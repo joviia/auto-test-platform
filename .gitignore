@@ -7,3 +7,5 @@ artifacts/
 *.log
 .DS_Store
 .env*
+apps/desktop/release/
+apps/desktop/dist-builder/

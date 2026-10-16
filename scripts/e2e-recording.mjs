@@ -17,12 +17,17 @@ import { chromium } from 'playwright'
 const require = createRequire(import.meta.url)
 const { DatabaseSync } = require('node:sqlite')
 
-const CDP_HTTP = 'http://localhost:9222'
-const fixture = pathToFileURL(
-  resolve(import.meta.dirname, '../packages/runner/fixtures/login-form/index.html'),
-).href
+const CDP_HTTP = process.env.ATP_E2E_CDP ?? 'http://localhost:9222'
+const fixture =
+  process.argv[2] ??
+  pathToFileURL(resolve(import.meta.dirname, '../packages/runner/fixtures/login-form/index.html'))
+    .href
 const DB =
   process.env.ATP_E2E_DB ?? '/Users/zhouwei/Library/Application Support/@atp/desktop/atp.db'
+// fixture 是 file:// 时匹配其路径；http 时匹配 host:port
+const VIEW_MATCH = fixture.includes('fixtures/login-form')
+  ? 'fixtures/login-form'
+  : new URL(fixture).host
 const CASE_NAME = `冒烟-登录成功-${Date.now().toString(36)}`
 
 const browser = await chromium.connectOverCDP(CDP_HTTP)
@@ -99,7 +104,7 @@ console.log('[e2e] 项目已创建')
 // 3. 打开被测页（主窗口点「打开」，受控视图 target 用 /json/list 轮询确认）
 await ui.getByPlaceholder(/输入被测页面地址/).fill(fixture)
 await ui.getByText('打开', { exact: true }).click()
-const viewTarget = await findViewTarget('fixtures/login-form')
+const viewTarget = await findViewTarget(VIEW_MATCH)
 console.log('[e2e] 受控浏览器已打开:', viewTarget.title)
 
 // 4. 开始录制
@@ -112,7 +117,7 @@ const ws = viewTarget.webSocketDebuggerUrl
 
 // 等页面真正加载完（target 出现 ≠ 文档就绪）
 let ready = false
-for (let i = 0; i < 20; i++) {
+for (let i = 0; i < 60; i++) {
   ready = await evaluateOn(
     ws,
     `document.readyState === 'complete' && !!document.querySelector('#username')`,
@@ -120,7 +125,10 @@ for (let i = 0; i < 20; i++) {
   if (ready) break
   await new Promise((r) => setTimeout(r, 500))
 }
-if (!ready) throw new Error('受控页面 10s 内未就绪')
+if (!ready) {
+  const state = await evaluateOn(ws, `document.readyState + '|' + location.href`)
+  throw new Error(`受控页面 30s 未就绪，现场: ${state}`)
+}
 
 await evaluateOn(
   ws,

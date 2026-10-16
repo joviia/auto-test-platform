@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dist": "electron-vite build && electron-builder"
   },
   "dependencies": {
     "@atp/model": "workspace:*",
@@ -18,6 +19,7 @@
     "@react-aria/utils": "^3.34.1",
     "@tanstack/react-query": "^5.104.3",
     "drizzle-orm": "1.0.0-beta.22",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^1.58.0",
     "react": "^19.1.0",
     "react-arborist": "^4.0.1",
@@ -33,7 +35,8 @@
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.4.0",
     "drizzle-kit": "1.0.0-beta.22",
-    "electron": "^37.0.0",
+    "electron": "37.10.3",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^3.1.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.8.0",
