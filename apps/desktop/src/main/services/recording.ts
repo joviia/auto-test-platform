@@ -15,7 +15,16 @@ const state: {
   buffer: RawRecorderEvent[]
   view: WebContentsView | null
   domReadyHandler: (() => void) | null
-} = { recording: false, buffer: [], view: null, domReadyHandler: null }
+  assertionArmed: boolean
+  assertionSteps: Step[]
+} = {
+  recording: false,
+  buffer: [],
+  view: null,
+  domReadyHandler: null,
+  assertionArmed: false,
+  assertionSteps: [],
+}
 
 /** 订阅受控视图采集器的原始事件流（recorder-preload → ipcMain） */
 export function initRecordingService(): void {
@@ -23,6 +32,27 @@ export function initRecordingService(): void {
     if (!state.recording) return
     const ev = payload as RawRecorderEvent
     if (!ev || typeof ev.kind !== 'string' || !Array.isArray(ev.candidates)) return
+
+    // 断言拾取态：下一个被捕获元素生成 visible 断言步骤，不记动作
+    if (state.assertionArmed) {
+      state.assertionArmed = false
+      const el = buildElement(ev.target, ev.candidates)
+      state.assertionSteps.push({
+        id: `s-assert-${Date.now().toString(36)}`,
+        action: 'assert',
+        elementId: el.id,
+        assertion: { type: 'visible' },
+      })
+      getMainWindow()?.webContents.send(IpcEvent.recordingStep, {
+        action: 'assert',
+        target: ev.target,
+        candidates: ev.candidates,
+        url: ev.url,
+        ts: ev.ts,
+      })
+      return
+    }
+
     state.buffer.push(ev)
     // 实时预览：全量归一化后把最后一步推给 renderer（T8 起进入右栏面板）
     const steps = normalizeEvents(state.buffer)
@@ -33,6 +63,8 @@ export function initRecordingService(): void {
 
 export function startRecording(view: WebContentsView): { ok: true } {
   state.buffer = []
+  state.assertionSteps = []
+  state.assertionArmed = false
   state.view = view
   state.recording = true
 
@@ -84,5 +116,11 @@ export function stopRecording(): {
   const startUrl = events[0]?.url ?? ''
 
   getMainWindow()?.webContents.send(IpcEvent.recordingStatus, { recording: false })
-  return { steps, elements, startUrl }
+  return { steps: [...steps, ...state.assertionSteps], elements, startUrl }
+}
+
+/** 录制中断言拾取：武装后下一个被捕获元素生成 visible 断言步骤 */
+export function armAssertion(): { ok: true } {
+  if (state.recording) state.assertionArmed = true
+  return { ok: true }
 }

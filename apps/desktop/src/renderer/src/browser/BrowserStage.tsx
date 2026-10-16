@@ -58,6 +58,14 @@ export function BrowserStage() {
         <Button variant={recording ? 'danger' : 'primary'} onPress={() => void toggleRecording()}>
           {recording ? '■ 停止录制' : '● 开始录制'}
         </Button>
+        {recording && (
+          <Button
+            variant="secondary"
+            onPress={() => void window.atp.invoke('recording:assert-arm')}
+          >
+            ＋断言
+          </Button>
+        )}
         <Button isDisabled>▶ 回放</Button>
       </div>
       <div ref={stageRef} className="relative min-h-0 flex-1 bg-default-100">

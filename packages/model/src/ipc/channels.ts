@@ -22,6 +22,7 @@ export const IpcChannel = {
   viewBoundsSet: 'view:bounds-set',
   recordingStart: 'recording:start',
   recordingStop: 'recording:stop',
+  recordingAssertArm: 'recording:assert-arm',
   // 回放与执行记录
   replayStart: 'replay:start',
   runList: 'run:list',

@@ -19,9 +19,10 @@ export interface IpcEndpoint<I = unknown, O = unknown> {
 const okSchema = z.object({ ok: z.literal(true) })
 const idInput = z.object({ id: z.string().min(1) })
 
-/** 录制实时预览步骤（未绑定元素库的语义动作），RecorderStep 的契约形态 */
+/** 录制实时预览步骤（未绑定元素库的语义动作），RecorderStep 的契约形态；
+ * 断言拾取的预览也走此结构（action='assert'） */
 export const liveStepSchema = z.object({
-  action: z.enum(['click', 'fill', 'select', 'press']),
+  action: z.enum(['click', 'fill', 'select', 'press', 'assert']),
   target: z.object({
     tag: z.string(),
     inputType: z.string().optional(),
@@ -120,6 +121,8 @@ export const ipcContract = {
       startUrl: z.string(),
     }),
   },
+
+  [IpcChannel.recordingAssertArm]: { input: z.void(), output: okSchema },
 
   [IpcChannel.replayStart]: {
     input: z.object({ caseId: z.string().min(1) }),

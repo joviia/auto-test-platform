@@ -16,7 +16,7 @@ import { elementRepo } from '../db/repositories/elements'
 import { moduleRepo } from '../db/repositories/modules'
 import { projectRepo } from '../db/repositories/projects'
 import { runRepo } from '../db/repositories/runs'
-import { startRecording, stopRecording } from '../services/recording'
+import { armAssertion, startRecording, stopRecording } from '../services/recording'
 
 type AnyFn = (input: never) => unknown
 const routes = new Map<string, { parse: (raw: unknown) => unknown; fn: AnyFn }>()
@@ -96,6 +96,7 @@ export function registerIpc(): void {
     return startRecording(view)
   })
   route(IpcChannel.recordingStop, () => stopRecording())
+  route(IpcChannel.recordingAssertArm, () => armAssertion())
   route(IpcChannel.replayStart, () => {
     throw new Error('回放尚未实现（T10）')
   })

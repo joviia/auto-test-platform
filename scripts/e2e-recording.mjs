@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module'
 /**
  * 录制闭环 E2E：驱动我们自己的 Electron UI 走完「建项目 → 打开被测页 →
  * 录制 → 停止 → 保存用例」，然后直查 SQLite 验证落库。
@@ -11,7 +12,6 @@
  */
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { createRequire } from 'node:module'
 import { chromium } from 'playwright'
 
 const require = createRequire(import.meta.url)
@@ -75,7 +75,9 @@ async function evaluateOn(wsUrl, expression) {
     returnByValue: true,
   })
   if (result.exceptionDetails) {
-    throw new Error(`页面脚本异常: ${JSON.stringify(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text)}`)
+    throw new Error(
+      `页面脚本异常: ${JSON.stringify(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text)}`,
+    )
   }
   return result.result?.value
 }
@@ -146,7 +148,9 @@ console.log('[e2e] 已保存:', CASE_NAME)
 const db = new DatabaseSync(DB)
 const caseRow = db.prepare('SELECT id, name, start_url FROM cases WHERE name = ?').get(CASE_NAME)
 if (!caseRow) throw new Error('用例未落库！')
-const stepCount = db.prepare('SELECT COUNT(*) AS n FROM case_steps WHERE case_id = ?').get(caseRow.id).n
+const stepCount = db
+  .prepare('SELECT COUNT(*) AS n FROM case_steps WHERE case_id = ?')
+  .get(caseRow.id).n
 const elementCount = db.prepare('SELECT COUNT(*) AS n FROM elements').get().n
 console.log(`[e2e] 落库 ✓ 用例=${caseRow.id} 步骤=${stepCount} 元素库=${elementCount}`)
 if (stepCount !== 3) throw new Error(`步骤数应为 3（fill/fill/click），实际 ${stepCount}`)
