@@ -22,6 +22,30 @@ export function createMainWindow(): BrowserWindow {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+
+  // dev 可见性：renderer console 转发到主进程 stdout；加载失败显式报错
+  mainWindow.webContents.on('console-message', (_event) => {
+    const m = _event as unknown as { message: string; level: string }
+    console.log(`[renderer:${m.level}] ${m.message}`)
+  })
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    console.error(`[atp] did-fail-load ${code} ${desc} ${url}`)
+  })
+
+  // dev 验收辅助：ATP_DEV_SHOT=<路径> 时启动数秒后自动截屏
+  const shotPath = process.env.ATP_DEV_SHOT
+  if (shotPath) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      console.log('[atp] did-finish-load, screenshot in 2.5s')
+      setTimeout(() => {
+        void mainWindow
+          ?.capturePage()
+          .then((image) => require('node:fs').writeFileSync(shotPath, image.toPNG()))
+          .then(() => console.log(`[atp] screenshot saved: ${shotPath}`))
+          .catch((err) => console.error('[atp] screenshot failed:', err))
+      }, 2500)
+    })
+  }
   return mainWindow
 }
 

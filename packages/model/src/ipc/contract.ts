@@ -19,6 +19,34 @@ export interface IpcEndpoint<I = unknown, O = unknown> {
 const okSchema = z.object({ ok: z.literal(true) })
 const idInput = z.object({ id: z.string().min(1) })
 
+/** 录制实时预览步骤（未绑定元素库的语义动作），RecorderStep 的契约形态 */
+export const liveStepSchema = z.object({
+  action: z.enum(['click', 'fill', 'select', 'press']),
+  target: z.object({
+    tag: z.string(),
+    inputType: z.string().optional(),
+    role: z.string().optional(),
+    name: z.string().optional(),
+    text: z.string().optional(),
+    value: z.string().optional(),
+    placeholder: z.string().optional(),
+  }),
+  candidates: z.array(
+    z.object({
+      type: z.enum(['testId', 'role', 'text', 'css']),
+      value: z.string(),
+      name: z.string().optional(),
+      count: z.number().nullable().optional(),
+    }),
+  ),
+  url: z.string(),
+  ts: z.number(),
+  value: z.string().optional(),
+  key: z.string().optional(),
+})
+
+export type LiveStep = z.infer<typeof liveStepSchema>
+
 /** 每个 channel 的输入/输出 zod 契约 —— main 侧强制校验，renderer 侧获得类型 */
 export const ipcContract = {
   [IpcChannel.projectList]: { input: z.void(), output: z.array(projectRowSchema) },
@@ -123,7 +151,7 @@ export const ipcEventContract = {
     recording: z.boolean(),
     url: z.string().optional(),
   }),
-  [IpcEvent.recordingStep]: stepSchema,
+  [IpcEvent.recordingStep]: liveStepSchema,
   [IpcEvent.replayProgress]: z.object({
     runId: z.string(),
     index: z.number().int().nonnegative(),
@@ -131,6 +159,10 @@ export const ipcEventContract = {
     status: stepStatusSchema,
   }),
 }
+
+export type IpcEventPayload<K extends keyof typeof ipcEventContract> = z.output<
+  (typeof ipcEventContract)[K]
+>
 
 export type RendererInvoke = <K extends keyof IpcContract>(
   channel: K,
