@@ -7,6 +7,7 @@ import {
   ModalHeader,
   ModalRoot,
 } from '@heroui/react'
+import { FlaskConical, Folder, FolderTree, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { NodeRendererProps } from 'react-arborist'
 import { Tree } from 'react-arborist'
@@ -30,7 +31,11 @@ interface TreeNodeData {
   children?: TreeNodeData[]
 }
 
-const KIND_ICON: Record<NodeKind, string> = { project: '📁', module: '🗂️', case: '🧪' }
+const KIND_ICON: Record<NodeKind, typeof Folder> = {
+  project: Folder,
+  module: FolderTree,
+  case: FlaskConical,
+}
 
 function buildModuleTree(
   modules: Array<{ id: string; parentId: string | null; name: string; projectId: string }>,
@@ -64,7 +69,10 @@ function NodeRenderer({ node, style }: NodeRendererProps<TreeNodeData>) {
         active ? 'bg-primary-100 text-primary-700' : 'hover:bg-default-100'
       }`}
     >
-      <span>{KIND_ICON[node.data.kind]}</span>
+      {(() => {
+        const Icon = KIND_ICON[node.data.kind]
+        return <Icon size={14} />
+      })()}
       <span className="truncate">{node.data.name}</span>
     </div>
   )
@@ -153,7 +161,8 @@ export function CaseTree() {
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center gap-1 border-b border-default-200 p-2">
         <Button size="sm" variant="ghost" onPress={() => setDialog('project')}>
-          +项目
+          <Plus size={14} />
+          项目
         </Button>
         <Button
           size="sm"
@@ -161,7 +170,8 @@ export function CaseTree() {
           isDisabled={!contextProjectId}
           onPress={() => setDialog('module')}
         >
-          +模块
+          <Plus size={14} />
+          模块
         </Button>
         <Button
           size="sm"
@@ -169,9 +179,11 @@ export function CaseTree() {
           isDisabled={!contextProjectId}
           onPress={() => setDialog('case')}
         >
-          +用例
+          <Plus size={14} />
+          用例
         </Button>
         <Button size="sm" variant="danger" isDisabled={!selected} onPress={() => void remove()}>
+          <Trash2 size={14} />
           删除
         </Button>
       </div>

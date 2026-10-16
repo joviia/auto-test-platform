@@ -2,6 +2,7 @@ import { Tab, TabList, TabPanel, TabsRoot } from '@heroui/react'
 import { ElementPanel } from '../elements/ElementPanel'
 import { useUiStore } from '../state/ui-store'
 import { StepPanel } from '../steps/StepPanel'
+import { ReportPanel } from './ReportPanel'
 
 export function RightPanel() {
   const recording = useUiStore((s) => s.recording)
@@ -41,8 +42,8 @@ export function RightPanel() {
       <TabPanel id="elements" className="min-h-0 flex-1 overflow-auto">
         <ElementPanel />
       </TabPanel>
-      <TabPanel id="report" className="min-h-0 flex-1 overflow-auto p-3 text-sm">
-        <p className="text-default-400">执行记录与报告（T10 接入）</p>
+      <TabPanel id="report" className="min-h-0 flex-1 overflow-auto">
+        <ReportPanel />
       </TabPanel>
     </TabsRoot>
   )

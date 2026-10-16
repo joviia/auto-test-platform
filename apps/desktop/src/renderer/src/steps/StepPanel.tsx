@@ -1,6 +1,7 @@
 import type { CaseFile, Step } from '@atp/model'
 import { Button, Input } from '@heroui/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowDown, ArrowUp, Save, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { qk } from '../api/client'
 import { useUiStore } from '../state/ui-store'
@@ -79,6 +80,7 @@ export function StepPanel() {
         <div className="flex items-center gap-1">
           {status && <span className="text-xs text-default-400">{status}</span>}
           <Button size="sm" variant="primary" onPress={() => void save()}>
+            <Save size={14} />
             保存
           </Button>
         </div>
@@ -108,7 +110,7 @@ export function StepPanel() {
                     })
                   }
                 >
-                  ↑
+                  <ArrowUp size={14} />
                 </Button>
                 <Button
                   variant="ghost"
@@ -119,7 +121,7 @@ export function StepPanel() {
                     })
                   }
                 >
-                  ↓
+                  <ArrowDown size={14} />
                 </Button>
                 <Button
                   variant="danger"
@@ -129,7 +131,7 @@ export function StepPanel() {
                     })
                   }
                 >
-                  ✕
+                  <X size={14} />
                 </Button>
               </div>
 

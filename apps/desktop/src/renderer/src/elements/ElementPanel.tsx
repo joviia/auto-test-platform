@@ -1,6 +1,7 @@
 import type { CaseFile, ElementRow, Locator } from '@atp/model'
 import { Button, Input } from '@heroui/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Save, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { qk } from '../api/client'
 import { useUiStore } from '../state/ui-store'
@@ -65,6 +66,7 @@ export function ElementPanel() {
         <div className="flex items-center gap-1">
           {status && <span className="text-xs text-default-400">{status}</span>}
           <Button size="sm" variant="primary" onPress={() => void save()}>
+            <Save size={14} />
             保存
           </Button>
         </div>
@@ -91,7 +93,7 @@ export function ElementPanel() {
                     isDisabled={el.locators.length <= 1}
                     onPress={() => removeLocator(el.id, idx)}
                   >
-                    ✕
+                    <X size={14} />
                   </Button>
                 </div>
               ))}

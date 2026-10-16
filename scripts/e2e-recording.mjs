@@ -90,7 +90,7 @@ await ui.bringToFront()
 console.log('[e2e] 主窗口就绪')
 
 // 2. 新建项目
-await ui.getByText('+项目').click()
+await ui.getByRole('button', { name: '项目' }).click()
 await ui.getByPlaceholder('名称').fill('冒烟项目')
 await ui.getByText('创建', { exact: true }).click()
 await ui.getByText('冒烟项目').first().waitFor({ timeout: 5000 })
@@ -158,6 +158,20 @@ if (stepCount !== 3) throw new Error(`步骤数应为 3（fill/fill/click），�
 // 8. UI 验证：左树出现该用例
 await ui.getByText(CASE_NAME).first().waitFor({ timeout: 10000 })
 console.log('[e2e] 左树可见用例 ✓')
+
+// 9. 回放：点「回放选中用例」，等执行完成，验证执行记录与证据文件
+await ui.getByText('回放选中用例').click()
+console.log('[e2e] 回放中…')
+await ui.getByText('回放中…').waitFor({ timeout: 10000 })
+await ui.getByText('回放选中用例').waitFor({ timeout: 120000 })
+const runRow = db.prepare('SELECT id, status, video_path FROM runs WHERE case_id = ? ORDER BY started_at DESC').get(caseRow.id)
+if (!runRow) throw new Error('执行记录未落库！')
+const runStepCount = db.prepare('SELECT COUNT(*) AS n FROM run_steps WHERE run_id = ?').get(runRow.id).n
+console.log(`[e2e] 回放落库 ✓ run=${runRow.id} status=${runRow.status} 步骤=${runStepCount}`)
+if (runStepCount !== 3) throw new Error(`回放步骤数应为 3，实际 ${runStepCount}`)
+const { statSync } = await import('node:fs')
+if (!runRow.video_path || !statSync(runRow.video_path).size) throw new Error('回放视频缺失')
+console.log('[e2e] 回放视频 ✓', runRow.video_path.split('/').slice(-2).join('/'))
 
 await browser.close()
 console.log('[e2e] 通过 ✅')

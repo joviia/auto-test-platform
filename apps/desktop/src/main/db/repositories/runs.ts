@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { RunResult, RunRow, RunStepRow } from '@atp/model'
 import { eq } from 'drizzle-orm'
 import { getDb } from '../client'
-import { runSteps, runs } from '../schema'
+import { cases, runSteps, runs } from '../schema'
 
 function toRunRow(r: typeof runs.$inferSelect): RunRow {
   return {
@@ -21,7 +21,12 @@ export const runRepo = {
     const rows = caseId
       ? getDb().select().from(runs).where(eq(runs.caseId, caseId)).all()
       : getDb().select().from(runs).all()
-    return rows.map(toRunRow).sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+    const caseName = (cid: string): string | undefined =>
+      getDb().select({ name: cases.name }).from(cases).where(eq(cases.id, cid)).get()?.name
+    return rows
+      .map(toRunRow)
+      .map((r) => ({ ...r, caseName: caseName(r.caseId) }))
+      .sort((a, b) => b.startedAt.localeCompare(a.startedAt))
   },
 
   get(runId: string): { run: RunRow; steps: RunStepRow[] } | null {

@@ -17,6 +17,7 @@ import { moduleRepo } from '../db/repositories/modules'
 import { projectRepo } from '../db/repositories/projects'
 import { runRepo } from '../db/repositories/runs'
 import { armAssertion, startRecording, stopRecording } from '../services/recording'
+import { startReplay } from '../services/replay'
 
 type AnyFn = (input: never) => unknown
 const routes = new Map<string, { parse: (raw: unknown) => unknown; fn: AnyFn }>()
@@ -97,9 +98,7 @@ export function registerIpc(): void {
   })
   route(IpcChannel.recordingStop, () => stopRecording())
   route(IpcChannel.recordingAssertArm, () => armAssertion())
-  route(IpcChannel.replayStart, () => {
-    throw new Error('回放尚未实现（T10）')
-  })
+  route(IpcChannel.replayStart, (input) => startReplay(input.caseId, getControlledView()))
 
   for (const [channel, r] of routes) {
     ipcMain.handle(channel, (_event, raw: unknown) => r.fn(r.parse(raw) as never))

@@ -1,5 +1,11 @@
 import { z } from 'zod'
-import { actionSchema, assertionSchema, locatorSchema } from '../domain'
+import {
+  actionSchema,
+  assertionSchema,
+  candidateAttemptSchema,
+  locatorHitSchema,
+  locatorSchema,
+} from '../domain'
 
 /** 七张表的行 DTO（locators/params/assertion 落 JSON 列，进库前用 domain schema 校验） */
 
@@ -47,6 +53,7 @@ export const elementRowSchema = z.object({
 export const runRowSchema = z.object({
   id: z.string(),
   caseId: z.string(),
+  caseName: z.string().optional(),
   status: z.enum(['passed', 'failed']),
   startedAt: z.string(),
   finishedAt: z.string().nullable(),
@@ -63,9 +70,15 @@ export const runStepRowSchema = z.object({
   status: z.enum(['passed', 'failed']),
   durationMs: z.number().nonnegative(),
   error: z.string().nullable(),
-  locatorHit: z.unknown().nullable(),
-  triedCandidates: z.unknown().nullable(),
-  assertion: z.unknown().nullable(),
+  locatorHit: locatorHitSchema.nullable(),
+  triedCandidates: z.array(candidateAttemptSchema).nullable(),
+  assertion: z
+    .object({
+      type: z.enum(['visible', 'text', 'value']),
+      expected: z.string().nullable().optional(),
+      actual: z.string().nullable().optional(),
+    })
+    .nullable(),
   screenshotPath: z.string().nullable(),
 })
 
