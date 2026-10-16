@@ -1,0 +1,23 @@
+{
+  "name": "@atp/runner",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "postinstall": "playwright install chromium",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "replay": "node dist/cli.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@atp/model": "workspace:*",
+    "playwright": "^1.53.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.5"
+  }
+}

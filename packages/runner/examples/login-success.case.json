@@ -1,0 +1,68 @@
+{
+  "case": {
+    "id": "c-example-001",
+    "name": "登录成功",
+    "projectId": "p-example",
+    "startUrl": "fixtures/login-form/index.html",
+    "steps": [
+      {
+        "id": "s-001",
+        "action": "fill",
+        "elementId": "el-username",
+        "params": { "value": "admin" }
+      },
+      {
+        "id": "s-002",
+        "action": "fill",
+        "elementId": "el-password",
+        "params": { "value": "admin123" }
+      },
+      { "id": "s-003", "action": "click", "elementId": "el-submit" },
+      {
+        "id": "s-004",
+        "action": "assert",
+        "elementId": "el-message",
+        "assertion": { "type": "text", "expected": "登录成功" }
+      }
+    ]
+  },
+  "elements": {
+    "el-username": {
+      "id": "el-username",
+      "name": "用户名输入框",
+      "locators": [
+        { "type": "testId", "value": "username-input" },
+        { "type": "role", "value": "textbox", "name": "用户名" },
+        { "type": "css", "value": "#username" }
+      ]
+    },
+    "el-password": {
+      "id": "el-password",
+      "name": "密码输入框",
+      "locators": [
+        { "type": "testId", "value": "password-input" },
+        { "type": "role", "value": "textbox", "name": "密码" },
+        { "type": "css", "value": "#password" }
+      ]
+    },
+    "el-submit": {
+      "id": "el-submit",
+      "name": "登录按钮",
+      "locators": [
+        { "type": "testId", "value": "login-submit" },
+        { "type": "role", "value": "button", "name": "登录" },
+        { "type": "text", "value": "登录" },
+        { "type": "css", "value": "#login-form > button[type=submit]" }
+      ]
+    },
+    "el-message": {
+      "id": "el-message",
+      "name": "状态消息",
+      "locators": [
+        { "type": "testId", "value": "login-message" },
+        { "type": "role", "value": "status" },
+        { "type": "css", "value": "#message" }
+      ]
+    }
+  }
+}

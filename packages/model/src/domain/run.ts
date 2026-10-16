@@ -13,11 +13,15 @@ export const candidateAttemptSchema = z.object({
   error: z.string().optional(),
 })
 
+export type CandidateAttempt = z.infer<typeof candidateAttemptSchema>
+
 /** 命中的候选：第几层（tier 从 0 起）与具体定位器 */
 export const locatorHitSchema = z.object({
   tier: z.number().int().nonnegative(),
   locator: locatorSchema,
 })
+
+export type LocatorHit = z.infer<typeof locatorHitSchema>
 
 /** 步骤级结果 —— 证据落到步骤粒度（方案 §4.3） */
 export const stepResultSchema = z.object({
@@ -50,6 +54,7 @@ export const runResultSchema = z.object({
   startedAt: z.string(),
   finishedAt: z.string(),
   status: stepStatusSchema,
+  error: z.string().optional(),
   videoPath: z.string().optional(),
   steps: z.array(stepResultSchema),
 })

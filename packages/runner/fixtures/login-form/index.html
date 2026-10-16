@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>演示登录页（三幕剧被测对象）</title>
+    <style>
+      body { font-family: system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; margin: 0; background: #f5f6f8; }
+      main { background: #fff; padding: 40px 48px; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.08); width: 320px; }
+      h1 { font-size: 20px; margin: 0 0 24px; }
+      label { display: block; margin-bottom: 16px; font-size: 14px; color: #333; }
+      input { display: block; width: 100%; box-sizing: border-box; margin-top: 6px; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+      button { width: 100%; padding: 10px; border: 0; border-radius: 6px; background: #2f6fed; color: #fff; font-size: 15px; cursor: pointer; }
+      #message { min-height: 20px; margin: 16px 0 0; font-size: 14px; text-align: center; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>演示系统登录</h1>
+      <form id="login-form">
+        <label>用户名
+          <input type="text" id="username" name="username" data-testid="username-input" placeholder="admin" />
+        </label>
+        <label>密码
+          <input type="password" id="password" name="password" data-testid="password-input" placeholder="admin123" />
+        </label>
+        <button type="submit" id="login-submit" data-testid="login-submit">登录</button>
+      </form>
+      <p id="message" role="status" data-testid="login-message"></p>
+    </main>
+    <script>
+      document.getElementById('login-form').addEventListener('submit', function (e) {
+        e.preventDefault()
+        var u = document.getElementById('username').value
+        var p = document.getElementById('password').value
+        var msg = document.getElementById('message')
+        msg.textContent = u === 'admin' && p === 'admin123' ? '登录成功' : '登录失败：用户名或密码错误'
+      })
+    </script>
+  </body>
+</html>
