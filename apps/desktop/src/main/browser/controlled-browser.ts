@@ -29,7 +29,8 @@ export function getControlledView(): WebContentsView | null {
 
 export async function navigateControlledView(url: string): Promise<void> {
   if (!view) throw new Error('受控浏览器尚未创建')
-  if (/^https?:\/\//i.test(url)) {
+  // 已带完整 scheme（http/https/file 等）直接加载；否则视为本地路径转 file://
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) {
     await view.webContents.loadURL(url)
     return
   }

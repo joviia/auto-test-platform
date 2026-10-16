@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserStage } from './browser/BrowserStage'
 import { ThreeColumn } from './layout/ThreeColumn'
 import { RightPanel } from './panels/RightPanel'
+import { SaveCaseDialog } from './recording/SaveCaseDialog'
 import { useUiStore } from './state/ui-store'
 import { CaseTree } from './tree/CaseTree'
 
@@ -18,5 +19,10 @@ export function App() {
     }
   }, [setRecording, pushLiveStep])
 
-  return <ThreeColumn left={<CaseTree />} center={<BrowserStage />} right={<RightPanel />} />
+  return (
+    <>
+      <ThreeColumn left={<CaseTree />} center={<BrowserStage />} right={<RightPanel />} />
+      <SaveCaseDialog />
+    </>
+  )
 }

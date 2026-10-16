@@ -11,6 +11,11 @@ import { initRecordingService } from './services/recording'
 
 registerEvidenceSchemePrivileges()
 
+// E2E/自动化验收：ATP_REMOTE_DEBUG=<port> 打开 CDP 远程调试
+if (process.env.ATP_REMOTE_DEBUG) {
+  app.commandLine.appendSwitch('remote-debugging-port', process.env.ATP_REMOTE_DEBUG)
+}
+
 app.whenReady().then(() => {
   registerEvidenceProtocolHandler()
   initDb()

@@ -8,6 +8,8 @@ export function BrowserStage() {
   const recording = useUiStore((s) => s.recording)
   const url = useUiStore((s) => s.url)
   const setUrl = useUiStore((s) => s.setUrl)
+  const resetLiveSteps = useUiStore((s) => s.resetLiveSteps)
+  const setDraftRecording = useUiStore((s) => s.setDraftRecording)
 
   useEffect(() => {
     const el = stageRef.current
@@ -35,10 +37,11 @@ export function BrowserStage() {
 
   const toggleRecording = async (): Promise<void> => {
     if (!recording) {
+      resetLiveSteps()
       await window.atp.invoke('recording:start')
     } else {
       const result = await window.atp.invoke('recording:stop')
-      console.log('[atp] 录制结果（保存流程在 T8 接入）:', result)
+      setDraftRecording(result)
     }
   }
 

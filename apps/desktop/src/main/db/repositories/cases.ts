@@ -47,7 +47,7 @@ export const caseRepo = {
         moduleId: r.moduleId ?? undefined,
         startUrl: r.startUrl,
         steps: stepRows.map((s) => ({
-          id: s.id,
+          id: s.id.startsWith(`${id}-`) ? s.id.slice(id.length + 1) : s.id,
           action: s.action,
           elementId: s.elementId ?? undefined,
           params: s.params ? JSON.parse(s.params) : undefined,
@@ -97,7 +97,8 @@ export const caseRepo = {
       for (const [idx, step] of file.case.steps.entries()) {
         tx.insert(caseSteps)
           .values({
-            id: step.id,
+            // 主键带用例前缀：不同用例的 s-001 互不冲突
+            id: `${file.case.id}-${step.id}`,
             caseId: file.case.id,
             idx,
             action: step.action,
