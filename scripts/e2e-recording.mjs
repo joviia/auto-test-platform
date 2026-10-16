@@ -172,9 +172,13 @@ await ui.getByText('回放选中用例').click()
 console.log('[e2e] 回放中…')
 await ui.getByText('回放中…').waitFor({ timeout: 10000 })
 await ui.getByText('回放选中用例').waitFor({ timeout: 120000 })
-const runRow = db.prepare('SELECT id, status, video_path FROM runs WHERE case_id = ? ORDER BY started_at DESC').get(caseRow.id)
+const runRow = db
+  .prepare('SELECT id, status, video_path FROM runs WHERE case_id = ? ORDER BY started_at DESC')
+  .get(caseRow.id)
 if (!runRow) throw new Error('执行记录未落库！')
-const runStepCount = db.prepare('SELECT COUNT(*) AS n FROM run_steps WHERE run_id = ?').get(runRow.id).n
+const runStepCount = db
+  .prepare('SELECT COUNT(*) AS n FROM run_steps WHERE run_id = ?')
+  .get(runRow.id).n
 console.log(`[e2e] 回放落库 ✓ run=${runRow.id} status=${runRow.status} 步骤=${runStepCount}`)
 if (runStepCount !== 3) throw new Error(`回放步骤数应为 3，实际 ${runStepCount}`)
 const { statSync } = await import('node:fs')

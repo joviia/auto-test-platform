@@ -10,5 +10,14 @@
     "lineWidth": 100
   },
   "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "asNeeded" } },
-  "files": { "ignore": ["**/release/**", "**/dist-builder/**", "**/dist/**", "**/out/**", "**/node_modules/**", "**/artifacts/**"] }
+  "files": {
+    "ignore": [
+      "**/release/**",
+      "**/dist-builder/**",
+      "**/dist/**",
+      "**/out/**",
+      "**/node_modules/**",
+      "**/artifacts/**"
+    ]
+  }
 }

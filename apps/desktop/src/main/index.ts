@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { app, BrowserWindow } from 'electron'
+import { BrowserWindow, app } from 'electron'
 import { createMainWindow } from './app-window'
 import { ensureControlledView } from './browser/controlled-browser'
 import { initDb } from './db/client'
