@@ -7,6 +7,7 @@ import {
   registerEvidenceSchemePrivileges,
 } from './evidence/protocol'
 import { registerIpc } from './ipc/register'
+import { initRecordingService } from './services/recording'
 
 registerEvidenceSchemePrivileges()
 
@@ -14,6 +15,7 @@ app.whenReady().then(() => {
   registerEvidenceProtocolHandler()
   initDb()
   registerIpc()
+  initRecordingService()
   const win = createMainWindow()
   ensureControlledView(win)
 

@@ -1,3 +1,4 @@
+import { join } from 'node:path'
 import type { Rectangle } from 'electron'
 import { WebContentsView } from 'electron'
 
@@ -5,13 +6,14 @@ let view: WebContentsView | null = null
 
 /**
  * 受控浏览器视图：录制的舞台（M1 回放走 Playwright 独立窗口）。
- * 录制注入（T6）挂在其 webContents 上；bounds 由 renderer 经 IPC 上报同步。
+ * recorder-preload 常驻（提供 window.__atpBridge），事件是否采纳由录制服务决定；
+ * bounds 由 renderer 经 IPC 上报同步。
  */
 export function ensureControlledView(win: Electron.BrowserWindow): WebContentsView {
   if (!view) {
     view = new WebContentsView({
       webPreferences: {
-        // 录制 preload 需要 node 集成来转发事件（T6 启用 recorder-preload）
+        preload: join(__dirname, '../preload/recorder.js'),
         sandbox: false,
       },
     })

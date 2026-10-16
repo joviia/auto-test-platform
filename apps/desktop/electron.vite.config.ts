@@ -15,7 +15,10 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     build: {
       rollupOptions: {
-        input: { index: resolve(__dirname, 'src/preload/index.ts') },
+        input: {
+          index: resolve(__dirname, 'src/preload/index.ts'),
+          recorder: resolve(__dirname, 'src/preload/recorder.ts'),
+        },
       },
     },
   },

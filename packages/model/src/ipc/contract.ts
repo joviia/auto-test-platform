@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ZodType } from 'zod'
-import { caseFileSchema, stepSchema, stepStatusSchema } from '../domain'
+import { caseFileSchema, elementSchema, stepSchema, stepStatusSchema } from '../domain'
 import {
   caseRowSchema,
   elementRowSchema,
@@ -84,7 +84,14 @@ export const ipcContract = {
     output: okSchema,
   },
   [IpcChannel.recordingStart]: { input: z.void(), output: okSchema },
-  [IpcChannel.recordingStop]: { input: z.void(), output: z.array(stepSchema) },
+  [IpcChannel.recordingStop]: {
+    input: z.void(),
+    output: z.object({
+      steps: z.array(stepSchema),
+      elements: z.record(z.string(), elementSchema),
+      startUrl: z.string(),
+    }),
+  },
 
   [IpcChannel.replayStart]: {
     input: z.object({ caseId: z.string().min(1) }),

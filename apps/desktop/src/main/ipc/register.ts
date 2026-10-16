@@ -6,12 +6,17 @@ import {
   parseIpcInput,
 } from '@atp/model'
 import { ipcMain } from 'electron'
-import { navigateControlledView, setControlledViewBounds } from '../browser/controlled-browser'
+import {
+  getControlledView,
+  navigateControlledView,
+  setControlledViewBounds,
+} from '../browser/controlled-browser'
 import { caseRepo } from '../db/repositories/cases'
 import { elementRepo } from '../db/repositories/elements'
 import { moduleRepo } from '../db/repositories/modules'
 import { projectRepo } from '../db/repositories/projects'
 import { runRepo } from '../db/repositories/runs'
+import { startRecording, stopRecording } from '../services/recording'
 
 type AnyFn = (input: never) => unknown
 const routes = new Map<string, { parse: (raw: unknown) => unknown; fn: AnyFn }>()
@@ -86,8 +91,11 @@ export function registerIpc(): void {
   })
   // recording:start/stop（T6）、replay:start（T10）在对应任务接入
   route(IpcChannel.recordingStart, () => {
-    throw new Error('录制尚未实现（T6）')
+    const view = getControlledView()
+    if (!view) throw new Error('受控浏览器未就绪')
+    return startRecording(view)
   })
+  route(IpcChannel.recordingStop, () => stopRecording())
   route(IpcChannel.replayStart, () => {
     throw new Error('回放尚未实现（T10）')
   })

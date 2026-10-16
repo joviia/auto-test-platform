@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@atp/model": "workspace:*",
+    "@atp/recorder": "workspace:*",
     "drizzle-orm": "1.0.0-beta.22",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
