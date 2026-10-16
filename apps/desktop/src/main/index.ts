@@ -1,28 +1,27 @@
-import { join } from 'node:path'
 import { BrowserWindow, app } from 'electron'
+import { createMainWindow } from './app-window'
+import { ensureControlledView } from './browser/controlled-browser'
+import { initDb } from './db/client'
+import {
+  registerEvidenceProtocolHandler,
+  registerEvidenceSchemePrivileges,
+} from './evidence/protocol'
+import { registerIpc } from './ipc/register'
 
-function createMainWindow(): BrowserWindow {
-  const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    title: '自动化测试平台',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-    },
-  })
-
-  if (process.env.ELECTRON_RENDERER_URL) {
-    win.loadURL(process.env.ELECTRON_RENDERER_URL)
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
-  }
-  return win
-}
+registerEvidenceSchemePrivileges()
 
 app.whenReady().then(() => {
-  createMainWindow()
+  registerEvidenceProtocolHandler()
+  initDb()
+  registerIpc()
+  const win = createMainWindow()
+  ensureControlledView(win)
+
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      const next = createMainWindow()
+      ensureControlledView(next)
+    }
   })
 })
 

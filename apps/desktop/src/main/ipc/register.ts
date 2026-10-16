@@ -1,0 +1,99 @@
+import {
+  IpcChannel,
+  type IpcContract,
+  type IpcInput,
+  type IpcOutput,
+  parseIpcInput,
+} from '@atp/model'
+import { ipcMain } from 'electron'
+import { navigateControlledView, setControlledViewBounds } from '../browser/controlled-browser'
+import { caseRepo } from '../db/repositories/cases'
+import { elementRepo } from '../db/repositories/elements'
+import { moduleRepo } from '../db/repositories/modules'
+import { projectRepo } from '../db/repositories/projects'
+import { runRepo } from '../db/repositories/runs'
+
+type AnyFn = (input: never) => unknown
+const routes = new Map<string, { parse: (raw: unknown) => unknown; fn: AnyFn }>()
+
+function route<K extends keyof IpcContract>(
+  channel: K,
+  fn: (input: IpcInput<K>) => IpcOutput<K> | Promise<IpcOutput<K>>,
+): void {
+  routes.set(channel, {
+    parse: (raw) => parseIpcInput(channel, raw),
+    fn: fn as AnyFn,
+  })
+}
+
+/** 薄壳注册表：zod 校验入参后直接调仓储/服务 */
+export function registerIpc(): void {
+  route(IpcChannel.projectList, () => projectRepo.list())
+  route(IpcChannel.projectCreate, (input) => projectRepo.create(input.name))
+  route(IpcChannel.projectDelete, (input) => {
+    projectRepo.remove(input.id)
+    return { ok: true }
+  })
+
+  route(IpcChannel.moduleList, (input) => moduleRepo.list(input.projectId))
+  route(IpcChannel.moduleCreate, (input) =>
+    moduleRepo.create(input.projectId, input.parentId, input.name),
+  )
+  route(IpcChannel.moduleRename, (input) => {
+    const row = moduleRepo.rename(input.id, input.name)
+    if (!row) throw new Error(`模块不存在：${input.id}`)
+    return row
+  })
+  route(IpcChannel.moduleDelete, (input) => {
+    moduleRepo.remove(input.id)
+    return { ok: true }
+  })
+
+  route(IpcChannel.caseList, (input) => caseRepo.list(input.projectId))
+  route(IpcChannel.caseGet, (input) => {
+    const file = caseRepo.get(input.id)
+    if (!file) throw new Error(`用例不存在：${input.id}`)
+    return file
+  })
+  route(IpcChannel.caseCreate, (input) => caseRepo.create(input))
+  route(IpcChannel.caseUpdate, (input) => caseRepo.save(input))
+  route(IpcChannel.caseDelete, (input) => {
+    caseRepo.remove(input.id)
+    return { ok: true }
+  })
+
+  route(IpcChannel.elementList, (input) => elementRepo.list(input.projectId))
+  route(IpcChannel.elementUpsert, (input) => elementRepo.upsert(input))
+  route(IpcChannel.elementDelete, (input) => {
+    elementRepo.remove(input.id)
+    return { ok: true }
+  })
+
+  route(IpcChannel.browserNavigate, (input) => {
+    void navigateControlledView(input.url)
+    return { ok: true }
+  })
+  route(IpcChannel.viewBoundsSet, (input) => {
+    setControlledViewBounds(input)
+    return { ok: true }
+  })
+
+  route(IpcChannel.runList, (input) => runRepo.list(input.caseId))
+  route(IpcChannel.runGet, (input) => {
+    const found = runRepo.get(input.runId)
+    if (!found) throw new Error(`执行记录不存在：${input.runId}`)
+    return found
+  })
+  // recording:start/stop（T6）、replay:start（T10）在对应任务接入
+  route(IpcChannel.recordingStart, () => {
+    throw new Error('录制尚未实现（T6）')
+  })
+  route(IpcChannel.replayStart, () => {
+    throw new Error('回放尚未实现（T10）')
+  })
+
+  for (const [channel, r] of routes) {
+    ipcMain.handle(channel, (_event, raw: unknown) => r.fn(r.parse(raw) as never))
+  }
+  console.log(`[atp] ipc registered: ${routes.size} channels`)
+}

@@ -102,6 +102,14 @@ export const ipcContract = {
 
 export type IpcContract = typeof ipcContract
 
+export type IpcInput<K extends keyof IpcContract> = z.output<IpcContract[K]['input']>
+export type IpcOutput<K extends keyof IpcContract> = z.output<IpcContract[K]['output']>
+
+/** main 侧统一入参校验入口（payload 缺省按 undefined 处理，兼容 z.void()） */
+export function parseIpcInput<K extends keyof IpcContract>(channel: K, raw: unknown): IpcInput<K> {
+  return ipcContract[channel].input.parse(raw) as IpcInput<K>
+}
+
 /** main → renderer 推送事件的载荷契约 */
 export const ipcEventContract = {
   [IpcEvent.recordingStatus]: z.object({

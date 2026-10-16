@@ -9,10 +9,13 @@
  * 输入框的候选不动，保证幕 3 中 fill 步骤仍可通过、失败聚焦在 click 步骤。
  */
 import { readFileSync, writeFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const fixturePath = resolve(dirname(fileURLToPath(import.meta.url)), '../packages/runner/fixtures/login-form/index.html')
+const fixturePath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../packages/runner/fixtures/login-form/index.html',
+)
 
 function replaceOrFail(source, from, to) {
   if (!source.includes(from)) {
