@@ -7,12 +7,18 @@ export interface RecorderStep {
   candidates: RawLocatorCandidate[]
   url: string
   ts: number
+  isTop?: boolean
   value?: string
   key?: string
 }
 
 function cssOf(candidates: RawLocatorCandidate[]): string {
   return candidates.find((c) => c.type === 'css')?.value ?? JSON.stringify(candidates)
+}
+
+/** 同一 frame 内的同一目标：iframe 之间可能存在相同的 CSS 链，必须带上 url 区分 */
+function sameTarget(step: RecorderStep, ev: RawRecorderEvent): boolean {
+  return step.url === ev.url && cssOf(step.candidates) === cssOf(ev.candidates)
 }
 
 /**
@@ -26,7 +32,7 @@ export function normalizeEvents(events: RawRecorderEvent[]): RecorderStep[] {
   for (const ev of events) {
     const last = steps[steps.length - 1]
     if (ev.kind === 'fill' && last && last.action === 'fill') {
-      if (cssOf(last.candidates) === cssOf(ev.candidates)) {
+      if (sameTarget(last, ev)) {
         last.value = ev.value
         last.ts = ev.ts
         continue
@@ -36,7 +42,7 @@ export function normalizeEvents(events: RawRecorderEvent[]): RecorderStep[] {
       ev.kind === 'click' &&
       last &&
       last.action === 'click' &&
-      cssOf(last.candidates) === cssOf(ev.candidates) &&
+      sameTarget(last, ev) &&
       ev.ts - last.ts < 300
     ) {
       continue
@@ -47,6 +53,7 @@ export function normalizeEvents(events: RawRecorderEvent[]): RecorderStep[] {
       candidates: ev.candidates,
       url: ev.url,
       ts: ev.ts,
+      isTop: ev.isTop,
       value: ev.value,
       key: ev.key,
     })

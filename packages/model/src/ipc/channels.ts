@@ -14,6 +14,7 @@ export const IpcChannel = {
   caseUpdate: 'case:update',
   caseDelete: 'case:delete',
   caseExportTs: 'case:export-ts',
+  caseExportTsFile: 'case:export-ts-file',
   // 元素库
   elementList: 'element:list',
   elementUpsert: 'element:upsert',

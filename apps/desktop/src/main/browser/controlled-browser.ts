@@ -15,6 +15,8 @@ export function ensureControlledView(win: Electron.BrowserWindow): WebContentsVi
       webPreferences: {
         preload: join(__dirname, '../preload/recorder.js'),
         sandbox: false,
+        // 让 recorder-preload 也跑在 iframe 里，采集器才能把子 frame 的事件回传
+        nodeIntegrationInSubFrames: true,
       },
     })
     win.contentView.addChildView(view)

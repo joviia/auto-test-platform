@@ -71,7 +71,7 @@ docs/               # 技术方案
 
 1. **打包版回放依赖本机 Playwright 缓存**（`~/Library/Caches/ms-playwright`）：M1 的 chromium 二进制不进 dmg，启动前请执行 `pnpm -F @atp/runner exec playwright install chromium`
 2. **自动更新未生效**：electron-updater 代码路径已就绪（打包版对缺失 feed 优雅跳过，已验证）；真实更新需 macOS 签名 + 公证 + feed 服务器
-3. 录制支持 click / fill / select / 按键 / 断言（可见·文本·值）；拖拽、iframe、弹窗在 backlog
+3. 录制支持 click / fill / select / 按键 / 断言（可见·文本·值），含同域/跨域 iframe；拖拽、弹窗在 backlog
 4. **打包版受控浏览器加载 file:// 页面失败**（chrome-error，dev 正常）——被测页请用 http(s) 地址；根因待查
 5. drizzle ORM 为 1.0 beta（`node:sqlite` 适配器仅在 beta 线）；其事务对失败语句不回滚，已规避（元素写入置于步骤之后并依赖主键唯一）
 6. 用户数据目录：dev / 构建产物直启 / 打包版分别为 `~/Library/Application Support/` 下的 `@atp/desktop`、`Electron`、`@atp/desktop`

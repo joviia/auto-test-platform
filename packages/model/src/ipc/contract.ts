@@ -95,6 +95,10 @@ export const ipcContract = {
     input: idInput,
     output: z.object({ code: z.string() }),
   },
+  [IpcChannel.caseExportTsFile]: {
+    input: idInput,
+    output: z.object({ saved: z.boolean(), path: z.string().optional() }),
+  },
 
   [IpcChannel.elementList]: {
     input: z.object({ projectId: z.string().min(1) }),
@@ -123,6 +127,16 @@ export const ipcContract = {
       steps: z.array(stepSchema),
       elements: z.record(z.string(), elementSchema),
       startUrl: z.string(),
+      /** 采集诊断：原始事件数 + 每个 frame 的注入状态 */
+      diagnostics: z.object({
+        rawEvents: z.number().int().nonnegative(),
+        frames: z.array(
+          z.object({
+            url: z.string(),
+            injected: z.boolean(),
+          }),
+        ),
+      }),
     }),
   },
 

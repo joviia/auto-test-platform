@@ -27,6 +27,8 @@ export interface RawRecorderEvent {
   kind: 'click' | 'fill' | 'select' | 'keydown'
   url: string
   ts: number
+  /** 是否顶层文档（iframe 内的事件为 false，用于起始地址判定） */
+  isTop?: boolean
   target: RawTargetInfo
   candidates: RawLocatorCandidate[]
   value?: string
@@ -46,7 +48,7 @@ function pageCollector(): void {
   w.__atpRecorderInstalled = true
 
   const send = (event: unknown): void => {
-    w.__atpBridge?.send(event)
+    w.__atpBridge?.send({ ...(event as object), isTop: window === window.top })
   }
 
   const cssEscape = (s: string): string =>

@@ -52,6 +52,14 @@ describe('normalizeEvents', () => {
     expect(steps).toHaveLength(2)
   })
 
+  it('不同 frame 的同名 CSS 链不合并', () => {
+    const steps = normalizeEvents([
+      ev({ kind: 'fill', value: 'a', url: 'https://a.test/frame.html' }),
+      ev({ kind: 'fill', value: 'b', ts: 1100, url: 'https://b.test/frame.html' }),
+    ])
+    expect(steps).toHaveLength(2)
+  })
+
   it('300ms 内同元素重复 click 去重', () => {
     const steps = normalizeEvents([
       ev({

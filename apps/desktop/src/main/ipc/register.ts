@@ -1,3 +1,4 @@
+import { writeFile } from 'node:fs/promises'
 import {
   IpcChannel,
   type IpcContract,
@@ -6,7 +7,8 @@ import {
   parseIpcInput,
 } from '@atp/model'
 import { toPlaywrightSpec } from '@atp/runner'
-import { ipcMain } from 'electron'
+import { dialog, ipcMain } from 'electron'
+import { getMainWindow } from '../app-window'
 import {
   getControlledView,
   navigateControlledView,
@@ -72,6 +74,26 @@ export function registerIpc(): void {
     const file = caseRepo.get(input.id)
     if (!file) throw new Error(`用例不存在：${input.id}`)
     return { code: toPlaywrightSpec(file) }
+  })
+  route(IpcChannel.caseExportTsFile, async (input) => {
+    const file = caseRepo.get(input.id)
+    if (!file) throw new Error(`用例不存在：${input.id}`)
+    const fileName = `${file.case.name.replace(/[\\/:*?"<>|\s]+/g, '-')}.spec.ts`
+    const win = getMainWindow()
+    const result = win
+      ? await dialog.showSaveDialog(win, {
+          title: '保存 Playwright TS 脚本',
+          defaultPath: fileName,
+          filters: [{ name: 'TypeScript', extensions: ['ts'] }],
+        })
+      : await dialog.showSaveDialog({
+          title: '保存 Playwright TS 脚本',
+          defaultPath: fileName,
+          filters: [{ name: 'TypeScript', extensions: ['ts'] }],
+        })
+    if (result.canceled || !result.filePath) return { saved: false }
+    await writeFile(result.filePath, toPlaywrightSpec(file), 'utf8')
+    return { saved: true, path: result.filePath }
   })
 
   route(IpcChannel.elementList, (input) => elementRepo.list(input.projectId))

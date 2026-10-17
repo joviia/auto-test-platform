@@ -45,6 +45,7 @@ export function StepPanel() {
   const [status, setStatus] = useState('')
   const [exportedCode, setExportedCode] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [savedPath, setSavedPath] = useState('')
   useEffect(() => {
     setDraft(file ?? null)
     setStatus('')
@@ -88,6 +89,13 @@ export function StepPanel() {
     const { code } = await window.atp.invoke('case:export-ts', { id: caseId })
     setExportedCode(code)
     setCopied(false)
+    setSavedPath('')
+  }
+
+  const saveTsFile = async (): Promise<void> => {
+    if (!caseId) return
+    const result = await window.atp.invoke('case:export-ts-file', { id: caseId })
+    if (result.saved && result.path) setSavedPath(result.path)
   }
 
   return (
@@ -226,11 +234,15 @@ export function StepPanel() {
             <p className="text-xs text-default-500">
               定位器取元素库第一候选；可直接放入 @playwright/test 项目运行
             </p>
+            {savedPath && <p className="break-all text-xs text-green-600">已保存到：{savedPath}</p>}
             <pre className="max-h-96 overflow-auto rounded-md bg-default-100 p-2 text-xs leading-5">
               {exportedCode}
             </pre>
           </ModalBody>
           <ModalFooter>
+            <Button variant="ghost" onPress={() => void saveTsFile()}>
+              保存为 .spec.ts
+            </Button>
             <Button
               variant="ghost"
               onPress={() => {

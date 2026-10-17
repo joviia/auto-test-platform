@@ -74,13 +74,32 @@ export function SaveCaseDialog() {
         <ModalBody className="space-y-3">
           {draft.steps.length === 0 && (
             <p className="text-sm text-red-600">
-              ⚠ 本次录制没有捕获到任何操作（可能是注入失败或页面在 iframe 中），建议丢弃后重录
+              ⚠
+              本次录制没有捕获到任何操作（可能是操作发生在弹窗中，或采集器注入失败），建议丢弃后重录
             </p>
           )}
           <p className="text-sm text-default-500">
             共 {draft.steps.length} 个步骤、{Object.keys(draft.elements).length} 个元素 ·{' '}
             {draft.startUrl || '（无起始地址）'}
           </p>
+          {draft.diagnostics && (
+            <p className="text-xs text-default-400">
+              捕获原始事件 {draft.diagnostics.rawEvents} 条 · 采集器注入{' '}
+              {draft.diagnostics.frames.filter((f) => f.injected).length}/
+              {draft.diagnostics.frames.length} 个 frame
+              {draft.diagnostics.frames.some((f) => !f.injected) && (
+                <>
+                  {' '}
+                  · 未注入：
+                  {draft.diagnostics.frames
+                    .filter((f) => !f.injected)
+                    .map((f) => f.url || '(空地址)')
+                    .slice(0, 3)
+                    .join('、')}
+                </>
+              )}
+            </p>
+          )}
           <Input placeholder="用例名称" value={name} onChange={(e) => setName(e.target.value)} />
           <select
             className={selectClass}

@@ -7,6 +7,10 @@ export interface RecordingDraft {
   steps: Step[]
   elements: Record<string, Element>
   startUrl: string
+  diagnostics?: {
+    rawEvents: number
+    frames: Array<{ url: string; injected: boolean }>
+  }
 }
 
 interface UiState {
