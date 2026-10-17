@@ -36,6 +36,8 @@ export interface RawRecorderEvent {
   /** 滚动位置（仅 scroll 事件） */
   x?: number
   y?: number
+  /** 元素所属 iframe 路径（主进程根据 senderFrame 填充） */
+  framePath?: number[]
   /** 拖拽位移与时长（仅 drag 事件） */
   dx?: number
   dy?: number

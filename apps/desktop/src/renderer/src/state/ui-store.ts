@@ -1,7 +1,9 @@
 import type { Element, IpcEventPayload, LiveStep, Step } from '@atp/model'
 import { create } from 'zustand'
 
-export type SelectedNode = { kind: 'project' | 'module' | 'case'; id: string }
+export type SelectedNode = { kind: 'project' | 'module' | 'case' | 'plan'; id: string }
+
+export type NavTab = 'cases' | 'plans'
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 
@@ -102,6 +104,10 @@ interface UiState {
   selected: SelectedNode | null
   setSelected: (node: SelectedNode | null) => void
 
+  /** 左栏导航：用例库 / 测试计划 */
+  navTab: NavTab
+  setNavTab: (tab: NavTab) => void
+
   /** 当前项目：左树、新建用例、保存对话框共用 */
   currentProjectId: string | null
   setCurrentProjectId: (projectId: string | null) => void
@@ -140,6 +146,9 @@ interface UiState {
   setReplayProgress: (
     progress: { runId: string | null; index: number; total: number } | null,
   ) => void
+
+  planProgress: IpcEventPayload<'event:plan-progress'> | null
+  setPlanProgress: (progress: IpcEventPayload<'event:plan-progress'> | null) => void
 }
 
 const initialDevice = readStoredDevice()
@@ -147,6 +156,9 @@ const initialDevice = readStoredDevice()
 export const useUiStore = create<UiState>((set, get) => ({
   selected: null,
   setSelected: (selected) => set({ selected }),
+
+  navTab: 'cases',
+  setNavTab: (navTab) => set({ navTab }),
 
   currentProjectId: null,
   setCurrentProjectId: (currentProjectId) => set({ currentProjectId }),
@@ -206,4 +218,7 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   replayProgress: null,
   setReplayProgress: (replayProgress) => set({ replayProgress }),
+
+  planProgress: null,
+  setPlanProgress: (planProgress) => set({ planProgress }),
 }))

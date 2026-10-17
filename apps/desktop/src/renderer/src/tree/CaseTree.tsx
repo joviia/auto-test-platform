@@ -27,7 +27,7 @@ import {
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { EmptyHint } from '../components/EmptyHint'
 import { useOverlayGuard } from '../hooks/use-overlay-guard'
-import { type SelectedNode, useUiStore } from '../state/ui-store'
+import { useUiStore } from '../state/ui-store'
 
 type NodeKind = 'project' | 'module' | 'case'
 
@@ -253,7 +253,9 @@ export function CaseTree() {
 
   const remove = async (): Promise<void> => {
     if (!selected) return
-    const target: SelectedNode = selected
+    const { kind, id } = selected
+    if (kind === 'plan') return
+    const target = { kind, id }
     try {
       await deleteNode.mutateAsync(target)
       if (target.kind === 'project') {

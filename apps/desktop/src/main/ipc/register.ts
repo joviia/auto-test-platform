@@ -17,9 +17,12 @@ import {
 import { caseRepo } from '../db/repositories/cases'
 import { elementRepo } from '../db/repositories/elements'
 import { moduleRepo } from '../db/repositories/modules'
+import { planRepo, planRunRepo } from '../db/repositories/plans'
 import { projectRepo } from '../db/repositories/projects'
 import { runRepo } from '../db/repositories/runs'
+import { suiteRepo } from '../db/repositories/suites'
 import { applyDeviceMetrics } from '../services/emulation'
+import { startPlanRun, stopPlanRun } from '../services/plan-runner'
 import { armAssertion, startRecording, stopRecording } from '../services/recording'
 import { startReplay, stopReplay } from '../services/replay'
 
@@ -104,6 +107,42 @@ export function registerIpc(): void {
     return { ok: true }
   })
 
+  route(IpcChannel.suiteList, (input) => suiteRepo.list(input.projectId))
+  route(IpcChannel.suiteGet, (input) => {
+    const found = suiteRepo.get(input.id)
+    if (!found) throw new Error(`套件不存在：${input.id}`)
+    return found
+  })
+  route(IpcChannel.suiteCreate, (input) => suiteRepo.create(input))
+  route(IpcChannel.suiteUpdate, (input) => suiteRepo.update(input))
+  route(IpcChannel.suiteDelete, (input) => {
+    suiteRepo.remove(input.id)
+    return { ok: true }
+  })
+
+  route(IpcChannel.planList, (input) => planRepo.list(input.projectId))
+  route(IpcChannel.planGet, (input) => {
+    const found = planRepo.get(input.id)
+    if (!found) throw new Error(`计划不存在：${input.id}`)
+    return found
+  })
+  route(IpcChannel.planCreate, (input) => planRepo.create(input))
+  route(IpcChannel.planUpdate, (input) => planRepo.update(input))
+  route(IpcChannel.planDelete, (input) => {
+    planRepo.remove(input.id)
+    return { ok: true }
+  })
+  route(IpcChannel.planRunStart, (input) =>
+    startPlanRun(input.planId, getControlledView(), input.caseIds),
+  )
+  route(IpcChannel.planRunStop, () => stopPlanRun())
+  route(IpcChannel.planRunList, (input) => planRunRepo.list(input.planId, input.limit))
+  route(IpcChannel.planRunGet, (input) => {
+    const planRun = planRunRepo.get(input.planRunId)
+    if (!planRun) throw new Error(`计划执行不存在：${input.planRunId}`)
+    return { planRun, runs: planRunRepo.runsOf(input.planRunId) }
+  })
+
   route(IpcChannel.browserNavigate, (input) => {
     void navigateControlledView(input.url)
     return { ok: true }
@@ -127,7 +166,7 @@ export function registerIpc(): void {
     return { ok: true }
   })
 
-  route(IpcChannel.runList, (input) => runRepo.list(input.caseId))
+  route(IpcChannel.runList, (input) => runRepo.list(input))
   route(IpcChannel.runGet, (input) => {
     const found = runRepo.get(input.runId)
     if (!found) throw new Error(`执行记录不存在：${input.runId}`)

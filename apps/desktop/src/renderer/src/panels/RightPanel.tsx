@@ -1,8 +1,11 @@
 import { Tab, TabIndicator, TabList, TabListContainer, TabPanel, TabsRoot } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
+import { ListChecks } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { qk } from '../api/client'
+import { EmptyHint } from '../components/EmptyHint'
 import { ElementPanel } from '../elements/ElementPanel'
+import { PlanPanel } from '../plans/PlanPanel'
 import { useUiStore } from '../state/ui-store'
 import { DraftStepsPanel } from '../steps/DraftStepsPanel'
 import { LiveStepsPanel } from '../steps/LiveStepsPanel'
@@ -18,6 +21,22 @@ function CountBadge({ value }: { value: number }) {
 }
 
 export function RightPanel() {
+  const selected = useUiStore((s) => s.selected)
+  const navTab = useUiStore((s) => s.navTab)
+  if (selected?.kind === 'plan') return <PlanPanel planId={selected.id} />
+  if (navTab === 'plans') {
+    return (
+      <EmptyHint
+        icon={ListChecks}
+        title="选择或新建测试计划"
+        description="左侧选择计划查看执行记录，或点击「新建测试计划」把用例组织成批量回归。"
+      />
+    )
+  }
+  return <CaseRightPanel />
+}
+
+function CaseRightPanel() {
   const selected = useUiStore((s) => s.selected)
   const recording = useUiStore((s) => s.recording)
   const liveSteps = useUiStore((s) => s.liveSteps)

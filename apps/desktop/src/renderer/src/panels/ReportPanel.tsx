@@ -1,7 +1,8 @@
 import type { RunStepRow } from '@atp/model'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, ChevronDown, ChevronRight, FileVideo, History, XCircle } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { usePlans } from '../api/client'
 import { EmptyHint } from '../components/EmptyHint'
 import { useUiStore } from '../state/ui-store'
 
@@ -31,11 +32,24 @@ function formatTime(value: string | null | undefined): string {
 
 export function ReportPanel() {
   const selected = useUiStore((s) => s.selected)
+  const currentProjectId = useUiStore((s) => s.currentProjectId)
   const caseId = selected?.kind === 'case' ? selected.id : undefined
+  const { data: plans = [] } = usePlans(currentProjectId)
+  const [planFilter, setPlanFilter] = useState('')
+
+  // 切换项目后清掉可能属于旧项目的计划筛选
+  useEffect(() => {
+    if (!currentProjectId) return
+    setPlanFilter('')
+  }, [currentProjectId])
 
   const { data: runs = [] } = useQuery({
-    queryKey: ['runs', caseId ?? 'all'],
-    queryFn: () => window.atp.invoke('run:list', caseId ? { caseId } : {}),
+    queryKey: ['runs', caseId ?? 'all', planFilter || 'all'],
+    queryFn: () =>
+      window.atp.invoke('run:list', {
+        caseId,
+        planId: planFilter || undefined,
+      }),
   })
   const [openRunId, setOpenRunId] = useState<string | null>(null)
   const { data: detail } = useQuery({
@@ -51,6 +65,19 @@ export function ReportPanel() {
         <span className="rounded-full bg-surface-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted">
           {runs.length}
         </span>
+        <select
+          className="h-7 max-w-[132px] rounded-md border border-border bg-field px-1.5 text-[11px] text-foreground outline-none focus:border-accent/60"
+          value={planFilter}
+          onChange={(e) => setPlanFilter(e.target.value)}
+          aria-label="按计划筛选执行记录"
+        >
+          <option value="">全部计划</option>
+          {plans.map((plan) => (
+            <option key={plan.id} value={plan.id}>
+              {plan.name}
+            </option>
+          ))}
+        </select>
         <span className="min-w-0 flex-1 truncate text-[11px] text-muted">
           {caseId ? '当前用例' : '全部用例'} · 步骤级证据
         </span>
@@ -61,7 +88,11 @@ export function ReportPanel() {
           <EmptyHint
             icon={History}
             title="还没有执行记录"
-            description="选中用例后点击中间工具栏的「回放用例」，结果与证据会出现在这里"
+            description={
+              planFilter
+                ? '这个计划还没有产生执行记录，执行计划后结果会出现在这里'
+                : '选中用例后点击中间工具栏的「回放用例」，结果与证据会出现在这里'
+            }
             compact
           />
         ) : (
@@ -95,6 +126,11 @@ export function ReportPanel() {
                         {formatTime(run.startedAt)}
                       </span>
                     </span>
+                    {(run.attempt ?? 0) > 1 && (
+                      <span className="shrink-0 rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                        第 {run.attempt} 次
+                      </span>
+                    )}
                     <span
                       className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
                         passed

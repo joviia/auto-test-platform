@@ -3,16 +3,17 @@ import { useEffect } from 'react'
 import { useProjects } from './api/client'
 import { BrowserStage } from './browser/BrowserStage'
 import { AppBar } from './components/AppBar'
+import { LeftSidebar } from './components/LeftSidebar'
 import { StatusBar } from './components/StatusBar'
 import { RightPanel } from './panels/RightPanel'
 import { SaveCaseDialog } from './recording/SaveCaseDialog'
 import { useUiStore } from './state/ui-store'
-import { CaseTree } from './tree/CaseTree'
 
 export function App() {
   const setRecording = useUiStore((s) => s.setRecording)
   const pushLiveStep = useUiStore((s) => s.pushLiveStep)
   const setReplayProgress = useUiStore((s) => s.setReplayProgress)
+  const setPlanProgress = useUiStore((s) => s.setPlanProgress)
   const theme = useUiStore((s) => s.theme)
   const currentProjectId = useUiStore((s) => s.currentProjectId)
   const setCurrentProjectId = useUiStore((s) => s.setCurrentProjectId)
@@ -50,12 +51,14 @@ export function App() {
     const offReplay = window.atp.on('event:replay-progress', (p) =>
       setReplayProgress({ runId: p.runId, index: p.index, total: p.total }),
     )
+    const offPlan = window.atp.on('event:plan-progress', (p) => setPlanProgress(p))
     return () => {
       offStatus()
       offStep()
       offReplay()
+      offPlan()
     }
-  }, [setRecording, pushLiveStep, setReplayProgress])
+  }, [setRecording, pushLiveStep, setReplayProgress, setPlanProgress])
 
   return (
     <>
@@ -63,7 +66,7 @@ export function App() {
         <AppBar />
         <div className="flex min-h-0 flex-1">
           <aside className="flex w-[288px] shrink-0 flex-col border-r border-border bg-surface">
-            <CaseTree />
+            <LeftSidebar />
           </aside>
           <main className="flex min-w-0 flex-1 flex-col">
             <BrowserStage />

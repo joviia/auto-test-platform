@@ -32,13 +32,21 @@ export const caseRepo = {
       .all()
       .sort((a, b) => a.idx - b.idx)
     const elementIds = new Set(stepRows.map((s) => s.elementId).filter(Boolean) as string[])
+    // 元素按 id 全局共享：同一元素可能被多个项目的用例引用，
+    // 不能仅按当前项目过滤（否则跨项目复用时会丢失元素）。
     const elementRows = getDb()
       .select()
       .from(elements)
-      .where(eq(elements.projectId, r.projectId))
       .all()
       .filter((e) => elementIds.has(e.id))
-      .map((e) => elementSchema.parse({ id: e.id, name: e.name, locators: JSON.parse(e.locators) }))
+      .map((e) =>
+        elementSchema.parse({
+          id: e.id,
+          name: e.name,
+          locators: JSON.parse(e.locators),
+          framePath: e.framePath ? JSON.parse(e.framePath) : undefined,
+        }),
+      )
     return caseFileSchema.parse({
       case: {
         id: r.id,
@@ -117,11 +125,21 @@ export const caseRepo = {
       for (const el of Object.values(file.elements)) {
         const exists = tx.select().from(elements).where(eq(elements.id, el.id)).get()
         const locators = JSON.stringify(el.locators)
+        const framePath = el.framePath ? JSON.stringify(el.framePath) : null
         if (exists) {
-          tx.update(elements).set({ name: el.name, locators }).where(eq(elements.id, el.id)).run()
+          tx.update(elements)
+            .set({ name: el.name, locators, framePath })
+            .where(eq(elements.id, el.id))
+            .run()
         } else {
           tx.insert(elements)
-            .values({ id: el.id, projectId: file.case.projectId, name: el.name, locators })
+            .values({
+              id: el.id,
+              projectId: file.case.projectId,
+              name: el.name,
+              locators,
+              framePath,
+            })
             .run()
         }
       }

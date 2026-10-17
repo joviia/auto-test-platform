@@ -5,9 +5,12 @@ import {
   caseRowSchema,
   elementRowSchema,
   moduleRowSchema,
+  planRowSchema,
+  planRunRowSchema,
   projectRowSchema,
   runRowSchema,
   runStepRowSchema,
+  suiteRowSchema,
 } from '../dto/rows'
 import { IpcChannel, IpcEvent } from './channels'
 
@@ -18,6 +21,11 @@ export interface IpcEndpoint<I = unknown, O = unknown> {
 
 const okSchema = z.object({ ok: z.literal(true) })
 const idInput = z.object({ id: z.string().min(1) })
+const planPolicySchema = z.object({
+  retries: z.number().int().min(0).max(10),
+  timeoutMs: z.number().int().positive(),
+  continueOnFailure: z.boolean(),
+})
 
 /** 录制实时预览步骤（未绑定元素库的语义动作），RecorderStep 的契约形态；
  * 断言拾取的预览也走此结构（action='assert'） */
@@ -114,6 +122,97 @@ export const ipcContract = {
   [IpcChannel.elementUpsert]: { input: elementRowSchema, output: elementRowSchema },
   [IpcChannel.elementDelete]: { input: idInput, output: okSchema },
 
+  [IpcChannel.suiteList]: {
+    input: z.object({ projectId: z.string().min(1) }),
+    output: z.array(suiteRowSchema),
+  },
+  [IpcChannel.suiteGet]: {
+    input: idInput,
+    output: z.object({
+      suite: suiteRowSchema,
+      caseIds: z.array(z.string()),
+    }),
+  },
+  [IpcChannel.suiteCreate]: {
+    input: z.object({
+      projectId: z.string().min(1),
+      name: z.string().min(1),
+      description: z.string().optional(),
+      caseIds: z.array(z.string()),
+    }),
+    output: suiteRowSchema,
+  },
+  [IpcChannel.suiteUpdate]: {
+    input: z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      description: z.string().optional(),
+      caseIds: z.array(z.string()),
+    }),
+    output: suiteRowSchema,
+  },
+  [IpcChannel.suiteDelete]: { input: idInput, output: okSchema },
+
+  [IpcChannel.planList]: {
+    input: z.object({ projectId: z.string().min(1) }),
+    output: z.array(planRowSchema),
+  },
+  [IpcChannel.planGet]: {
+    input: idInput,
+    output: z.object({
+      plan: planRowSchema,
+      caseIds: z.array(z.string()),
+    }),
+  },
+  [IpcChannel.planCreate]: {
+    input: z.object({
+      projectId: z.string().min(1),
+      name: z.string().min(1),
+      suiteId: z.string().nullable().optional(),
+      caseIds: z.array(z.string()),
+      ...planPolicySchema.shape,
+    }),
+    output: planRowSchema,
+  },
+  [IpcChannel.planUpdate]: {
+    input: z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+      caseIds: z.array(z.string()),
+      ...planPolicySchema.shape,
+    }),
+    output: planRowSchema,
+  },
+  [IpcChannel.planDelete]: { input: idInput, output: okSchema },
+  [IpcChannel.planRunStart]: {
+    input: z.object({
+      planId: z.string().min(1),
+      /** 只执行计划内的指定用例（按计划顺序）；缺省执行全部 */
+      caseIds: z.array(z.string().min(1)).min(1).optional(),
+    }),
+    output: z.object({ planRunId: z.string() }),
+  },
+  [IpcChannel.planRunStop]: { input: z.void(), output: okSchema },
+  [IpcChannel.planRunList]: {
+    input: z.object({
+      planId: z.string().min(1).optional(),
+      limit: z.number().int().positive().optional(),
+    }),
+    output: z.array(planRunRowSchema),
+  },
+  [IpcChannel.planRunGet]: {
+    input: z.object({ planRunId: z.string().min(1) }),
+    output: z.object({
+      planRun: planRunRowSchema,
+      runs: z.array(
+        z.object({
+          run: runRowSchema,
+          caseName: z.string(),
+        }),
+      ),
+    }),
+  },
+
   [IpcChannel.browserNavigate]: {
     input: z.object({ url: z.string().min(1) }),
     output: okSchema,
@@ -171,7 +270,11 @@ export const ipcContract = {
   },
   [IpcChannel.replayStop]: { input: z.void(), output: okSchema },
   [IpcChannel.runList]: {
-    input: z.object({ caseId: z.string().min(1).optional() }),
+    input: z.object({
+      caseId: z.string().min(1).optional(),
+      /** 只看某个计划产生的执行记录（含重试） */
+      planId: z.string().min(1).optional(),
+    }),
     output: z.array(runRowSchema),
   },
   [IpcChannel.runGet]: {
@@ -202,6 +305,21 @@ export const ipcEventContract = {
     index: z.number().int().nonnegative(),
     total: z.number().int().nonnegative(),
     status: stepStatusSchema,
+  }),
+  [IpcEvent.planProgress]: z.object({
+    planRunId: z.string(),
+    planName: z.string(),
+    phase: z.enum(['run-start', 'case-start', 'step', 'case-end', 'run-end']),
+    caseIndex: z.number().int().nonnegative(),
+    caseTotal: z.number().int().nonnegative(),
+    caseId: z.string().optional(),
+    caseName: z.string(),
+    attempt: z.number().int().positive(),
+    maxAttempts: z.number().int().positive(),
+    stepIndex: z.number().int().nonnegative().optional(),
+    stepTotal: z.number().int().nonnegative().optional(),
+    status: z.enum(['running', 'passed', 'failed', 'retrying', 'cancelled']).optional(),
+    error: z.string().optional(),
   }),
 }
 

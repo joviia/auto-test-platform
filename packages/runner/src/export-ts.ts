@@ -7,20 +7,29 @@ function quote(s: string): string {
 }
 
 /** 元素 → Playwright 定位器表达式（取第一候选，语义优先） */
-function locatorExpr(element: Element): string {
+function locatorExpr(element: Element, root = 'page'): string {
   const loc = element.locators[0]
   switch (loc.type) {
     case 'testId':
-      return `page.getByTestId(${quote(loc.value)})`
+      return `${root}.getByTestId(${quote(loc.value)})`
     case 'role':
       return loc.name === undefined
-        ? `page.getByRole('${loc.value}')`
-        : `page.getByRole('${loc.value}', { name: ${quote(loc.name)} })`
+        ? `${root}.getByRole('${loc.value}')`
+        : `${root}.getByRole('${loc.value}', { name: ${quote(loc.name)} })`
     case 'text':
-      return `page.getByText(${quote(loc.value)}, { exact: true })`
+      return `${root}.getByText(${quote(loc.value)}, { exact: true })`
     case 'css':
-      return `page.locator(${quote(loc.value)})`
+      return `${root}.locator(${quote(loc.value)})`
   }
+}
+
+/** iframe 元素：按索引链生成 frameLocator 近似表达式 */
+function frameRoot(element: Element): string {
+  let root = 'page'
+  for (const idx of element.framePath ?? []) {
+    root += `.frameLocator('iframe').nth(${idx})`
+  }
+  return root
 }
 
 function regexLiteral(pattern: string): string {
@@ -95,7 +104,7 @@ function assertionLines(a: Assertion, loc: string | null): string[] {
 
 function stepLines(step: Step, elements: Record<string, Element>): string[] {
   const element = step.elementId ? elements[step.elementId] : undefined
-  const loc = element ? locatorExpr(element) : null
+  const loc = element ? locatorExpr(element, frameRoot(element)) : null
   const comment = element ? `// ${element.name}` : '// 页面级操作'
   const lines: string[] = [comment]
   const params = step.params ?? {}

@@ -1,6 +1,6 @@
 import { Dropdown, Tooltip } from '@heroui/react'
 import { ChevronDown, FlaskConical, FolderKanban, Monitor, Moon, Sun } from 'lucide-react'
-import { useCases, useProjects } from '../api/client'
+import { useCases, usePlans, useProjects } from '../api/client'
 import { useElapsed } from '../hooks/use-elapsed'
 import { useUiStore } from '../state/ui-store'
 
@@ -17,11 +17,15 @@ export function AppBar() {
   const recordingStartedAt = useUiStore((s) => s.recordingStartedAt)
   const theme = useUiStore((s) => s.theme)
   const setTheme = useUiStore((s) => s.setTheme)
+  const navTab = useUiStore((s) => s.navTab)
 
   const { data: cases = [] } = useCases(currentProjectId)
+  const { data: plans = [] } = usePlans(currentProjectId)
   const project = projects.find((p) => p.id === currentProjectId)
   const currentCase =
     selected?.kind === 'case' ? cases.find((c) => c.id === selected.id) : undefined
+  const currentPlan =
+    selected?.kind === 'plan' ? plans.find((p) => p.id === selected.id) : undefined
   const elapsed = useElapsed(recordingStartedAt)
 
   const ThemeIcon = THEME_ICON[theme]
@@ -69,10 +73,14 @@ export function AppBar() {
       </Dropdown.Root>
 
       <div className="flex min-w-0 items-center gap-1.5 text-[13px]">
-        <span className="text-muted">用例</span>
+        <span className="text-muted">
+          {selected?.kind === 'plan' || navTab === 'plans' ? '测试计划' : '用例'}
+        </span>
         <span className="text-separator">/</span>
         <span className="truncate text-foreground">
-          {currentCase?.name ?? (selected?.kind === 'case' ? '未命名用例' : '未选择用例')}
+          {currentPlan?.name ??
+            currentCase?.name ??
+            (selected?.kind === 'plan' || navTab === 'plans' ? '未选择计划' : '未选择用例')}
         </span>
       </div>
 

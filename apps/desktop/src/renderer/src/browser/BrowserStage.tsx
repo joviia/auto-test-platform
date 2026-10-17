@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   Circle,
   Globe,
+  ListChecks,
   Loader2,
   MonitorSmartphone,
   Play,
@@ -66,12 +67,20 @@ export function BrowserStage() {
   const setReplayMode = useUiStore((s) => s.setReplayMode)
   const replayProgress = useUiStore((s) => s.replayProgress)
   const setReplayProgress = useUiStore((s) => s.setReplayProgress)
+  const planProgress = useUiStore((s) => s.planProgress)
+  const navTab = useUiStore((s) => s.navTab)
   const qc = useQueryClient()
   const elapsed = useElapsed(recordingStartedAt)
 
   const preset = getDevicePreset(devicePresetId)
   const size = deviceSize(preset, deviceOrientation)
-  const busy = recording || replaying
+  const planRunning = Boolean(planProgress && planProgress.phase !== 'run-end')
+  const busy = recording || replaying || planRunning
+
+  // 外部（回放/计划执行）设置 url 时同步地址栏
+  useEffect(() => {
+    if (url) setInput(url)
+  }, [url])
 
   // 原生视图层级高于 renderer：任何与舞台相交的浮层（弹窗 / 下拉菜单）
   // 出现时都要暂时收起视图，否则浮层会被原生页面盖住。
@@ -320,7 +329,7 @@ export function BrowserStage() {
         <Button
           size="sm"
           variant={recording ? 'danger' : 'primary'}
-          isDisabled={replaying}
+          isDisabled={replaying || planRunning}
           onPress={() => void toggleRecording()}
         >
           {recording ? (
@@ -431,6 +440,20 @@ export function BrowserStage() {
         </div>
       )}
 
+      {planRunning && !recording && !replaying && (
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-accent/25 bg-accent/[0.06] px-3 text-xs">
+          <Loader2 size={13} className="animate-spin text-accent" />
+          <span className="font-medium text-accent">计划执行中</span>
+          <span className="min-w-0 flex-1 truncate text-muted">
+            {planProgress?.caseName || '准备执行'} · 第 {planProgress?.attempt ?? 1} 次
+          </span>
+          <span className="shrink-0 font-mono text-muted">
+            {Math.min((planProgress?.caseIndex ?? 0) + 1, planProgress?.caseTotal ?? 0)}/
+            {planProgress?.caseTotal ?? 0}
+          </span>
+        </div>
+      )}
+
       {replaying && (
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-accent/25 bg-accent/[0.06] px-3 text-xs">
           <Loader2 size={13} className="animate-spin text-accent" />
@@ -461,11 +484,19 @@ export function BrowserStage() {
       <div ref={stageRef} className="atp-stage relative min-h-0 flex-1 overflow-hidden">
         {!url && !recording && (
           <div className="absolute inset-0 grid place-items-center">
-            <EmptyHint
-              icon={Globe}
-              title="打开被测页面，开始录制"
-              description="在上方输入网址（或本地 HTML 文件路径）后回车。录制期间在页面上的点击、输入、选择与按键都会自动沉淀为步骤。"
-            />
+            {navTab === 'plans' ? (
+              <EmptyHint
+                icon={ListChecks}
+                title="执行计划后，页面会在这里运行"
+                description="在右侧选择测试计划并点击「执行计划」；用例会按顺序在中栏可见地执行。"
+              />
+            ) : (
+              <EmptyHint
+                icon={Globe}
+                title="打开被测页面，开始录制"
+                description="在上方输入网址（或本地 HTML 文件路径）后回车。录制期间在页面上的点击、输入、选择与按键都会自动沉淀为步骤。"
+              />
+            )}
           </div>
         )}
 

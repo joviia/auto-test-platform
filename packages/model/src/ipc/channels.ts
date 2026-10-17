@@ -19,6 +19,21 @@ export const IpcChannel = {
   elementList: 'element:list',
   elementUpsert: 'element:upsert',
   elementDelete: 'element:delete',
+  // 套件与测试计划
+  suiteList: 'suite:list',
+  suiteGet: 'suite:get',
+  suiteCreate: 'suite:create',
+  suiteUpdate: 'suite:update',
+  suiteDelete: 'suite:delete',
+  planList: 'plan:list',
+  planGet: 'plan:get',
+  planCreate: 'plan:create',
+  planUpdate: 'plan:update',
+  planDelete: 'plan:delete',
+  planRunStart: 'plan:run-start',
+  planRunStop: 'plan:run-stop',
+  planRunList: 'plan:run-list',
+  planRunGet: 'plan:run-get',
   // 受控浏览器与录制
   browserNavigate: 'browser:navigate',
   viewBoundsSet: 'view:bounds-set',
@@ -38,6 +53,7 @@ export const IpcEvent = {
   recordingStatus: 'event:recording-status',
   recordingStep: 'event:recording-step',
   replayProgress: 'event:replay-progress',
+  planProgress: 'event:plan-progress',
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]

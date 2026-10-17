@@ -37,16 +37,69 @@ export const caseSteps = sqliteTable('case_steps', {
   condition: text('condition'),
 })
 
+export const suites = sqliteTable('suites', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const suiteItems = sqliteTable('suite_items', {
+  id: text('id').primaryKey(),
+  suiteId: text('suite_id').notNull(),
+  caseId: text('case_id').notNull(),
+  idx: integer('idx').notNull(),
+})
+
+export const plans = sqliteTable('plans', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').notNull(),
+  name: text('name').notNull(),
+  /** 创建计划时来源套件（仅作展示；计划成员是快照） */
+  suiteId: text('suite_id'),
+  retries: integer('retries').notNull().default(0),
+  timeoutMs: integer('timeout_ms').notNull().default(15000),
+  continueOnFailure: integer('continue_on_failure').notNull().default(1),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const planItems = sqliteTable('plan_items', {
+  id: text('id').primaryKey(),
+  planId: text('plan_id').notNull(),
+  caseId: text('case_id').notNull(),
+  idx: integer('idx').notNull(),
+})
+
+export const planRuns = sqliteTable('plan_runs', {
+  id: text('id').primaryKey(),
+  planId: text('plan_id').notNull(),
+  status: text('status').notNull(),
+  startedAt: text('started_at').notNull(),
+  finishedAt: text('finished_at'),
+  total: integer('total').notNull(),
+  passed: integer('passed').notNull().default(0),
+  failed: integer('failed').notNull().default(0),
+  error: text('error'),
+})
+
 export const elements = sqliteTable('elements', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull(),
   name: text('name').notNull(),
   locators: text('locators').notNull(),
+  /** iframe 索引路径（JSON 数组） */
+  framePath: text('frame_path'),
 })
 
 export const runs = sqliteTable('runs', {
   id: text('id').primaryKey(),
   caseId: text('case_id').notNull(),
+  planRunId: text('plan_run_id'),
+  attempt: integer('attempt'),
+  caseSnapshot: text('case_snapshot'),
   status: text('status').notNull(),
   startedAt: text('started_at').notNull(),
   finishedAt: text('finished_at'),

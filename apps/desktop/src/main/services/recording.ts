@@ -10,6 +10,7 @@ import type { WebContentsView, WebFrameMain } from 'electron'
 import { ipcMain } from 'electron'
 import { getMainWindow } from '../app-window'
 import { acquireDebugger, releaseDebugger } from '../browser/debugger'
+import { isPlanRunning } from './run-lock'
 
 /** 录制停止时回传的诊断信息：前端用于区分「没操作」与「注入失败/iframe」 */
 export interface RecordingDiagnostics {
@@ -93,17 +94,31 @@ async function collectFrameDiagnostics(
   )
 }
 
+/** 从发送 frame 计算到主文档的索引路径（iframe 回放用） */
+function framePathOf(frame: WebFrameMain | null): number[] {
+  const path: number[] = []
+  let cur = frame
+  while (cur?.parent) {
+    const idx = cur.parent.frames.indexOf(cur)
+    if (idx < 0) break
+    path.unshift(idx)
+    cur = cur.parent
+  }
+  return path
+}
+
 /** 订阅受控视图采集器的原始事件流（recorder-preload → ipcMain） */
 export function initRecordingService(): void {
-  ipcMain.on('atp:recorder-event', (_event, payload: unknown) => {
+  ipcMain.on('atp:recorder-event', (event, payload: unknown) => {
     if (!state.recording) return
-    const ev = payload as RawRecorderEvent
-    if (!ev || typeof ev.kind !== 'string' || !Array.isArray(ev.candidates)) return
+    const raw = payload as RawRecorderEvent
+    if (!raw || typeof raw.kind !== 'string' || !Array.isArray(raw.candidates)) return
+    const ev: RawRecorderEvent = { ...raw, framePath: framePathOf(event.senderFrame) }
 
     // 断言拾取态：下一个被捕获元素生成 visible 断言步骤，不记动作
     if (state.assertionArmed) {
       state.assertionArmed = false
-      const el = buildElement(ev.target, ev.candidates)
+      const el = buildElement(ev.target, ev.candidates, ev.framePath)
       // 断言步骤同样引用元素库，元素必须随用例一起落库
       state.assertionElements[el.id] = el
       state.assertionSteps.push({
@@ -131,6 +146,7 @@ export function initRecordingService(): void {
 }
 
 export function startRecording(view: WebContentsView): { ok: true } {
+  if (isPlanRunning()) throw new Error('计划执行中，无法开始录制')
   state.buffer = []
   state.assertionSteps = []
   state.assertionElements = {}
@@ -223,7 +239,7 @@ export async function stopRecording(): Promise<{
         params: { x: s.x ?? 0, y: s.y ?? 0 },
       }
     }
-    const el = buildElement(s.target, s.candidates)
+    const el = buildElement(s.target, s.candidates, s.framePath)
     elements[el.id] = el
     return {
       id: `s-${String(i + 1).padStart(3, '0')}`,

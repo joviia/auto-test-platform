@@ -5,6 +5,12 @@ export const qk = {
   modules: (projectId: string) => ['modules', projectId] as const,
   cases: (projectId: string) => ['cases', projectId] as const,
   caseFile: (caseId: string) => ['case', caseId] as const,
+  suites: (projectId: string) => ['suites', projectId] as const,
+  suite: (suiteId: string) => ['suite', suiteId] as const,
+  plans: (projectId: string) => ['plans', projectId] as const,
+  plan: (planId: string) => ['plan', planId] as const,
+  planRuns: (planId: string) => ['planRuns', planId] as const,
+  planRun: (planRunId: string) => ['planRun', planRunId] as const,
 }
 
 export function useProjects() {
@@ -24,6 +30,54 @@ export function useCases(projectId: string | null) {
     queryKey: projectId ? qk.cases(projectId) : ['cases', 'none'],
     queryFn: () => window.atp.invoke('case:list', { projectId: projectId as string }),
     enabled: Boolean(projectId),
+  })
+}
+
+export function useSuites(projectId: string | null) {
+  return useQuery({
+    queryKey: projectId ? qk.suites(projectId) : ['suites', 'none'],
+    queryFn: () => window.atp.invoke('suite:list', { projectId: projectId as string }),
+    enabled: Boolean(projectId),
+  })
+}
+
+export function useSuite(suiteId: string | null) {
+  return useQuery({
+    queryKey: suiteId ? qk.suite(suiteId) : ['suite', 'none'],
+    queryFn: () => window.atp.invoke('suite:get', { id: suiteId as string }),
+    enabled: Boolean(suiteId),
+  })
+}
+
+export function usePlans(projectId: string | null) {
+  return useQuery({
+    queryKey: projectId ? qk.plans(projectId) : ['plans', 'none'],
+    queryFn: () => window.atp.invoke('plan:list', { projectId: projectId as string }),
+    enabled: Boolean(projectId),
+  })
+}
+
+export function usePlan(planId: string | null) {
+  return useQuery({
+    queryKey: planId ? qk.plan(planId) : ['plan', 'none'],
+    queryFn: () => window.atp.invoke('plan:get', { id: planId as string }),
+    enabled: Boolean(planId),
+  })
+}
+
+export function usePlanRuns(planId: string | null) {
+  return useQuery({
+    queryKey: planId ? qk.planRuns(planId) : ['planRuns', 'none'],
+    queryFn: () => window.atp.invoke('plan:run-list', { planId: planId as string }),
+    enabled: Boolean(planId),
+  })
+}
+
+export function usePlanRun(planRunId: string | null) {
+  return useQuery({
+    queryKey: planRunId ? qk.planRun(planRunId) : ['planRun', 'none'],
+    queryFn: () => window.atp.invoke('plan:run-get', { planRunId: planRunId as string }),
+    enabled: Boolean(planRunId),
   })
 }
 

@@ -28,8 +28,8 @@ function hashJson(v: unknown): string {
 }
 
 /** 元素 id 由候选链派生：同一元素重复录制时复用 id（元素库 upsert 语义） */
-export function elementIdOf(locators: Locator[]): string {
-  return `el-${hashJson(locators)}`
+export function elementIdOf(locators: Locator[], framePath?: number[]): string {
+  return `el-${hashJson(framePath && framePath.length > 0 ? { locators, framePath } : locators)}`
 }
 
 function elementName(target: RawTargetInfo, candidates: RawLocatorCandidate[]): string {
@@ -42,7 +42,16 @@ function elementName(target: RawTargetInfo, candidates: RawLocatorCandidate[]): 
   )
 }
 
-export function buildElement(target: RawTargetInfo, candidates: RawLocatorCandidate[]): Element {
+export function buildElement(
+  target: RawTargetInfo,
+  candidates: RawLocatorCandidate[],
+  framePath?: number[],
+): Element {
   const locators = toLocatorCandidates(candidates)
-  return { id: elementIdOf(locators), name: elementName(target, candidates), locators }
+  return {
+    id: elementIdOf(locators, framePath),
+    name: elementName(target, candidates),
+    locators,
+    ...(framePath && framePath.length > 0 ? { framePath } : {}),
+  }
 }

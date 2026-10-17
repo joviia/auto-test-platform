@@ -1,13 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import type { RunResult, RunRow, RunStepRow } from '@atp/model'
-import { eq } from 'drizzle-orm'
+import { type SQL, and, eq, inArray } from 'drizzle-orm'
 import { getDb } from '../client'
-import { cases, runSteps, runs } from '../schema'
+import { cases, planRuns, runSteps, runs } from '../schema'
 
 function toRunRow(r: typeof runs.$inferSelect): RunRow {
   return {
     id: r.id,
     caseId: r.caseId,
+    planRunId: r.planRunId,
+    attempt: r.attempt,
     status: r.status as RunRow['status'],
     startedAt: r.startedAt,
     finishedAt: r.finishedAt,
@@ -17,10 +19,21 @@ function toRunRow(r: typeof runs.$inferSelect): RunRow {
 }
 
 export const runRepo = {
-  list(caseId?: string): RunRow[] {
-    const rows = caseId
-      ? getDb().select().from(runs).where(eq(runs.caseId, caseId)).all()
-      : getDb().select().from(runs).all()
+  list(filter: { caseId?: string; planId?: string } = {}): RunRow[] {
+    const conditions: SQL[] = []
+    if (filter.caseId) conditions.push(eq(runs.caseId, filter.caseId))
+    if (filter.planId) {
+      const planRunIds = getDb()
+        .select({ id: planRuns.id })
+        .from(planRuns)
+        .where(eq(planRuns.planId, filter.planId))
+        .all()
+        .map((r) => r.id)
+      if (planRunIds.length === 0) return []
+      conditions.push(inArray(runs.planRunId, planRunIds))
+    }
+    const base = getDb().select().from(runs)
+    const rows = conditions.length > 0 ? base.where(and(...conditions)).all() : base.all()
     const caseName = (cid: string): string | undefined =>
       getDb().select({ name: cases.name }).from(cases).where(eq(cases.id, cid)).get()?.name
     return rows
@@ -57,12 +70,18 @@ export const runRepo = {
   },
 
   /** 落库一次完整回放结果（执行记录与用例定义分离），事务写入 */
-  save(result: RunResult): void {
+  save(
+    result: RunResult,
+    meta?: { planRunId?: string; attempt?: number; caseSnapshot?: string },
+  ): void {
     getDb().transaction((tx) => {
       tx.insert(runs)
         .values({
           id: result.runId,
           caseId: result.caseId,
+          planRunId: meta?.planRunId ?? null,
+          attempt: meta?.attempt ?? null,
+          caseSnapshot: meta?.caseSnapshot ?? null,
           status: result.status,
           startedAt: result.startedAt,
           finishedAt: result.finishedAt,

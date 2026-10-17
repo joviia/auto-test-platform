@@ -50,12 +50,54 @@ export const elementRowSchema = z.object({
   projectId: z.string(),
   name: z.string().min(1),
   locators: z.array(locatorSchema),
+  framePath: z.array(z.number().int().nonnegative()).optional(),
+})
+
+export const suiteRowSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  name: z.string().min(1),
+  description: z.string().nullable(),
+  caseCount: z.number().int().nonnegative(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export const planRowSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  name: z.string().min(1),
+  suiteId: z.string().nullable(),
+  retries: z.number().int().nonnegative(),
+  timeoutMs: z.number().int().positive(),
+  continueOnFailure: z.boolean(),
+  caseCount: z.number().int().nonnegative(),
+  lastRunStatus: z.enum(['running', 'passed', 'failed', 'cancelled']).nullable(),
+  lastRunAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+
+export const planRunStatusSchema = z.enum(['running', 'passed', 'failed', 'cancelled'])
+
+export const planRunRowSchema = z.object({
+  id: z.string(),
+  planId: z.string(),
+  status: planRunStatusSchema,
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
+  total: z.number().int().nonnegative(),
+  passed: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  error: z.string().nullable(),
 })
 
 export const runRowSchema = z.object({
   id: z.string(),
   caseId: z.string(),
   caseName: z.string().optional(),
+  planRunId: z.string().nullable().optional(),
+  attempt: z.number().int().positive().nullable().optional(),
   status: z.enum(['passed', 'failed']),
   startedAt: z.string(),
   finishedAt: z.string().nullable(),
@@ -90,5 +132,9 @@ export type ModuleRow = z.infer<typeof moduleRowSchema>
 export type CaseRow = z.infer<typeof caseRowSchema>
 export type CaseStepRow = z.infer<typeof caseStepRowSchema>
 export type ElementRow = z.infer<typeof elementRowSchema>
+export type SuiteRow = z.infer<typeof suiteRowSchema>
+export type PlanRow = z.infer<typeof planRowSchema>
+export type PlanRunRow = z.infer<typeof planRunRowSchema>
+export type PlanRunStatus = z.infer<typeof planRunStatusSchema>
 export type RunRow = z.infer<typeof runRowSchema>
 export type RunStepRow = z.infer<typeof runStepRowSchema>

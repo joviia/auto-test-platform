@@ -8,6 +8,7 @@ export interface RecorderStep {
   url: string
   ts: number
   isTop?: boolean
+  framePath?: number[]
   value?: string
   key?: string
   x?: number
@@ -67,6 +68,7 @@ export function normalizeEvents(events: RawRecorderEvent[]): RecorderStep[] {
       url: ev.url,
       ts: ev.ts,
       isTop: ev.isTop,
+      framePath: ev.framePath,
       value: ev.value,
       key: ev.key,
       x: ev.x,
