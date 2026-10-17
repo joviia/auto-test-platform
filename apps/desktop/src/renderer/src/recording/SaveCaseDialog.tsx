@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, FileCheck2, Layers, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { qk, useModules, useProjects } from '../api/client'
+import { useOverlayGuard } from '../hooks/use-overlay-guard'
 import { useUiStore } from '../state/ui-store'
 import { actionMeta } from '../steps/step-meta'
 
@@ -22,6 +23,9 @@ export function SaveCaseDialog() {
 
   const { data: projects = [] } = useProjects()
   const { data: modules = [] } = useModules(draft ? projectId || null : null)
+
+  // 弹窗打开时收起受控浏览器，否则原生视图会盖住这个居中弹窗
+  useOverlayGuard(Boolean(draft))
 
   useEffect(() => {
     if (!draft) return

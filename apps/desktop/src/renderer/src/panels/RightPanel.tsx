@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { qk } from '../api/client'
 import { ElementPanel } from '../elements/ElementPanel'
 import { useUiStore } from '../state/ui-store'
+import { DraftStepsPanel } from '../steps/DraftStepsPanel'
 import { LiveStepsPanel } from '../steps/LiveStepsPanel'
 import { StepPanel } from '../steps/StepPanel'
 import { ReportPanel } from './ReportPanel'
@@ -20,13 +21,14 @@ export function RightPanel() {
   const selected = useUiStore((s) => s.selected)
   const recording = useUiStore((s) => s.recording)
   const liveSteps = useUiStore((s) => s.liveSteps)
+  const draftRecording = useUiStore((s) => s.draftRecording)
   const caseId = selected?.kind === 'case' ? selected.id : null
   const [tab, setTab] = useState('steps')
 
-  // 开始录制时自动回到「步骤」页，确保实时步骤可见
+  // 开始录制 / 停止待保存时都回到「步骤」页
   useEffect(() => {
-    if (recording) setTab('steps')
-  }, [recording])
+    if (recording || draftRecording) setTab('steps')
+  }, [recording, draftRecording])
 
   // 与 StepPanel/ElementPanel 共用同一 query key，用于标签计数
   const { data: file } = useQuery({
@@ -39,7 +41,11 @@ export function RightPanel() {
     queryFn: () => window.atp.invoke('run:list', caseId ? { caseId } : {}),
   })
 
-  const stepCount = recording ? liveSteps.length : (file?.case.steps.length ?? 0)
+  const stepCount = recording
+    ? liveSteps.length
+    : draftRecording
+      ? draftRecording.steps.length
+      : (file?.case.steps.length ?? 0)
   const elementCount = file ? Object.keys(file.elements).length : 0
 
   return (
@@ -69,7 +75,7 @@ export function RightPanel() {
         </TabList>
       </TabListContainer>
       <TabPanel id="steps" className="min-h-0 flex-1 overflow-hidden">
-        {recording ? <LiveStepsPanel /> : <StepPanel />}
+        {recording ? <LiveStepsPanel /> : draftRecording ? <DraftStepsPanel /> : <StepPanel />}
       </TabPanel>
       <TabPanel id="elements" className="min-h-0 flex-1 overflow-hidden">
         <ElementPanel />

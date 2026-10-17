@@ -1,6 +1,7 @@
 import { AlertDialog, Button } from '@heroui/react'
 import { AlertTriangle } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
+import { useOverlayGuard } from '../hooks/use-overlay-guard'
 
 interface ConfirmDialogProps {
   isOpen: boolean
@@ -23,6 +24,7 @@ export function ConfirmDialog({
   onConfirm,
 }: ConfirmDialogProps) {
   const [pending, setPending] = useState(false)
+  useOverlayGuard(isOpen)
 
   const confirm = async (): Promise<void> => {
     setPending(true)

@@ -57,6 +57,11 @@ interface UiState {
   url: string
   setUrl: (url: string) => void
 
+  /** 打开的弹层层数：原生受控浏览器视图必须让位，否则会盖住弹窗 */
+  overlayDepth: number
+  pushOverlay: () => void
+  popOverlay: () => void
+
   theme: ThemePreference
   setTheme: (theme: ThemePreference) => void
 }
@@ -86,6 +91,10 @@ export const useUiStore = create<UiState>((set) => ({
 
   url: '',
   setUrl: (url) => set({ url }),
+
+  overlayDepth: 0,
+  pushOverlay: () => set((s) => ({ overlayDepth: s.overlayDepth + 1 })),
+  popOverlay: () => set((s) => ({ overlayDepth: Math.max(0, s.overlayDepth - 1) })),
 
   theme: readStoredTheme(),
   setTheme: (theme) => {

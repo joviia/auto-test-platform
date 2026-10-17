@@ -5,8 +5,9 @@ import { ChevronDown, ChevronUp, Download, GripVertical, ListTree, Save, X } fro
 import { useEffect, useMemo, useState } from 'react'
 import { qk } from '../api/client'
 import { EmptyHint } from '../components/EmptyHint'
+import { useOverlayGuard } from '../hooks/use-overlay-guard'
 import { useUiStore } from '../state/ui-store'
-import { ACTION_META } from './step-meta'
+import { ACTION_META, stepPreview } from './step-meta'
 
 const LOCATOR_LABEL: Record<Locator['type'], string> = {
   testId: 'testId',
@@ -25,17 +26,6 @@ function move<T>(arr: T[], from: number, to: number): T[] {
 
 function locatorText(loc: Locator): string {
   return loc.type === 'role' && loc.name ? `${loc.value}「${loc.name}」` : loc.value
-}
-
-function stepPreview(step: Step): string {
-  if (step.action === 'fill' || step.action === 'select') return String(step.params?.value ?? '')
-  if (step.action === 'press') return String(step.params?.key ?? 'Enter')
-  if (step.action === 'assert') {
-    const a = step.assertion
-    if (!a) return ''
-    return a.type === 'visible' ? '可见' : `${a.type} = ${a.expected}`
-  }
-  return ''
 }
 
 export function StepPanel() {
@@ -58,6 +48,8 @@ export function StepPanel() {
   const [copied, setCopied] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [overIndex, setOverIndex] = useState<number | null>(null)
+
+  useOverlayGuard(exportedCode !== null)
 
   useEffect(() => {
     setDraft(file ?? null)

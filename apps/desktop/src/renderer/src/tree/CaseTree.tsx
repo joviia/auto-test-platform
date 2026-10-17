@@ -26,6 +26,7 @@ import {
 } from '../api/client'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { EmptyHint } from '../components/EmptyHint'
+import { useOverlayGuard } from '../hooks/use-overlay-guard'
 import { type SelectedNode, useUiStore } from '../state/ui-store'
 
 type NodeKind = 'project' | 'module' | 'case'
@@ -151,6 +152,9 @@ export function CaseTree() {
   const [name, setName] = useState('')
   const [startUrl, setStartUrl] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  useOverlayGuard(dialog !== null)
+  useOverlayGuard(confirmDelete)
 
   const createProject = useCreateProject()
   const createModule = useCreateModule()

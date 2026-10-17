@@ -18,16 +18,63 @@ export function BrowserStage() {
   const resetLiveSteps = useUiStore((s) => s.resetLiveSteps)
   const setDraftRecording = useUiStore((s) => s.setDraftRecording)
   const selected = useUiStore((s) => s.selected)
+  const overlayDepth = useUiStore((s) => s.overlayDepth)
   const qc = useQueryClient()
   const elapsed = useElapsed(recordingStartedAt)
+  const [domOverlay, setDomOverlay] = useState(false)
 
-  // 原生 WebContentsView 覆盖在舞台区域；未打开页面时收起，避免遮住空状态
+  // 原生视图层级高于 renderer：任何与舞台相交的浮层（弹窗 / 下拉菜单）
+  // 出现时都要暂时收起视图，否则浮层会被原生页面盖住。
+  useEffect(() => {
+    const stage = stageRef.current
+    if (!stage) return
+    const intersectsStage = (): boolean => {
+      const s = stage.getBoundingClientRect()
+      const selector = [
+        '[data-slot="dropdown-popover"]:not([data-exiting="true"])',
+        '[data-slot="modal-backdrop"]:not([data-exiting="true"])',
+        '[data-slot="alert-dialog-backdrop"]:not([data-exiting="true"])',
+      ].join(',')
+      return Array.from(document.querySelectorAll(selector)).some((el) => {
+        const r = el.getBoundingClientRect()
+        return r.bottom > s.top && r.top < s.bottom && r.right > s.left && r.left < s.right
+      })
+    }
+    const check = (): void => setDomOverlay(intersectsStage())
+    // 浮层刚插入时还没有布局（rect 全 0），等一帧再量
+    let raf = 0
+    const schedule = (): void => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => {
+        raf = requestAnimationFrame(check)
+      })
+    }
+    const observer = new MutationObserver(schedule)
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-slot', 'data-exiting', 'data-entering'],
+    })
+    window.addEventListener('resize', check)
+    schedule()
+    return () => {
+      cancelAnimationFrame(raf)
+      observer.disconnect()
+      window.removeEventListener('resize', check)
+    }
+  }, [])
+
+  const hideForOverlay = overlayDepth > 0 || domOverlay
+
+  // 原生 WebContentsView 覆盖在舞台区域；未打开页面或有浮层时收起，
+  // 否则弹窗/遮罩会被原生视图盖住
   useEffect(() => {
     const el = stageRef.current
     if (!el) return
     const report = (): void => {
       const r = el.getBoundingClientRect()
-      const visible = Boolean(url)
+      const visible = Boolean(url) && !hideForOverlay
       void window.atp.invoke('view:bounds-set', {
         x: visible ? Math.round(r.left) : 0,
         y: visible ? Math.round(r.top) : 0,
@@ -39,7 +86,7 @@ export function BrowserStage() {
     const ro = new ResizeObserver(report)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [url])
+  }, [url, hideForOverlay])
 
   const open = async (target = input): Promise<void> => {
     const value = target.trim()

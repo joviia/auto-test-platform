@@ -3,6 +3,7 @@ import type { Rectangle } from 'electron'
 import { WebContentsView } from 'electron'
 
 let view: WebContentsView | null = null
+let lastHidden: boolean | null = null
 
 /**
  * 受控浏览器视图：录制的舞台（M1 回放走 Playwright 独立窗口）。
@@ -43,6 +44,12 @@ export async function navigateControlledView(url: string): Promise<void> {
 
 export function setControlledViewBounds(bounds: Rectangle): void {
   view?.setBounds(bounds)
+  // 弹层出现时会收起视图（宽高置 0）；只记录状态切换，避免 resize 刷屏
+  const hidden = bounds.width === 0 || bounds.height === 0
+  if (hidden !== lastHidden) {
+    lastHidden = hidden
+    console.log(`[atp] 受控视图${hidden ? '收起（浮层/未打开）' : '显示'}`)
+  }
 }
 
 export function hideControlledView(win: Electron.BrowserWindow): void {

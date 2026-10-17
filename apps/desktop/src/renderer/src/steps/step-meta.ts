@@ -18,3 +18,15 @@ export function actionMeta(action: string): { label: string; className: string }
     }
   )
 }
+
+/** 行内预览：输入值 / 按键 / 断言期望 */
+export function stepPreview(step: Step): string {
+  if (step.action === 'fill' || step.action === 'select') return String(step.params?.value ?? '')
+  if (step.action === 'press') return String(step.params?.key ?? 'Enter')
+  if (step.action === 'assert') {
+    const a = step.assertion
+    if (!a) return ''
+    return a.type === 'visible' ? '可见' : `${a.type} = ${a.expected}`
+  }
+  return ''
+}
