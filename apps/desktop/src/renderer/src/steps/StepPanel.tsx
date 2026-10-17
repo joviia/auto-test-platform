@@ -43,6 +43,8 @@ export function StepPanel() {
 
   const [draft, setDraft] = useState<CaseFile | null>(null)
   const [status, setStatus] = useState('')
+  const [exportedCode, setExportedCode] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   useEffect(() => {
     setDraft(file ?? null)
     setStatus('')
@@ -80,9 +82,6 @@ export function StepPanel() {
     void qc.invalidateQueries({ queryKey: qk.cases(draft.case.projectId) })
     setStatus('已保存 ✓')
   }
-
-  const [exportedCode, setExportedCode] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
 
   const exportTs = async (): Promise<void> => {
     if (!caseId) return
