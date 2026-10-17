@@ -812,6 +812,55 @@ export function StepPanel() {
                             />
                           </div>
                         )}
+                        {step.action === 'drag' && (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                className="flex-1"
+                                placeholder="水平位移 dx"
+                                value={String(step.params?.dx ?? 0)}
+                                onChange={(e) =>
+                                  patchStep(idx, {
+                                    params: { ...step.params, dx: Number(e.target.value) },
+                                  })
+                                }
+                              />
+                              <Input
+                                type="number"
+                                className="flex-1"
+                                placeholder="垂直位移 dy"
+                                value={String(step.params?.dy ?? 0)}
+                                onChange={(e) =>
+                                  patchStep(idx, {
+                                    params: { ...step.params, dy: Number(e.target.value) },
+                                  })
+                                }
+                              />
+                            </div>
+                            <Input
+                              type="number"
+                              className="w-36"
+                              placeholder="时长 ms（可选）"
+                              value={
+                                step.params?.durationMs === undefined
+                                  ? ''
+                                  : String(step.params.durationMs)
+                              }
+                              onChange={(e) =>
+                                patchStep(idx, {
+                                  params: {
+                                    ...step.params,
+                                    durationMs: e.target.value ? Number(e.target.value) : undefined,
+                                  },
+                                })
+                              }
+                            />
+                            <p className="text-[11px] text-muted">
+                              从目标元素中心按住并移动 (dx, dy)；滑块验证码建议拖到轨道最右端。
+                            </p>
+                          </div>
+                        )}
                         {step.action === 'wait' && (
                           <div className="flex items-center gap-2">
                             <select

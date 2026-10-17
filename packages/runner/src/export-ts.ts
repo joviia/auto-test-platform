@@ -113,6 +113,25 @@ function stepLines(step: Step, elements: Record<string, Element>): string[] {
     case 'press':
       lines.push(`await page.keyboard.press(${quote(String(params.key ?? 'Enter'))})`)
       break
+    case 'drag':
+      if (loc) {
+        const startX = params.startX === undefined ? 'box.width / 2' : Number(params.startX)
+        const startY = params.startY === undefined ? 'box.height / 2' : Number(params.startY)
+        lines.push(
+          '{',
+          `  const box = await ${loc}.boundingBox()`,
+          '  if (box) {',
+          `    const sx = box.x + ${startX}`,
+          `    const sy = box.y + ${startY}`,
+          '    await page.mouse.move(sx, sy)',
+          '    await page.mouse.down()',
+          `    await page.mouse.move(sx + ${Number(params.dx ?? 0)}, sy + ${Number(params.dy ?? 0)}, { steps: ${Number(params.steps ?? 24)} })`,
+          '    await page.mouse.up()',
+          '  }',
+          '}',
+        )
+      }
+      break
     case 'scroll':
       lines.push(
         `await page.evaluate(() => window.scrollTo({ left: ${Number(params.x ?? 0)}, top: ${Number(params.y ?? 0)} }))`,

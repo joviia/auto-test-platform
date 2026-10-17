@@ -1,5 +1,6 @@
 import {
   type Step,
+  dragParamsSchema,
   fillParamsSchema,
   pressParamsSchema,
   scrollParamsSchema,
@@ -31,6 +32,26 @@ export async function performAction(
     case 'press':
       await page.keyboard.press(pressParamsSchema.parse(params).key)
       return
+    case 'drag': {
+      if (!locator) throw new Error('拖拽步骤缺少定位器')
+      const { dx, dy, startX, startY, durationMs, steps } = dragParamsSchema.parse(params)
+      const box = await locator.boundingBox()
+      if (!box) throw new Error('无法获取拖拽目标的屏幕位置')
+      const startXAbs = box.x + (startX ?? box.width / 2)
+      const startYAbs = box.y + (startY ?? box.height / 2)
+      const total = steps ?? 24
+      const delay = Math.max(4, Math.round((durationMs ?? 320) / total))
+      await page.mouse.move(startXAbs, startYAbs)
+      await page.mouse.down()
+      for (let i = 1; i <= total; i++) {
+        const t = i / total
+        // 轻微正弦轨迹，模拟人手；终点严格落在 dx/dy 上
+        await page.mouse.move(startXAbs + dx * t, startYAbs + dy * t + Math.sin(t * Math.PI) * 2)
+        await page.waitForTimeout(delay)
+      }
+      await page.mouse.up()
+      return
+    }
     case 'scroll': {
       const { x, y } = scrollParamsSchema.parse({
         x: Number(params.x),

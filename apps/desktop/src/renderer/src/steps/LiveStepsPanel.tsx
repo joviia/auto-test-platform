@@ -50,7 +50,9 @@ export function LiveStepsPanel() {
               const value =
                 step.action === 'scroll'
                   ? `(${step.x ?? 0}, ${step.y ?? 0})`
-                  : (step.value ?? step.key)
+                  : step.action === 'drag'
+                    ? `Δ${step.dx ?? 0}, ${step.dy ?? 0}`
+                    : (step.value ?? step.key)
               return (
                 <div
                   key={`${step.ts}-${idx}`}

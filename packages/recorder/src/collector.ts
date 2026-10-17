@@ -24,7 +24,7 @@ export interface RawLocatorCandidate {
 }
 
 export interface RawRecorderEvent {
-  kind: 'click' | 'fill' | 'select' | 'keydown' | 'scroll'
+  kind: 'click' | 'fill' | 'select' | 'keydown' | 'scroll' | 'drag'
   url: string
   ts: number
   /** 是否顶层文档（iframe 内的事件为 false，用于起始地址判定） */
@@ -36,6 +36,13 @@ export interface RawRecorderEvent {
   /** 滚动位置（仅 scroll 事件） */
   x?: number
   y?: number
+  /** 拖拽位移与时长（仅 drag 事件） */
+  dx?: number
+  dy?: number
+  /** 按下点相对目标元素左上角的偏移 */
+  startX?: number
+  startY?: number
+  durationMs?: number
 }
 
 export function collectorSource(): string {
@@ -188,13 +195,94 @@ function pageCollector(): void {
     }
   }
 
+  const pickClickTarget = (target: Element): Element =>
+    target.closest('button, a, input, select, label, [role="button"], [onclick]') ?? target
+
+  /** 拖拽把手常常是 svg/path，向上找到真正的可交互容器 */
+  const pickDragTarget = (target: Element): Element => {
+    let el: Element | null = target
+    const svgTags = ['svg', 'path', 'g', 'use', 'circle', 'rect', 'line', 'polyline', 'polygon']
+    while (el?.parentElement && svgTags.includes(el.tagName.toLowerCase())) {
+      el = el.parentElement
+    }
+    return el ? pickClickTarget(el) : target
+  }
+
+  let dragStart: {
+    x: number
+    y: number
+    ts: number
+    target: Element
+    moved: boolean
+    left: number
+    top: number
+  } | null = null
+  let lastDragEnd = 0
+
+  document.addEventListener(
+    'mousedown',
+    (e) => {
+      if (e.button !== 0) return
+      const target = e.target as Element | null
+      if (!target) return
+      const dragTarget = pickDragTarget(target)
+      // 必须在按下时记录元素位置：滑块被拖动后 rect 会变
+      const rect = dragTarget.getBoundingClientRect()
+      dragStart = {
+        x: e.clientX,
+        y: e.clientY,
+        ts: Date.now(),
+        target: dragTarget,
+        moved: false,
+        left: rect.left,
+        top: rect.top,
+      }
+    },
+    true,
+  )
+
+  document.addEventListener(
+    'mousemove',
+    (e) => {
+      if (!dragStart) return
+      if (Math.abs(e.clientX - dragStart.x) + Math.abs(e.clientY - dragStart.y) > 6) {
+        dragStart.moved = true
+      }
+    },
+    true,
+  )
+
+  document.addEventListener(
+    'mouseup',
+    (e) => {
+      const start = dragStart
+      dragStart = null
+      if (!start || !start.moved) return
+      lastDragEnd = Date.now()
+      send({
+        kind: 'drag',
+        url: location.href,
+        ts: lastDragEnd,
+        target: describe(start.target),
+        candidates: candidatesFor(start.target),
+        dx: e.clientX - start.x,
+        dy: e.clientY - start.y,
+        startX: Math.round(start.x - start.left),
+        startY: Math.round(start.y - start.top),
+        durationMs: lastDragEnd - start.ts,
+      })
+    },
+    true,
+  )
+
   document.addEventListener(
     'click',
     (e) => {
+      // 拖拽结束后浏览器常补发 click，避免把一次拖动记成两次动作
+      if (Date.now() - lastDragEnd < 400) return
       const target = e.target as Element | null
       if (!target || !target.closest) return
-      const el =
-        target.closest('button, a, input, select, label, [role="button"], [onclick]') ?? target
+      const el = pickClickTarget(target)
       send({
         kind: 'click',
         url: location.href,

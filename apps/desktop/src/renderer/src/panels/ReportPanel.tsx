@@ -21,6 +21,7 @@ const ACTION_LABEL: Record<string, string> = {
   assert: '断言',
   scroll: '滚动',
   wait: '等待',
+  drag: '拖拽',
 }
 
 function formatTime(value: string | null | undefined): string {

@@ -22,7 +22,7 @@ const idInput = z.object({ id: z.string().min(1) })
 /** 录制实时预览步骤（未绑定元素库的语义动作），RecorderStep 的契约形态；
  * 断言拾取的预览也走此结构（action='assert'） */
 export const liveStepSchema = z.object({
-  action: z.enum(['click', 'fill', 'select', 'press', 'assert', 'scroll', 'wait']),
+  action: z.enum(['click', 'fill', 'select', 'press', 'assert', 'scroll', 'wait', 'drag']),
   target: z.object({
     tag: z.string(),
     inputType: z.string().optional(),
@@ -46,6 +46,11 @@ export const liveStepSchema = z.object({
   key: z.string().optional(),
   x: z.number().optional(),
   y: z.number().optional(),
+  dx: z.number().optional(),
+  dy: z.number().optional(),
+  startX: z.number().optional(),
+  startY: z.number().optional(),
+  durationMs: z.number().optional(),
 })
 
 export type LiveStep = z.infer<typeof liveStepSchema>

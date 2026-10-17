@@ -1,8 +1,17 @@
 import { z } from 'zod'
 import { assertionSchema, isPageLevelAssertion } from './assertion'
 
-/** M1 动作集：点击 / 输入 / 选择 / 按键 / 断言 / 滚动 / 等待 */
-export const actionSchema = z.enum(['click', 'fill', 'select', 'press', 'assert', 'scroll', 'wait'])
+/** M1 动作集：点击 / 输入 / 选择 / 按键 / 断言 / 滚动 / 等待 / 拖拽 */
+export const actionSchema = z.enum([
+  'click',
+  'fill',
+  'select',
+  'press',
+  'assert',
+  'scroll',
+  'wait',
+  'drag',
+])
 
 export type Action = z.infer<typeof actionSchema>
 
@@ -15,6 +24,16 @@ export const scrollParamsSchema = z.object({ x: z.number(), y: z.number() })
 export const waitParamsSchema = z.object({
   kind: z.enum(['visible', 'hidden', 'networkIdle', 'timeout']).default('timeout'),
   ms: z.number().int().nonnegative().optional(),
+})
+/** 拖拽：从目标元素中心位移 (dx, dy)，模拟连续鼠标移动（滑块验证码等） */
+export const dragParamsSchema = z.object({
+  dx: z.number(),
+  dy: z.number().default(0),
+  /** 按下点相对目标元素左上角的偏移；缺省从元素中心开始 */
+  startX: z.number().nonnegative().optional(),
+  startY: z.number().nonnegative().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
+  steps: z.number().int().positive().optional(),
 })
 
 /** 步骤级条件：变量不满足时跳过该步 */
@@ -55,7 +74,12 @@ export const stepSchema = z
       })
       return
     }
-    if (step.action === 'click' || step.action === 'fill' || step.action === 'select') {
+    if (
+      step.action === 'click' ||
+      step.action === 'fill' ||
+      step.action === 'select' ||
+      step.action === 'drag'
+    ) {
       if (!step.elementId) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,

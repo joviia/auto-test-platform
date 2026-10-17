@@ -234,7 +234,15 @@ export async function stopRecording(): Promise<{
           ? { value: s.value ?? '' }
           : s.action === 'press'
             ? { key: s.key ?? 'Enter' }
-            : undefined,
+            : s.action === 'drag'
+              ? {
+                  dx: s.dx ?? 0,
+                  dy: s.dy ?? 0,
+                  startX: s.startX,
+                  startY: s.startY,
+                  durationMs: s.durationMs,
+                }
+              : undefined,
     }
   })
   // 起始地址取主 frame：先看录制期间首次真实导航，再退回事件里的顶层 frame URL

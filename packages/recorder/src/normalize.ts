@@ -2,7 +2,7 @@ import type { RawLocatorCandidate, RawRecorderEvent, RawTargetInfo } from './col
 
 /** 归一化后的语义步骤（尚未绑定元素库） */
 export interface RecorderStep {
-  action: 'click' | 'fill' | 'select' | 'press' | 'scroll'
+  action: 'click' | 'fill' | 'select' | 'press' | 'scroll' | 'drag'
   target: RawTargetInfo
   candidates: RawLocatorCandidate[]
   url: string
@@ -12,6 +12,11 @@ export interface RecorderStep {
   key?: string
   x?: number
   y?: number
+  dx?: number
+  dy?: number
+  startX?: number
+  startY?: number
+  durationMs?: number
 }
 
 function cssOf(candidates: RawLocatorCandidate[]): string {
@@ -66,6 +71,11 @@ export function normalizeEvents(events: RawRecorderEvent[]): RecorderStep[] {
       key: ev.key,
       x: ev.x,
       y: ev.y,
+      dx: ev.dx,
+      dy: ev.dy,
+      startX: ev.startX,
+      startY: ev.startY,
+      durationMs: ev.durationMs,
     })
   }
   return steps

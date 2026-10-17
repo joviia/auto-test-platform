@@ -10,6 +10,7 @@ export const ACTION_META: Record<ActionKey, { label: string; className: string }
   assert: { label: '断言', className: 'bg-rose-500/10 text-rose-600 dark:text-rose-400' },
   scroll: { label: '滚动', className: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400' },
   wait: { label: '等待', className: 'bg-slate-500/10 text-slate-600 dark:text-slate-300' },
+  drag: { label: '拖拽', className: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400' },
 }
 
 export function actionMeta(action: string): { label: string; className: string } {
@@ -27,6 +28,7 @@ export function stepPreview(step: Step): string {
   if (step.action === 'fill' || step.action === 'select') return String(params.value ?? '')
   if (step.action === 'press') return String(params.key ?? 'Enter')
   if (step.action === 'scroll') return `(${Number(params.x ?? 0)}, ${Number(params.y ?? 0)})`
+  if (step.action === 'drag') return `Δ${Number(params.dx ?? 0)}, ${Number(params.dy ?? 0)}`
   if (step.action === 'wait') {
     const kind = String(params.kind ?? 'timeout')
     return kind === 'timeout' ? `${Number(params.ms ?? 1000)}ms` : kind
