@@ -94,9 +94,10 @@ const ui = await findPage(
 await ui.bringToFront()
 console.log('[e2e] 主窗口就绪')
 
-// 2. 新建项目
-await ui.getByRole('button', { name: '项目' }).click()
-await ui.getByPlaceholder('名称').fill('冒烟项目')
+// 2. 新建项目（左栏「+」→ 新建项目）
+await ui.getByRole('button', { name: '新建', exact: true }).click()
+await ui.getByRole('menuitem', { name: '新建项目' }).click()
+await ui.getByPlaceholder('输入名称').fill('冒烟项目')
 await ui.getByText('创建', { exact: true }).click()
 await ui.getByText('冒烟项目').first().waitFor({ timeout: 5000 })
 console.log('[e2e] 项目已创建')
@@ -148,7 +149,7 @@ console.log('[e2e] 登录流程已执行 ✓')
 // 6. 停止录制并保存
 await ui.bringToFront()
 await ui.getByText('停止录制').click()
-await ui.getByPlaceholder('用例名称').fill(CASE_NAME)
+await ui.getByPlaceholder('例如：登录成功').fill(CASE_NAME)
 await ui.getByText('保存用例').click()
 console.log('[e2e] 已保存:', CASE_NAME)
 
@@ -167,11 +168,11 @@ if (stepCount !== 3) throw new Error(`步骤数应为 3（fill/fill/click），�
 await ui.getByText(CASE_NAME).first().waitFor({ timeout: 10000 })
 console.log('[e2e] 左树可见用例 ✓')
 
-// 9. 回放：点「回放选中用例」，等执行完成，验证执行记录与证据文件
-await ui.getByText('回放选中用例').click()
+// 9. 回放：点「回放用例」，等执行完成，验证执行记录与证据文件
+await ui.getByText('回放用例').click()
 console.log('[e2e] 回放中…')
 await ui.getByText('回放中…').waitFor({ timeout: 10000 })
-await ui.getByText('回放选中用例').waitFor({ timeout: 120000 })
+await ui.getByText('回放用例').waitFor({ timeout: 120000 })
 const runRow = db
   .prepare('SELECT id, status, video_path FROM runs WHERE case_id = ? ORDER BY started_at DESC')
   .get(caseRow.id)

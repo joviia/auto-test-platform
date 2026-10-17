@@ -1,16 +1,17 @@
-import {
-  Button,
-  Input,
-  ModalBody,
-  ModalDialog,
-  ModalFooter,
-  ModalHeader,
-  ModalRoot,
-} from '@heroui/react'
+import { Button, Input, Modal, toast } from '@heroui/react'
 import { useQueryClient } from '@tanstack/react-query'
+import { AlertTriangle, FileCheck2, Layers, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { qk, useModules, useProjects } from '../api/client'
 import { useUiStore } from '../state/ui-store'
+
+const ACTION_LABEL: Record<string, string> = {
+  click: '点击',
+  fill: '输入',
+  select: '选择',
+  press: '按键',
+  assert: '断言',
+}
 
 /** 停止录制后的保存对话框：命名 + 归属项目/模块，元素随用例 upsert 进元素库 */
 export function SaveCaseDialog() {
@@ -18,6 +19,8 @@ export function SaveCaseDialog() {
   const draft = useUiStore((s) => s.draftRecording)
   const setDraftRecording = useUiStore((s) => s.setDraftRecording)
   const setSelected = useUiStore((s) => s.setSelected)
+  const currentProjectId = useUiStore((s) => s.currentProjectId)
+  const setCurrentProjectId = useUiStore((s) => s.setCurrentProjectId)
 
   const [name, setName] = useState('')
   const [projectId, setProjectId] = useState('')
@@ -28,17 +31,16 @@ export function SaveCaseDialog() {
   const { data: modules = [] } = useModules(draft ? projectId || null : null)
 
   useEffect(() => {
-    if (draft) {
-      setName(`录制 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
-      setProjectId((prev) => prev || projects[0]?.id || '')
-      setModuleId('')
-    }
-  }, [draft, projects])
+    if (!draft) return
+    setName(`录制 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
+    setProjectId(currentProjectId ?? projects[0]?.id ?? '')
+    setModuleId('')
+  }, [draft, currentProjectId, projects])
 
   if (!draft) return null
 
   const selectClass =
-    'h-9 w-full rounded-md border border-default-300 bg-white px-2 text-sm outline-none'
+    'h-9 w-full rounded-md border border-border bg-field px-2 text-sm text-foreground outline-none focus:border-accent/60 focus:ring-2 focus:ring-accent/15'
 
   const save = async (): Promise<void> => {
     if (!draft || !projectId || !name.trim()) return
@@ -60,90 +62,188 @@ export function SaveCaseDialog() {
         elements: draft.elements,
       })
       void qc.invalidateQueries({ queryKey: qk.cases(projectId) })
+      void qc.invalidateQueries({ queryKey: qk.caseFile(saved.case.id) })
+      setCurrentProjectId(projectId)
       setSelected({ kind: 'case', id: saved.case.id })
       setDraftRecording(null)
+      toast.success(`用例「${saved.case.name}」已保存`)
+    } catch (err) {
+      toast.danger(err instanceof Error ? err.message : '保存用例失败')
     } finally {
       setSaving(false)
     }
   }
 
+  const frameTotal = draft.diagnostics?.frames.length ?? 0
+  const frameInjected = draft.diagnostics?.frames.filter((f) => f.injected).length ?? 0
+  const uninjected = draft.diagnostics?.frames.filter((f) => !f.injected) ?? []
+
   return (
-    <ModalRoot isOpen onOpenChange={(open) => !open && setDraftRecording(null)}>
-      <ModalDialog>
-        <ModalHeader>保存录制的用例</ModalHeader>
-        <ModalBody className="space-y-3">
-          {draft.steps.length === 0 && (
-            <p className="text-sm text-red-600">
-              ⚠
-              本次录制没有捕获到任何操作（可能是操作发生在弹窗中，或采集器注入失败），建议丢弃后重录
-            </p>
-          )}
-          <p className="text-sm text-default-500">
-            共 {draft.steps.length} 个步骤、{Object.keys(draft.elements).length} 个元素 ·{' '}
-            {draft.startUrl || '（无起始地址）'}
-          </p>
-          {draft.diagnostics && (
-            <p className="text-xs text-default-400">
-              捕获原始事件 {draft.diagnostics.rawEvents} 条 · 采集器注入{' '}
-              {draft.diagnostics.frames.filter((f) => f.injected).length}/
-              {draft.diagnostics.frames.length} 个 frame
-              {draft.diagnostics.frames.some((f) => !f.injected) && (
-                <>
-                  {' '}
-                  · 未注入：
-                  {draft.diagnostics.frames
-                    .filter((f) => !f.injected)
-                    .map((f) => f.url || '(空地址)')
-                    .slice(0, 3)
-                    .join('、')}
-                </>
+    <Modal.Root isOpen onOpenChange={(open) => !open && setDraftRecording(null)}>
+      <Modal.Backdrop>
+        <Modal.Container size="lg">
+          <Modal.Dialog>
+            <Modal.Header>
+              <Modal.Heading>保存录制的用例</Modal.Heading>
+              <Modal.CloseTrigger />
+            </Modal.Header>
+
+            <Modal.Body className="space-y-4">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-md border border-border bg-surface-secondary px-2.5 py-2">
+                  <p className="text-[10px] text-muted">步骤</p>
+                  <p className="text-lg font-semibold tabular-nums">{draft.steps.length}</p>
+                </div>
+                <div className="rounded-md border border-border bg-surface-secondary px-2.5 py-2">
+                  <p className="text-[10px] text-muted">元素</p>
+                  <p className="text-lg font-semibold tabular-nums">
+                    {Object.keys(draft.elements).length}
+                  </p>
+                </div>
+                <div className="rounded-md border border-border bg-surface-secondary px-2.5 py-2">
+                  <p className="text-[10px] text-muted">采集帧</p>
+                  <p className="text-lg font-semibold tabular-nums">
+                    {frameInjected}/{frameTotal}
+                  </p>
+                </div>
+              </div>
+
+              {draft.steps.length === 0 && (
+                <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-700 dark:text-amber-400">
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-medium">本次录制没有捕获到任何操作</p>
+                    <p className="mt-0.5 opacity-90">
+                      可能是操作发生在弹窗中，或采集器注入失败。建议丢弃后重录。
+                    </p>
+                  </div>
+                </div>
               )}
-            </p>
-          )}
-          <Input placeholder="用例名称" value={name} onChange={(e) => setName(e.target.value)} />
-          <select
-            className={selectClass}
-            value={projectId}
-            onChange={(e) => {
-              setProjectId(e.target.value)
-              setModuleId('')
-            }}
-          >
-            <option value="" disabled>
-              选择项目
-            </option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          <select
-            className={selectClass}
-            value={moduleId}
-            onChange={(e) => setModuleId(e.target.value)}
-          >
-            <option value="">（不放入模块）</option>
-            {modules.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="ghost" onPress={() => setDraftRecording(null)}>
-            丢弃
-          </Button>
-          <Button
-            variant="primary"
-            isDisabled={!projectId || !name.trim() || saving}
-            onPress={() => void save()}
-          >
-            {saving ? '保存中…' : '保存用例'}
-          </Button>
-        </ModalFooter>
-      </ModalDialog>
-    </ModalRoot>
+
+              {uninjected.length > 0 && (
+                <p className="text-[11px] text-muted">
+                  未注入的 frame：{uninjected.map((f) => f.url || '(空地址)').join('、')}
+                </p>
+              )}
+
+              {draft.steps.length > 0 && (
+                <div className="rounded-md border border-border">
+                  <div className="flex items-center gap-1.5 border-b border-border px-2.5 py-1.5 text-[11px] font-medium text-muted">
+                    <Layers size={12} />
+                    步骤预览
+                  </div>
+                  <ol className="max-h-40 overflow-auto px-2.5 py-1.5">
+                    {draft.steps.slice(0, 8).map((step, idx) => (
+                      <li
+                        key={step.id}
+                        className="flex items-center gap-2 py-0.5 text-xs text-foreground/80"
+                      >
+                        <span className="w-4 text-right font-mono text-[10px] text-muted">
+                          {idx + 1}
+                        </span>
+                        <span className="rounded bg-surface-secondary px-1 text-[10px] text-muted">
+                          {ACTION_LABEL[step.action] ?? step.action}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">
+                          {draft.elements[step.elementId ?? '']?.name ?? step.elementId ?? '页面级'}
+                        </span>
+                      </li>
+                    ))}
+                    {draft.steps.length > 8 && (
+                      <li className="py-0.5 pl-6 text-[11px] text-muted">
+                        还有 {draft.steps.length - 8} 步…
+                      </li>
+                    )}
+                  </ol>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-muted" htmlFor="atp-case-name">
+                  用例名称
+                </label>
+                <Input
+                  id="atp-case-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="例如：登录成功"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void save()
+                  }}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <label
+                    className="block text-xs font-medium text-muted"
+                    htmlFor="atp-case-project"
+                  >
+                    归属项目
+                  </label>
+                  <select
+                    id="atp-case-project"
+                    className={selectClass}
+                    value={projectId}
+                    onChange={(e) => {
+                      setProjectId(e.target.value)
+                      setModuleId('')
+                    }}
+                  >
+                    <option value="" disabled>
+                      选择项目
+                    </option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-muted" htmlFor="atp-case-module">
+                    模块（可选）
+                  </label>
+                  <select
+                    id="atp-case-module"
+                    className={selectClass}
+                    value={moduleId}
+                    onChange={(e) => setModuleId(e.target.value)}
+                  >
+                    <option value="">（不放入模块）</option>
+                    {modules.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <p className="truncate text-[11px] text-muted">
+                起始地址：{draft.startUrl || '（无起始地址）'}
+              </p>
+            </Modal.Body>
+
+            <Modal.Footer>
+              <Button variant="ghost" size="sm" onPress={() => setDraftRecording(null)}>
+                <Trash2 size={13} />
+                丢弃
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                isDisabled={!projectId || !name.trim() || saving}
+                onPress={() => void save()}
+              >
+                <FileCheck2 size={13} />
+                {saving ? '保存中…' : '保存用例'}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal.Root>
   )
 }

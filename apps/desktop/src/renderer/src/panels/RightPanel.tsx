@@ -1,48 +1,65 @@
-import { Tab, TabList, TabPanel, TabsRoot } from '@heroui/react'
+import { Tab, TabIndicator, TabList, TabListContainer, TabPanel, TabsRoot } from '@heroui/react'
+import { useQuery } from '@tanstack/react-query'
+import { qk } from '../api/client'
 import { ElementPanel } from '../elements/ElementPanel'
 import { useUiStore } from '../state/ui-store'
 import { StepPanel } from '../steps/StepPanel'
 import { ReportPanel } from './ReportPanel'
 
+function CountBadge({ value }: { value: number }) {
+  return (
+    <span className="ml-1 rounded-full bg-default px-1.5 py-px text-[10px] font-medium text-muted tabular-nums">
+      {value}
+    </span>
+  )
+}
+
 export function RightPanel() {
-  const recording = useUiStore((s) => s.recording)
-  const liveSteps = useUiStore((s) => s.liveSteps)
+  const selected = useUiStore((s) => s.selected)
+  const caseId = selected?.kind === 'case' ? selected.id : null
+
+  // 与 StepPanel/ElementPanel 共用同一 query key，用于标签计数
+  const { data: file } = useQuery({
+    queryKey: caseId ? qk.caseFile(caseId) : ['case', 'none'],
+    queryFn: () => window.atp.invoke('case:get', { id: caseId as string }),
+    enabled: Boolean(caseId),
+  })
+  const { data: runs = [] } = useQuery({
+    queryKey: ['runs', caseId ?? 'all'],
+    queryFn: () => window.atp.invoke('run:list', caseId ? { caseId } : {}),
+  })
+
+  const stepCount = file?.case.steps.length ?? 0
+  const elementCount = file ? Object.keys(file.elements).length : 0
 
   return (
-    <TabsRoot className="flex h-full flex-col">
-      <TabList className="border-b border-default-200 px-2">
-        <Tab id="steps">步骤</Tab>
-        <Tab id="elements">元素</Tab>
-        <Tab id="report">报告</Tab>
-      </TabList>
-      <TabPanel id="steps" className="min-h-0 flex-1 overflow-auto">
-        {recording ? (
-          <div className="p-3 text-sm">
-            <p className="mb-2 text-default-400">
-              录制中：操作中间的受控浏览器，步骤实时出现（「＋断言」后点选目标即插断言）
-            </p>
-            <ol className="space-y-1">
-              {liveSteps.map((s, i) => (
-                <li key={`${s.ts}-${i}`} className="rounded bg-default-100 px-2 py-1">
-                  <span className="font-medium">
-                    {i + 1}. {s.action === 'assert' ? '断言(可见)' : s.action}
-                  </span>{' '}
-                  <span className="text-default-500">
-                    {s.target.name || s.target.text || s.target.tag}
-                    {s.value !== undefined ? ` = ${s.value}` : ''}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : (
-          <StepPanel />
-        )}
+    <TabsRoot variant="secondary" className="flex h-full flex-col">
+      <TabListContainer className="h-[52px] shrink-0 px-3">
+        <TabList className="h-full gap-0">
+          <Tab id="steps" className="h-full flex-1 justify-center text-[13px]">
+            步骤
+            <CountBadge value={stepCount} />
+            <TabIndicator />
+          </Tab>
+          <Tab id="elements" className="h-full flex-1 justify-center text-[13px]">
+            元素
+            <CountBadge value={elementCount} />
+            <TabIndicator />
+          </Tab>
+          <Tab id="report" className="h-full flex-1 justify-center text-[13px]">
+            报告
+            <CountBadge value={runs.length} />
+            <TabIndicator />
+          </Tab>
+        </TabList>
+      </TabListContainer>
+      <TabPanel id="steps" className="min-h-0 flex-1 overflow-hidden">
+        <StepPanel />
       </TabPanel>
-      <TabPanel id="elements" className="min-h-0 flex-1 overflow-auto">
+      <TabPanel id="elements" className="min-h-0 flex-1 overflow-hidden">
         <ElementPanel />
       </TabPanel>
-      <TabPanel id="report" className="min-h-0 flex-1 overflow-auto">
+      <TabPanel id="report" className="min-h-0 flex-1 overflow-hidden">
         <ReportPanel />
       </TabPanel>
     </TabsRoot>
