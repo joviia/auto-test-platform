@@ -72,6 +72,11 @@ export function SaveCaseDialog() {
       <ModalDialog>
         <ModalHeader>保存录制的用例</ModalHeader>
         <ModalBody className="space-y-3">
+          {draft.steps.length === 0 && (
+            <p className="text-sm text-red-600">
+              ⚠ 本次录制没有捕获到任何操作（可能是注入失败或页面在 iframe 中），建议丢弃后重录
+            </p>
+          )}
           <p className="text-sm text-default-500">
             共 {draft.steps.length} 个步骤、{Object.keys(draft.elements).length} 个元素 ·{' '}
             {draft.startUrl || '（无起始地址）'}

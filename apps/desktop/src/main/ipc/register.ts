@@ -5,6 +5,7 @@ import {
   type IpcOutput,
   parseIpcInput,
 } from '@atp/model'
+import { toPlaywrightSpec } from '@atp/runner'
 import { ipcMain } from 'electron'
 import {
   getControlledView,
@@ -66,6 +67,11 @@ export function registerIpc(): void {
   route(IpcChannel.caseDelete, (input) => {
     caseRepo.remove(input.id)
     return { ok: true }
+  })
+  route(IpcChannel.caseExportTs, (input) => {
+    const file = caseRepo.get(input.id)
+    if (!file) throw new Error(`用例不存在：${input.id}`)
+    return { code: toPlaywrightSpec(file) }
   })
 
   route(IpcChannel.elementList, (input) => elementRepo.list(input.projectId))

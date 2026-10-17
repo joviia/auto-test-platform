@@ -91,6 +91,10 @@ export const ipcContract = {
   },
   [IpcChannel.caseUpdate]: { input: caseFileSchema, output: caseFileSchema },
   [IpcChannel.caseDelete]: { input: idInput, output: okSchema },
+  [IpcChannel.caseExportTs]: {
+    input: idInput,
+    output: z.object({ code: z.string() }),
+  },
 
   [IpcChannel.elementList]: {
     input: z.object({ projectId: z.string().min(1) }),

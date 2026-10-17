@@ -17,6 +17,7 @@ const state: {
   domReadyHandler: (() => void) | null
   assertionArmed: boolean
   assertionSteps: Step[]
+  debuggerAttached: boolean
 } = {
   recording: false,
   buffer: [],
@@ -24,6 +25,7 @@ const state: {
   domReadyHandler: null,
   assertionArmed: false,
   assertionSteps: [],
+  debuggerAttached: false,
 }
 
 /** 订阅受控视图采集器的原始事件流（recorder-preload → ipcMain） */
@@ -68,13 +70,34 @@ export function startRecording(view: WebContentsView): { ok: true } {
   state.view = view
   state.recording = true
 
+  // 即时注入当前文档
   const inject = (): void => {
-    void view.webContents.executeJavaScript(collectorSource()).catch(() => {})
+    view.webContents
+      .executeJavaScript(collectorSource())
+      .then(() => console.log('[atp] recorder 注入成功:', view.webContents.getURL()))
+      .catch((err: unknown) =>
+        console.error('[atp] recorder 注入失败（将收不到任何录制事件）:', err),
+      )
   }
   inject()
-  // 页面跳转后重新注入（SPA 路由变化不需要，dom-ready 覆盖传统导航）
+  // 兜底：后续每个新文档自动注入（早于页面脚本，覆盖跳转/重定向时序）
+  try {
+    view.webContents.debugger.attach('1.3')
+    view.webContents.debugger
+      .sendCommand('Page.enable')
+      .then(() =>
+        view.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+          source: collectorSource(),
+        }),
+      )
+      .catch((err: unknown) => console.error('[atp] 自动注入注册失败:', err))
+    state.debuggerAttached = true
+  } catch (err) {
+    console.error('[atp] debugger attach 失败:', err)
+  }
   state.domReadyHandler = inject
   view.webContents.on('dom-ready', state.domReadyHandler)
+  view.webContents.on('did-finish-load', inject)
 
   getMainWindow()?.webContents.send(IpcEvent.recordingStatus, {
     recording: true,
@@ -91,9 +114,20 @@ export function stopRecording(): {
   state.recording = false
   if (state.view && state.domReadyHandler) {
     state.view.webContents.removeListener('dom-ready', state.domReadyHandler)
+    state.view.webContents.removeListener('did-finish-load', state.domReadyHandler)
+  }
+  if (state.view && state.debuggerAttached) {
+    try {
+      void state.view.webContents.debugger.sendCommand('Page.disable')
+      state.view.webContents.debugger.detach()
+    } catch {
+      // 已分离时忽略
+    }
+    state.debuggerAttached = false
   }
   const events = state.buffer
   state.buffer = []
+  console.log(`[atp] 录制停止：捕获原始事件 ${events.length} 条`)
   state.view = null
 
   const normalized = normalizeEvents(events)

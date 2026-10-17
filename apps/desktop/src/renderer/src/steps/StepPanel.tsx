@@ -1,5 +1,13 @@
 import type { CaseFile, Step } from '@atp/model'
-import { Button, Input } from '@heroui/react'
+import {
+  Button,
+  Input,
+  ModalBody,
+  ModalDialog,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+} from '@heroui/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, Save, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -73,12 +81,25 @@ export function StepPanel() {
     setStatus('已保存 ✓')
   }
 
+  const [exportedCode, setExportedCode] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const exportTs = async (): Promise<void> => {
+    if (!caseId) return
+    const { code } = await window.atp.invoke('case:export-ts', { id: caseId })
+    setExportedCode(code)
+    setCopied(false)
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between p-2">
         <span className="truncate text-sm font-medium">{draft.case.name}</span>
         <div className="flex items-center gap-1">
           {status && <span className="text-xs text-default-400">{status}</span>}
+          <Button size="sm" variant="ghost" onPress={() => void exportTs()}>
+            导出 TS
+          </Button>
           <Button size="sm" variant="primary" onPress={() => void save()}>
             <Save size={14} />
             保存
@@ -195,6 +216,37 @@ export function StepPanel() {
           )
         })}
       </div>
+
+      <ModalRoot
+        isOpen={exportedCode !== null}
+        onOpenChange={(open) => !open && setExportedCode(null)}
+      >
+        <ModalDialog>
+          <ModalHeader>导出 Playwright TS 脚本</ModalHeader>
+          <ModalBody>
+            <p className="text-xs text-default-500">
+              定位器取元素库第一候选；可直接放入 @playwright/test 项目运行
+            </p>
+            <pre className="max-h-96 overflow-auto rounded-md bg-default-100 p-2 text-xs leading-5">
+              {exportedCode}
+            </pre>
+          </ModalBody>
+          <ModalFooter>
+            <Button
+              variant="ghost"
+              onPress={() => {
+                void navigator.clipboard.writeText(exportedCode ?? '')
+                setCopied(true)
+              }}
+            >
+              {copied ? '已复制 ✓' : '复制代码'}
+            </Button>
+            <Button variant="primary" onPress={() => setExportedCode(null)}>
+              关闭
+            </Button>
+          </ModalFooter>
+        </ModalDialog>
+      </ModalRoot>
     </div>
   )
 }
