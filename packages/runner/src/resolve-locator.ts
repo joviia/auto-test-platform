@@ -47,3 +47,37 @@ export async function resolveElement(page: Page, element: Element): Promise<Reso
   }
   return { locator: null, hit: null, attempts }
 }
+
+export interface AssertionResolveOutcome {
+  /** 未取 .first() 的 locator，供 count/存在性断言使用 */
+  base: Locator | null
+  hit: { tier: number; locator: ModelLocator } | null
+  attempts: CandidateAttempt[]
+}
+
+const ASSERTION_CANDIDATE_TIMEOUT_MS = 800
+
+/**
+ * 断言专用解析：只要元素在 DOM 中存在（attached）即可，
+ * 不要求可见——hidden / notExists 等断言需要能定位到隐藏元素。
+ */
+export async function resolveElementForAssertion(
+  page: Page,
+  element: Element,
+): Promise<AssertionResolveOutcome> {
+  const attempts: CandidateAttempt[] = []
+  for (const [tier, loc] of element.locators.entries()) {
+    const base = toPlaywrightLocator(page, loc)
+    try {
+      await base.first().waitFor({ state: 'attached', timeout: ASSERTION_CANDIDATE_TIMEOUT_MS })
+      return { base, hit: { tier, locator: loc }, attempts }
+    } catch {
+      attempts.push({
+        locator: loc,
+        ok: false,
+        error: `${ASSERTION_CANDIDATE_TIMEOUT_MS}ms 内未出现元素`,
+      })
+    }
+  }
+  return { base: null, hit: null, attempts }
+}

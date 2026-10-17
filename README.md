@@ -36,7 +36,7 @@ pnpm -F @atp/runner replay examples/login-success.case.json   # 失败报告：�
 node scripts/fixture.mjs restore                              # 复原
 ```
 
-**应用级：** `pnpm dev` → 新建项目 → 网址栏输入 `file://<仓库>/packages/runner/fixtures/login-form/index.html` → 打开 → 开始录制 → 登录 → 停止录制 → 保存 → 回放 → 右栏「报告」看步骤级结果与全程视频。
+**应用级：** `pnpm dev` → 新建项目 → 网址栏输入 `file://<仓库>/packages/runner/fixtures/login-form/index.html` → 打开 → 选择设备预设（可选）→ 开始录制 → 登录 → 停止录制 → 保存 → 回放（默认中栏嵌入，可切独立窗口录视频）→ 右栏「报告」看步骤级结果与证据。
 
 **自动化：**
 
@@ -62,24 +62,25 @@ docs/               # 技术方案
 | # | 验收项 | 状态 |
 | --- | --- | --- |
 | 1 | Electron 应用可安装、可运行 | ✅ dmg 出包，打包版 E2E 全流程通过 |
-| 2 | 录制：click / fill / select / 按键 / 断言（可见·文本·值） | ✅ E2E 覆盖 click/fill；select/按键/断言拾取已实现（断言拾取未自动化覆盖，手动走查） |
+| 2 | 录制：click / fill / select / 按键 / 断言 / 滚动 / 等待 | ✅ E2E 覆盖 click/fill；断言库（状态/文本/值/属性/样式/数量/页面级）、变量与条件已实现并有 runner 单测 |
 | 3 | 用例管理：项目 / 模块树 / 用例 / 步骤编辑排序 / 元素库 | ✅ |
-| 4 | 一键回放 + 执行记录（步骤级结果） | ✅ E2E：run 落库 status=passed 3 步 |
+| 4 | 一键回放 + 执行记录（步骤级结果） | ✅ 双模式：中栏 CDP 嵌入回放（步骤截图）/ 独立窗口回放（全程视频）；E2E 均覆盖 |
 | 5 | 证据：每步截图 + 全程视频 + 失败报告有理有据 | ✅ 三幕剧幕 3（CLI 级）验证失败报告逐候选归因；应用级同链路 |
 
 ## M1 已知限制
 
 1. **打包版回放依赖本机 Playwright 缓存**（`~/Library/Caches/ms-playwright`）：M1 的 chromium 二进制不进 dmg，启动前请执行 `pnpm -F @atp/runner exec playwright install chromium`
 2. **自动更新未生效**：electron-updater 代码路径已就绪（打包版对缺失 feed 优雅跳过，已验证）；真实更新需 macOS 签名 + 公证 + feed 服务器
-3. 录制支持 click / fill / select / 按键 / 断言（可见·文本·值），含同域/跨域 iframe；拖拽、弹窗在 backlog
+3. 录制支持 click / fill / select / 按键 / 断言 / 滚动 / 等待，含同域/跨域 iframe；支持设备预设（Desktop/Laptop/Tablet/iPhone/Android，横竖屏与缩放）、用例变量 `${VAR}` 与步骤条件；拖拽、弹窗在 backlog
 4. **打包版受控浏览器加载 file:// 页面失败**（chrome-error，dev 正常）——被测页请用 http(s) 地址；根因待查
 5. drizzle ORM 为 1.0 beta（`node:sqlite` 适配器仅在 beta 线）；其事务对失败语句不回滚，已规避（元素写入置于步骤之后并依赖主键唯一）
 6. 用户数据目录：dev / 构建产物直启 / 打包版分别为 `~/Library/Application Support/` 下的 `@atp/desktop`、`Electron`、`@atp/desktop`
 7. E2E 用法：`node scripts/e2e-recording.mjs [fixtureUrl]`，环境变量 `ATP_E2E_CDP`（默认 9222）、`ATP_E2E_DB`（默认 @atp/desktop 路径）；打包版验收取 http fixture
+8. 嵌入回放通过本地 CDP 驱动受控视图：仅绑定 `127.0.0.1` 的随机端口，不对外开放
 
 ## Backlog（按方案里程碑）
 
 - M2：Web 平台化（服务端 + 管理台 + 多人协作，packages 直接复用）
-- M3：网页端串流远控受控浏览器（CDP screencast 桥）；回放嵌回中栏（connectOverCDP）
+- M3：网页端串流远控受控浏览器（CDP screencast 桥）；多标签/弹窗录制回放
 - M4：定时执行 / CI / 通知 / 多环境参数化；录制会话本身录视频
 - 远期：演示视频+配音、定位器自愈、AI 生成用例、ffmpeg 转码 MP4

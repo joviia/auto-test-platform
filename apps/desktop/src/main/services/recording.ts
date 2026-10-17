@@ -9,6 +9,7 @@ import {
 import type { WebContentsView, WebFrameMain } from 'electron'
 import { ipcMain } from 'electron'
 import { getMainWindow } from '../app-window'
+import { acquireDebugger, releaseDebugger } from '../browser/debugger'
 
 /** 录制停止时回传的诊断信息：前端用于区分「没操作」与「注入失败/iframe」 */
 export interface RecordingDiagnostics {
@@ -23,7 +24,6 @@ interface RecordingState {
   assertionArmed: boolean
   assertionSteps: Step[]
   assertionElements: Record<string, Element>
-  debuggerAttached: boolean
   startUrl: string
   /** 录制期挂在受控视图上的监听器，停止时按引用移除 */
   handlers: {
@@ -40,7 +40,6 @@ const state: RecordingState = {
   assertionArmed: false,
   assertionSteps: [],
   assertionElements: {},
-  debuggerAttached: false,
   startUrl: '',
   handlers: null,
 }
@@ -146,20 +145,13 @@ export function startRecording(view: WebContentsView): { ok: true } {
 
   // 兜底：后续每个新文档（含 iframe）在加载完成时自动注入，
   // 覆盖跳转/重定向/动态插入 iframe 的时序
-  try {
-    view.webContents.debugger.attach('1.3')
-    view.webContents.debugger
-      .sendCommand('Page.enable')
-      .then(() =>
-        view.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
-          source: collectorSource(),
-        }),
-      )
-      .catch((err: unknown) => console.error('[atp] 自动注入注册失败:', err))
-    state.debuggerAttached = true
-  } catch (err) {
-    console.error('[atp] debugger attach 失败:', err)
-  }
+  void acquireDebugger(view, 'recording')
+    .then(() =>
+      view.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
+        source: collectorSource(),
+      }),
+    )
+    .catch((err: unknown) => console.error('[atp] 自动注入注册失败:', err))
 
   const onReady = (): void => {
     void injectAllFrames(view)
@@ -214,18 +206,8 @@ export async function stopRecording(): Promise<{
     }
   }
 
-  if (view && state.debuggerAttached) {
-    try {
-      await view.webContents.debugger.sendCommand('Page.disable')
-    } catch {
-      // 页面已关闭/已分离时忽略
-    }
-    try {
-      view.webContents.debugger.detach()
-    } catch {
-      // 已分离时忽略
-    }
-    state.debuggerAttached = false
+  if (view) {
+    releaseDebugger(view, 'recording')
   }
   console.log(
     `[atp] 录制停止：捕获原始事件 ${events.length} 条；frame ${frames.length} 个（注入 ${frames.filter((f) => f.injected).length} 个）`,
@@ -234,6 +216,13 @@ export async function stopRecording(): Promise<{
   const normalized = normalizeEvents(events)
   const elements: Record<string, Element> = { ...state.assertionElements }
   const steps: Step[] = normalized.map((s, i) => {
+    if (s.action === 'scroll') {
+      return {
+        id: `s-${String(i + 1).padStart(3, '0')}`,
+        action: 'scroll',
+        params: { x: s.x ?? 0, y: s.y ?? 0 },
+      }
+    }
     const el = buildElement(s.target, s.candidates)
     elements[el.id] = el
     return {
@@ -274,4 +263,8 @@ export async function stopRecording(): Promise<{
 export function armAssertion(): { ok: true } {
   if (state.recording) state.assertionArmed = true
   return { ok: true }
+}
+
+export function isRecording(): boolean {
+  return state.recording
 }

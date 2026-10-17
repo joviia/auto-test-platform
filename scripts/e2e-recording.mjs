@@ -168,23 +168,39 @@ if (stepCount !== 3) throw new Error(`步骤数应为 3（fill/fill/click），�
 await ui.getByText(CASE_NAME).first().waitFor({ timeout: 10000 })
 console.log('[e2e] 左树可见用例 ✓')
 
-// 9. 回放：点「回放用例」，等执行完成，验证执行记录与证据文件
-await ui.getByText('回放用例').click()
-console.log('[e2e] 回放中…')
-await ui.getByText('回放中…').waitFor({ timeout: 10000 })
-await ui.getByText('回放用例').waitFor({ timeout: 120000 })
-const runRow = db
-  .prepare('SELECT id, status, video_path FROM runs WHERE case_id = ? ORDER BY started_at DESC')
-  .get(caseRow.id)
-if (!runRow) throw new Error('执行记录未落库！')
-const runStepCount = db
-  .prepare('SELECT COUNT(*) AS n FROM run_steps WHERE run_id = ?')
-  .get(runRow.id).n
-console.log(`[e2e] 回放落库 ✓ run=${runRow.id} status=${runRow.status} 步骤=${runStepCount}`)
-if (runStepCount !== 3) throw new Error(`回放步骤数应为 3，实际 ${runStepCount}`)
+// 9. 回放（中栏嵌入 + 独立窗口）：验证执行记录、步骤截图与视频
+const replayOnce = async (mode) => {
+  await ui.getByLabel('回放方式').selectOption(mode)
+  await ui.getByText('回放用例').click()
+  console.log(`[e2e] 回放中（${mode}）…`)
+  await ui.getByText('回放中…').waitFor({ timeout: 10000 })
+  await ui.getByText('回放用例').waitFor({ timeout: 120000 })
+  const runRow = db
+    .prepare('SELECT id, status, video_path FROM runs WHERE case_id = ? ORDER BY started_at DESC')
+    .get(caseRow.id)
+  if (!runRow) throw new Error('执行记录未落库！')
+  const runStepCount = db
+    .prepare('SELECT COUNT(*) AS n FROM run_steps WHERE run_id = ?')
+    .get(runRow.id).n
+  console.log(`[e2e] 回放落库 ✓ run=${runRow.id} status=${runRow.status} 步骤=${runStepCount}`)
+  if (runStepCount !== 3) throw new Error(`回放步骤数应为 3，实际 ${runStepCount}`)
+  return runRow
+}
+
 const { statSync } = await import('node:fs')
-if (!runRow.video_path || !statSync(runRow.video_path).size) throw new Error('回放视频缺失')
-console.log('[e2e] 回放视频 ✓', runRow.video_path.split('/').slice(-2).join('/'))
+const { dirname, join } = await import('node:path')
+
+const embeddedRun = await replayOnce('embedded')
+if (embeddedRun.video_path) throw new Error('嵌入回放不应生成独立窗口视频')
+const shot = join(dirname(DB), 'runs', embeddedRun.id, 'step-0.png')
+if (!statSync(shot).size) throw new Error('嵌入回放的步骤截图缺失')
+console.log('[e2e] 嵌入回放步骤截图 ✓', shot.split('/').slice(-2).join('/'))
+
+const standaloneRun = await replayOnce('standalone')
+if (!standaloneRun.video_path || !statSync(standaloneRun.video_path).size) {
+  throw new Error('独立窗口回放视频缺失')
+}
+console.log('[e2e] 独立窗口回放视频 ✓', standaloneRun.video_path.split('/').slice(-2).join('/'))
 
 await browser.close()
 console.log('[e2e] 通过 ✅')

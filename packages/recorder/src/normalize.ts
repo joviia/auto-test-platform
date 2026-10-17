@@ -2,7 +2,7 @@ import type { RawLocatorCandidate, RawRecorderEvent, RawTargetInfo } from './col
 
 /** 归一化后的语义步骤（尚未绑定元素库） */
 export interface RecorderStep {
-  action: 'click' | 'fill' | 'select' | 'press'
+  action: 'click' | 'fill' | 'select' | 'press' | 'scroll'
   target: RawTargetInfo
   candidates: RawLocatorCandidate[]
   url: string
@@ -10,6 +10,8 @@ export interface RecorderStep {
   isTop?: boolean
   value?: string
   key?: string
+  x?: number
+  y?: number
 }
 
 function cssOf(candidates: RawLocatorCandidate[]): string {
@@ -31,6 +33,12 @@ export function normalizeEvents(events: RawRecorderEvent[]): RecorderStep[] {
   const steps: RecorderStep[] = []
   for (const ev of events) {
     const last = steps[steps.length - 1]
+    if (ev.kind === 'scroll' && last && last.action === 'scroll') {
+      last.x = ev.x
+      last.y = ev.y
+      last.ts = ev.ts
+      continue
+    }
     if (ev.kind === 'fill' && last && last.action === 'fill') {
       if (sameTarget(last, ev)) {
         last.value = ev.value
@@ -56,6 +64,8 @@ export function normalizeEvents(events: RawRecorderEvent[]): RecorderStep[] {
       isTop: ev.isTop,
       value: ev.value,
       key: ev.key,
+      x: ev.x,
+      y: ev.y,
     })
   }
   return steps

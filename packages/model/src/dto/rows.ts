@@ -5,6 +5,7 @@ import {
   candidateAttemptSchema,
   locatorHitSchema,
   locatorSchema,
+  stepConditionSchema,
 } from '../domain'
 
 /** 七张表的行 DTO（locators/params/assertion 落 JSON 列，进库前用 domain schema 校验） */
@@ -41,6 +42,7 @@ export const caseStepRowSchema = z.object({
   elementId: z.string().nullable(),
   params: z.record(z.string(), z.unknown()).optional(),
   assertion: assertionSchema.optional(),
+  condition: stepConditionSchema.optional(),
 })
 
 export const elementRowSchema = z.object({
@@ -74,11 +76,12 @@ export const runStepRowSchema = z.object({
   triedCandidates: z.array(candidateAttemptSchema).nullable(),
   assertion: z
     .object({
-      type: z.enum(['visible', 'text', 'value']),
+      type: z.string(),
       expected: z.string().nullable().optional(),
       actual: z.string().nullable().optional(),
     })
     .nullable(),
+  skipped: z.boolean().nullable().optional(),
   screenshotPath: z.string().nullable(),
 })
 

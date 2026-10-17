@@ -19,8 +19,9 @@ import { elementRepo } from '../db/repositories/elements'
 import { moduleRepo } from '../db/repositories/modules'
 import { projectRepo } from '../db/repositories/projects'
 import { runRepo } from '../db/repositories/runs'
+import { applyDeviceMetrics } from '../services/emulation'
 import { armAssertion, startRecording, stopRecording } from '../services/recording'
-import { startReplay } from '../services/replay'
+import { startReplay, stopReplay } from '../services/replay'
 
 type AnyFn = (input: never) => unknown
 const routes = new Map<string, { parse: (raw: unknown) => unknown; fn: AnyFn }>()
@@ -111,6 +112,20 @@ export function registerIpc(): void {
     setControlledViewBounds(input)
     return { ok: true }
   })
+  route(IpcChannel.viewEmulate, async (input) => {
+    const view = getControlledView()
+    if ('clear' in input && input.clear) {
+      await applyDeviceMetrics(view, null)
+    } else if ('width' in input) {
+      await applyDeviceMetrics(view, {
+        width: input.width,
+        height: input.height,
+        deviceScaleFactor: input.deviceScaleFactor,
+        mobile: input.mobile,
+      })
+    }
+    return { ok: true }
+  })
 
   route(IpcChannel.runList, (input) => runRepo.list(input.caseId))
   route(IpcChannel.runGet, (input) => {
@@ -126,10 +141,24 @@ export function registerIpc(): void {
   })
   route(IpcChannel.recordingStop, () => stopRecording())
   route(IpcChannel.recordingAssertArm, () => armAssertion())
-  route(IpcChannel.replayStart, (input) => startReplay(input.caseId, getControlledView()))
+  route(IpcChannel.replayStart, (input) =>
+    startReplay(input.caseId, getControlledView(), input.mode),
+  )
+  route(IpcChannel.replayStop, () => stopReplay())
 
   for (const [channel, r] of routes) {
-    ipcMain.handle(channel, (_event, raw: unknown) => r.fn(r.parse(raw) as never))
+    ipcMain.handle(channel, async (_event, raw: unknown) => {
+      try {
+        return await r.fn(r.parse(raw) as never)
+      } catch (err) {
+        // zod 校验错误 → 可读中文提示（否则 renderer 收到的是一大段 JSON）
+        if (err && typeof err === 'object' && 'issues' in err) {
+          const issues = (err as { issues: Array<{ message?: string }> }).issues
+          throw new Error(issues.map((issue) => issue.message ?? '参数不合法').join('；'))
+        }
+        throw err
+      }
+    })
   }
   console.log(`[atp] ipc registered: ${routes.size} channels`)
 }

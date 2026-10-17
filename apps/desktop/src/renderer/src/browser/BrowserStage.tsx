@@ -1,15 +1,54 @@
 import { Button, Tooltip, toast } from '@heroui/react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Circle, Globe, Loader2, Play, Plus, RotateCw, Square, Video } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import {
+  Circle,
+  Globe,
+  Loader2,
+  MonitorSmartphone,
+  Play,
+  Plus,
+  RotateCcw,
+  RotateCw,
+  Square,
+  Video,
+} from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { EmptyHint } from '../components/EmptyHint'
 import { useElapsed } from '../hooks/use-elapsed'
-import { useUiStore } from '../state/ui-store'
+import {
+  type DeviceOrientation,
+  type DevicePresetId,
+  type DeviceZoom,
+  type ReplayMode,
+  useUiStore,
+} from '../state/ui-store'
+import { DEVICE_PRESETS, deviceSize, getDevicePreset } from './devices'
+
+const ZOOM_OPTIONS: Array<{ value: DeviceZoom; label: string }> = [
+  { value: 'fit', label: '适应舞台' },
+  { value: 0.5, label: '50%' },
+  { value: 0.75, label: '75%' },
+  { value: 1, label: '100%' },
+  { value: 1.25, label: '125%' },
+]
+
+interface FrameRect {
+  left: number
+  top: number
+  width: number
+  height: number
+  scale: number
+}
+
+const selectClass =
+  'h-7 rounded-md border border-border bg-field px-1.5 text-[11px] text-foreground outline-none focus:border-accent/60 disabled:opacity-50'
 
 export function BrowserStage() {
   const stageRef = useRef<HTMLDivElement>(null)
   const [input, setInput] = useState('')
   const [replaying, setReplaying] = useState(false)
+  const [frame, setFrame] = useState<FrameRect | null>(null)
+  const [domOverlay, setDomOverlay] = useState(false)
 
   const recording = useUiStore((s) => s.recording)
   const recordingStartedAt = useUiStore((s) => s.recordingStartedAt)
@@ -19,9 +58,20 @@ export function BrowserStage() {
   const setDraftRecording = useUiStore((s) => s.setDraftRecording)
   const selected = useUiStore((s) => s.selected)
   const overlayDepth = useUiStore((s) => s.overlayDepth)
+  const devicePresetId = useUiStore((s) => s.devicePresetId)
+  const deviceOrientation = useUiStore((s) => s.deviceOrientation)
+  const deviceZoom = useUiStore((s) => s.deviceZoom)
+  const setDevice = useUiStore((s) => s.setDevice)
+  const replayMode = useUiStore((s) => s.replayMode)
+  const setReplayMode = useUiStore((s) => s.setReplayMode)
+  const replayProgress = useUiStore((s) => s.replayProgress)
+  const setReplayProgress = useUiStore((s) => s.setReplayProgress)
   const qc = useQueryClient()
   const elapsed = useElapsed(recordingStartedAt)
-  const [domOverlay, setDomOverlay] = useState(false)
+
+  const preset = getDevicePreset(devicePresetId)
+  const size = deviceSize(preset, deviceOrientation)
+  const busy = recording || replaying
 
   // 原生视图层级高于 renderer：任何与舞台相交的浮层（弹窗 / 下拉菜单）
   // 出现时都要暂时收起视图，否则浮层会被原生页面盖住。
@@ -67,26 +117,89 @@ export function BrowserStage() {
 
   const hideForOverlay = overlayDepth > 0 || domOverlay
 
-  // 原生 WebContentsView 覆盖在舞台区域；未打开页面或有浮层时收起，
-  // 否则弹窗/遮罩会被原生视图盖住
+  // 计算设备显示区域（保持比例、居中）；visible=false 时收起视图
+  const computeLayout = useCallback(
+    (
+      visible: boolean,
+    ): {
+      bounds: { x: number; y: number; width: number; height: number }
+      frame: FrameRect | null
+    } | null => {
+      const el = stageRef.current
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      if (!visible) {
+        return { bounds: { x: 0, y: 0, width: 0, height: 0 }, frame: null }
+      }
+      if (preset.width === 0) {
+        return {
+          bounds: {
+            x: Math.round(r.left),
+            y: Math.round(r.top),
+            width: Math.round(r.width),
+            height: Math.round(r.height),
+          },
+          frame: null,
+        }
+      }
+
+      const padding = 24
+      // 顶部留出设备标签的高度，避免竖屏设备贴顶时标签被隐藏
+      const topReserve = 24
+      const availW = Math.max(120, r.width - padding * 2)
+      const availH = Math.max(120, r.height - padding * 2 - topReserve)
+      const fit = Math.min(availW / size.width, availH / size.height)
+      const scale = deviceZoom === 'fit' ? fit : Math.min(deviceZoom, fit)
+      const w = Math.max(1, Math.round(size.width * scale))
+      const h = Math.max(1, Math.round(size.height * scale))
+      const left = Math.round((r.width - w) / 2)
+      const top = Math.round(padding + topReserve + (availH - h) / 2)
+      return {
+        bounds: {
+          x: Math.round(r.left + left),
+          y: Math.round(r.top + top),
+          width: w,
+          height: h,
+        },
+        frame: { left, top, width: w, height: h, scale },
+      }
+    },
+    [preset.width, size.width, size.height, deviceZoom],
+  )
+
+  // 同步原生视图 bounds
   useEffect(() => {
     const el = stageRef.current
     if (!el) return
     const report = (): void => {
-      const r = el.getBoundingClientRect()
-      const visible = Boolean(url) && !hideForOverlay
-      void window.atp.invoke('view:bounds-set', {
-        x: visible ? Math.round(r.left) : 0,
-        y: visible ? Math.round(r.top) : 0,
-        width: visible ? Math.round(r.width) : 0,
-        height: visible ? Math.round(r.height) : 0,
-      })
+      const layout = computeLayout(Boolean(url) && !hideForOverlay)
+      if (!layout) return
+      setFrame(layout.frame)
+      void window.atp.invoke('view:bounds-set', layout.bounds)
     }
     report()
     const ro = new ResizeObserver(report)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [url, hideForOverlay])
+  }, [url, hideForOverlay, computeLayout])
+
+  // 设备模拟：自适应 = 清除 override；预设 = 固定 CSS 视口
+  useEffect(() => {
+    if (preset.width === 0) {
+      void window.atp.invoke('view:emulate', { clear: true })
+      return
+    }
+    void window.atp
+      .invoke('view:emulate', {
+        width: size.width,
+        height: size.height,
+        deviceScaleFactor: preset.deviceScaleFactor,
+        mobile: preset.mobile,
+      })
+      .catch((err: unknown) => {
+        toast.danger(err instanceof Error ? err.message : '设备模拟失败')
+      })
+  }, [preset.width, preset.deviceScaleFactor, preset.mobile, size.width, size.height])
 
   const open = async (target = input): Promise<void> => {
     const value = target.trim()
@@ -128,14 +241,39 @@ export function BrowserStage() {
     if (selected?.kind !== 'case') return
     setReplaying(true)
     try {
-      await window.atp.invoke('replay:start', { caseId: selected.id })
+      const file = await window.atp.invoke('case:get', { id: selected.id })
+      setInput(file.case.startUrl)
+      setUrl(file.case.startUrl)
+      // 先确保原生视图可见并拿到非零 viewport，再启动回放（否则点击会落在 0×0 视口外）
+      const layout = computeLayout(true)
+      if (layout) {
+        setFrame(layout.frame)
+        await window.atp.invoke('view:bounds-set', layout.bounds)
+      }
+      setReplayProgress({ runId: null, index: 0, total: file.case.steps.length })
+      await window.atp.invoke('replay:start', { caseId: selected.id, mode: replayMode })
       void qc.invalidateQueries({ queryKey: ['runs'] })
-      toast.success('回放完成，结果见右侧「报告」')
+      toast.success(replayMode === 'embedded' ? '回放完成，结果见右侧「报告」' : '独立窗口回放完成')
     } catch (err) {
       toast.danger(err instanceof Error ? err.message : '回放失败')
     } finally {
       setReplaying(false)
+      setReplayProgress(null)
     }
+  }
+
+  const stopReplay = async (): Promise<void> => {
+    try {
+      await window.atp.invoke('replay:stop')
+      toast.info('正在停止回放…')
+    } catch (err) {
+      toast.danger(err instanceof Error ? err.message : '停止回放失败')
+    }
+  }
+
+  const toggleOrientation = (): void => {
+    const next: DeviceOrientation = deviceOrientation === 'portrait' ? 'landscape' : 'portrait'
+    setDevice({ orientation: next })
   }
 
   return (
@@ -173,7 +311,7 @@ export function BrowserStage() {
         <Button
           size="sm"
           variant="secondary"
-          isDisabled={!input.trim() || recording}
+          isDisabled={!input.trim() || busy}
           onPress={() => void open()}
         >
           打开
@@ -182,6 +320,7 @@ export function BrowserStage() {
         <Button
           size="sm"
           variant={recording ? 'danger' : 'primary'}
+          isDisabled={replaying}
           onPress={() => void toggleRecording()}
         >
           {recording ? (
@@ -197,12 +336,77 @@ export function BrowserStage() {
         <Button
           size="sm"
           variant="secondary"
-          isDisabled={selected?.kind !== 'case' || replaying || recording}
+          isDisabled={selected?.kind !== 'case' || busy}
           onPress={() => void replay()}
         >
           {replaying ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
           {replaying ? '回放中…' : '回放用例'}
         </Button>
+      </div>
+
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-surface px-3 text-[11px]">
+        <MonitorSmartphone size={13} className="shrink-0 text-muted" />
+        <select
+          className={selectClass}
+          value={devicePresetId}
+          disabled={busy}
+          onChange={(e) => setDevice({ presetId: e.target.value as DevicePresetId })}
+          aria-label="设备预设"
+        >
+          {DEVICE_PRESETS.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.width ? ` ${p.width}×${p.height}` : ''}
+            </option>
+          ))}
+        </select>
+        {preset.rotatable && (
+          <button
+            type="button"
+            onClick={toggleOrientation}
+            disabled={busy}
+            className="grid size-6 place-items-center rounded text-muted hover:bg-default hover:text-foreground disabled:opacity-40"
+            aria-label="切换横竖屏"
+          >
+            <RotateCcw size={12} />
+          </button>
+        )}
+        <select
+          className={selectClass}
+          value={String(deviceZoom)}
+          disabled={busy || preset.width === 0}
+          onChange={(e) =>
+            setDevice({
+              zoom: e.target.value === 'fit' ? 'fit' : (Number(e.target.value) as DeviceZoom),
+            })
+          }
+          aria-label="缩放"
+        >
+          {ZOOM_OPTIONS.map((z) => (
+            <option key={String(z.value)} value={String(z.value)}>
+              {z.label}
+            </option>
+          ))}
+        </select>
+        <span className="truncate text-muted">
+          {preset.width === 0
+            ? '跟随舞台'
+            : `${size.width} × ${size.height} · ${Math.round((frame?.scale ?? 1) * 100)}%`}
+        </span>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="text-muted">回放方式</span>
+          <select
+            className={selectClass}
+            value={replayMode}
+            disabled={replaying}
+            onChange={(e) => setReplayMode(e.target.value as ReplayMode)}
+            aria-label="回放方式"
+          >
+            <option value="embedded">中栏嵌入</option>
+            <option value="standalone">独立窗口（录视频）</option>
+          </select>
+        </div>
       </div>
 
       {recording && (
@@ -227,6 +431,33 @@ export function BrowserStage() {
         </div>
       )}
 
+      {replaying && (
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-accent/25 bg-accent/[0.06] px-3 text-xs">
+          <Loader2 size={13} className="animate-spin text-accent" />
+          <span className="font-medium text-accent">
+            {replayMode === 'embedded' ? '中栏回放中' : '独立窗口回放中'}
+          </span>
+          {replayProgress && replayProgress.total > 0 && (
+            <span className="font-mono tabular-nums text-muted">
+              {replayProgress.index}/{replayProgress.total}
+            </span>
+          )}
+          <span className="ml-1 truncate text-muted">
+            {replayMode === 'embedded'
+              ? '页面会在中栏可见地执行；完成后结果写入右侧「报告」'
+              : 'Playwright 独立 Chromium 窗口执行中，完成后结果写入右侧「报告」'}
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="ml-auto"
+            onPress={() => void stopReplay()}
+          >
+            停止回放
+          </Button>
+        </div>
+      )}
+
       <div ref={stageRef} className="atp-stage relative min-h-0 flex-1 overflow-hidden">
         {!url && !recording && (
           <div className="absolute inset-0 grid place-items-center">
@@ -238,20 +469,39 @@ export function BrowserStage() {
           </div>
         )}
 
+        {frame && (
+          <div
+            className="pointer-events-none absolute rounded-sm outline outline-1 outline-border/80"
+            style={{ left: frame.left, top: frame.top, width: frame.width, height: frame.height }}
+          >
+            <span className="absolute -top-5 left-0 rounded bg-surface px-1.5 py-0.5 text-[10px] text-muted shadow-surface">
+              {preset.name} · {size.width}×{size.height} · {Math.round(frame.scale * 100)}%
+            </span>
+          </div>
+        )}
+
         {recording && (
           <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-red-500/70" />
         )}
+        {replaying && replayMode === 'embedded' && (
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-accent/70" />
+        )}
 
-        {replaying && (
+        {replaying && replayMode === 'standalone' && (
           <div className="absolute inset-0 z-10 grid place-items-center bg-background/70 backdrop-blur-[2px]">
             <div className="atp-fade-in flex items-center gap-3 rounded-lg border border-border bg-surface px-5 py-4 shadow-overlay">
               <Loader2 size={18} className="animate-spin text-accent" />
               <div>
-                <p className="text-sm font-medium">Playwright 回放中</p>
+                <p className="text-sm font-medium">独立窗口回放中</p>
                 <p className="mt-0.5 flex items-center gap-1 text-xs text-muted">
                   <Video size={11} />
-                  独立 Chromium 窗口执行，完成后在右侧「报告」查看证据
+                  Chromium 独立窗口执行并录制视频，完成后在右侧「报告」查看
                 </p>
+                {replayProgress && replayProgress.total > 0 && (
+                  <p className="mt-1 font-mono text-xs text-muted">
+                    {replayProgress.index}/{replayProgress.total}
+                  </p>
+                )}
               </div>
             </div>
           </div>

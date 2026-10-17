@@ -60,6 +60,17 @@ describe('normalizeEvents', () => {
     expect(steps).toHaveLength(2)
   })
 
+  it('连续 scroll 合并为一条并保留最终位置', () => {
+    const steps = normalizeEvents([
+      ev({ kind: 'scroll', ts: 1000, x: 0, y: 100 }),
+      ev({ kind: 'scroll', ts: 1400, x: 0, y: 320 }),
+      ev({ kind: 'scroll', ts: 1800, x: 0, y: 640 }),
+    ])
+    expect(steps).toHaveLength(1)
+    expect(steps[0].action).toBe('scroll')
+    expect(steps[0].y).toBe(640)
+  })
+
   it('300ms 内同元素重复 click 去重', () => {
     const steps = normalizeEvents([
       ev({

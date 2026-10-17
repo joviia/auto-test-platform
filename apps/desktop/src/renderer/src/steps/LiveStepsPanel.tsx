@@ -13,6 +13,7 @@ export function LiveStepsPanel() {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (liveSteps.length === 0) return
     bottomRef.current?.scrollIntoView({ block: 'end' })
   }, [liveSteps.length])
 
@@ -40,8 +41,16 @@ export function LiveStepsPanel() {
             {liveSteps.map((step, idx) => {
               const meta = actionMeta(step.action)
               const label =
-                step.target.name || step.target.text || step.target.placeholder || step.target.tag
-              const value = step.value ?? step.key
+                step.action === 'scroll'
+                  ? '页面'
+                  : step.target.name ||
+                    step.target.text ||
+                    step.target.placeholder ||
+                    step.target.tag
+              const value =
+                step.action === 'scroll'
+                  ? `(${step.x ?? 0}, ${step.y ?? 0})`
+                  : (step.value ?? step.key)
               return (
                 <div
                   key={`${step.ts}-${idx}`}

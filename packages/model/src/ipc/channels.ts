@@ -22,11 +22,13 @@ export const IpcChannel = {
   // 受控浏览器与录制
   browserNavigate: 'browser:navigate',
   viewBoundsSet: 'view:bounds-set',
+  viewEmulate: 'view:emulate',
   recordingStart: 'recording:start',
   recordingStop: 'recording:stop',
   recordingAssertArm: 'recording:assert-arm',
   // 回放与执行记录
   replayStart: 'replay:start',
+  replayStop: 'replay:stop',
   runList: 'run:list',
   runGet: 'run:get',
 } as const

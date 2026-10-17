@@ -35,11 +35,13 @@ export const stepResultSchema = z.object({
   triedCandidates: z.array(candidateAttemptSchema).optional(),
   assertion: z
     .object({
-      type: z.enum(['visible', 'text', 'value']),
+      type: z.string(),
       expected: z.string().optional(),
       actual: z.string().optional(),
     })
     .optional(),
+  /** 条件不满足而跳过 */
+  skipped: z.boolean().optional(),
   screenshotPath: z.string().optional(),
 })
 

@@ -20,6 +20,8 @@ export const cases = sqliteTable('cases', {
   moduleId: text('module_id'),
   name: text('name').notNull(),
   startUrl: text('start_url').notNull(),
+  /** 用例变量（JSON 对象字符串） */
+  variables: text('variables'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 })
@@ -32,6 +34,7 @@ export const caseSteps = sqliteTable('case_steps', {
   elementId: text('element_id'),
   params: text('params'),
   assertion: text('assertion'),
+  condition: text('condition'),
 })
 
 export const elements = sqliteTable('elements', {
@@ -63,5 +66,6 @@ export const runSteps = sqliteTable('run_steps', {
   locatorHit: text('locator_hit'),
   triedCandidates: text('tried_candidates'),
   assertion: text('assertion'),
+  skipped: integer('skipped'),
   screenshotPath: text('screenshot_path'),
 })

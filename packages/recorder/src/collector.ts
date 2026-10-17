@@ -24,7 +24,7 @@ export interface RawLocatorCandidate {
 }
 
 export interface RawRecorderEvent {
-  kind: 'click' | 'fill' | 'select' | 'keydown'
+  kind: 'click' | 'fill' | 'select' | 'keydown' | 'scroll'
   url: string
   ts: number
   /** 是否顶层文档（iframe 内的事件为 false，用于起始地址判定） */
@@ -33,6 +33,9 @@ export interface RawRecorderEvent {
   candidates: RawLocatorCandidate[]
   value?: string
   key?: string
+  /** 滚动位置（仅 scroll 事件） */
+  x?: number
+  y?: number
 }
 
 export function collectorSource(): string {
@@ -271,4 +274,27 @@ function pageCollector(): void {
     },
     true,
   )
+
+  // 页面滚动：只在顶层文档记录，300ms 内的连续滚动由主进程合并
+  if (window === window.top) {
+    let lastScrollTs = 0
+    window.addEventListener(
+      'scroll',
+      () => {
+        const now = Date.now()
+        if (now - lastScrollTs < 300) return
+        lastScrollTs = now
+        send({
+          kind: 'scroll',
+          url: location.href,
+          ts: now,
+          target: { tag: 'window' },
+          candidates: [],
+          x: window.scrollX,
+          y: window.scrollY,
+        })
+      },
+      { passive: true },
+    )
+  }
 }

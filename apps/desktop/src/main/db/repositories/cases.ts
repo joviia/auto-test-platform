@@ -46,12 +46,14 @@ export const caseRepo = {
         projectId: r.projectId,
         moduleId: r.moduleId ?? undefined,
         startUrl: r.startUrl,
+        variables: r.variables ? JSON.parse(r.variables) : {},
         steps: stepRows.map((s) => ({
           id: s.id.startsWith(`${id}-`) ? s.id.slice(id.length + 1) : s.id,
           action: s.action,
           elementId: s.elementId ?? undefined,
           params: s.params ? JSON.parse(s.params) : undefined,
           assertion: s.assertion ? JSON.parse(s.assertion) : undefined,
+          condition: s.condition ? JSON.parse(s.condition) : undefined,
         })),
       },
       elements: Object.fromEntries(elementRows.map((e) => [e.id, e])),
@@ -71,6 +73,7 @@ export const caseRepo = {
       moduleId: input.moduleId ?? null,
       name: input.name,
       startUrl: input.startUrl,
+      variables: '{}',
       createdAt: now,
       updatedAt: now,
     }
@@ -88,6 +91,7 @@ export const caseRepo = {
           name: file.case.name,
           moduleId: file.case.moduleId ?? null,
           startUrl: file.case.startUrl,
+          variables: JSON.stringify(file.case.variables ?? {}),
           updatedAt: now,
         })
         .where(eq(cases.id, file.case.id))
@@ -105,6 +109,7 @@ export const caseRepo = {
             elementId: step.elementId ?? null,
             params: step.params ? JSON.stringify(step.params) : null,
             assertion: step.assertion ? JSON.stringify(step.assertion) : null,
+            condition: step.condition ? JSON.stringify(step.condition) : null,
           })
           .run()
       }

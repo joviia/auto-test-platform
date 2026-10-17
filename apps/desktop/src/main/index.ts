@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { BrowserWindow, app } from 'electron'
 import { createMainWindow } from './app-window'
+import { configureRemoteDebugging } from './browser/cdp'
 import { ensureControlledView } from './browser/controlled-browser'
 import { initDb } from './db/client'
 import {
@@ -11,6 +12,8 @@ import { registerIpc } from './ipc/register'
 import { initRecordingService } from './services/recording'
 
 registerEvidenceSchemePrivileges()
+// 嵌入回放需要本地 CDP；端口 0 = 由 Chromium 选空闲端口（仅本机）
+configureRemoteDebugging()
 
 // E2E/自动化验收：ATP_REMOTE_DEBUG=<port> 打开 CDP 远程调试
 if (process.env.ATP_REMOTE_DEBUG) {

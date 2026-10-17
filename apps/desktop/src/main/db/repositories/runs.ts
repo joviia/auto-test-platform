@@ -50,6 +50,7 @@ export const runRepo = {
         locatorHit: s.locatorHit ? JSON.parse(s.locatorHit) : null,
         triedCandidates: s.triedCandidates ? JSON.parse(s.triedCandidates) : null,
         assertion: s.assertion ? JSON.parse(s.assertion) : null,
+        skipped: Boolean(s.skipped),
         screenshotPath: s.screenshotPath,
       }))
     return { run: toRunRow(r), steps }
@@ -83,6 +84,7 @@ export const runRepo = {
             locatorHit: s.locatorHit ? JSON.stringify(s.locatorHit) : null,
             triedCandidates: s.triedCandidates ? JSON.stringify(s.triedCandidates) : null,
             assertion: s.assertion ? JSON.stringify(s.assertion) : null,
+            skipped: s.skipped ? 1 : 0,
             screenshotPath: s.screenshotPath ?? null,
           })
           .run()

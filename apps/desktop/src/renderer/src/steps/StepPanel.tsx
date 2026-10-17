@@ -1,7 +1,18 @@
-import type { CaseFile, Locator, Step } from '@atp/model'
-import { Button, Input, Modal, toast } from '@heroui/react'
+import type { Assertion, CaseFile, Locator, Step, StepCondition } from '@atp/model'
+import { Button, Dropdown, Input, Modal, Tooltip, toast } from '@heroui/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, ChevronUp, Download, GripVertical, ListTree, Save, X } from 'lucide-react'
+import {
+  Braces,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+  Download,
+  GripVertical,
+  ListTree,
+  Plus,
+  Save,
+  X,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { qk } from '../api/client'
 import { EmptyHint } from '../components/EmptyHint'
@@ -16,6 +27,97 @@ const LOCATOR_LABEL: Record<Locator['type'], string> = {
   css: 'css',
 }
 
+const ASSERTION_GROUPS: Array<{
+  group: string
+  options: Array<{ value: Assertion['type']; label: string; pageLevel?: boolean }>
+}> = [
+  {
+    group: '元素状态',
+    options: [
+      { value: 'visible', label: '可见' },
+      { value: 'hidden', label: '隐藏' },
+      { value: 'exists', label: '存在' },
+      { value: 'notExists', label: '不存在' },
+      { value: 'enabled', label: '启用' },
+      { value: 'disabled', label: '禁用' },
+      { value: 'checked', label: '已勾选' },
+      { value: 'unchecked', label: '未勾选' },
+    ],
+  },
+  { group: '数量', options: [{ value: 'count', label: '元素数量' }] },
+  {
+    group: '文本',
+    options: [
+      { value: 'text', label: '文本等于' },
+      { value: 'textContains', label: '文本包含' },
+      { value: 'textMatches', label: '文本匹配正则' },
+    ],
+  },
+  {
+    group: '输入值',
+    options: [
+      { value: 'value', label: '值等于' },
+      { value: 'valueContains', label: '值包含' },
+    ],
+  },
+  {
+    group: '属性 / 样式',
+    options: [
+      { value: 'attribute', label: '属性' },
+      { value: 'css', label: 'CSS 属性' },
+    ],
+  },
+  {
+    group: '页面级（无需元素）',
+    options: [
+      { value: 'urlEquals', label: 'URL 等于', pageLevel: true },
+      { value: 'urlContains', label: 'URL 包含', pageLevel: true },
+      { value: 'titleEquals', label: '标题等于', pageLevel: true },
+      { value: 'titleContains', label: '标题包含', pageLevel: true },
+      { value: 'pageText', label: '页面文本', pageLevel: true },
+    ],
+  },
+]
+
+const CONDITION_OPERATORS: Array<{ value: StepCondition['operator']; label: string }> = [
+  { value: '=', label: '等于' },
+  { value: '!=', label: '不等于' },
+  { value: 'contains', label: '包含' },
+  { value: 'notContains', label: '不包含' },
+  { value: '>', label: '大于' },
+  { value: '<', label: '小于' },
+  { value: '>=', label: '大于等于' },
+  { value: '<=', label: '小于等于' },
+  { value: 'exists', label: '变量存在' },
+  { value: 'notExists', label: '变量不存在' },
+]
+
+function defaultAssertion(type: Assertion['type']): Assertion {
+  switch (type) {
+    case 'count':
+      return { type, op: '=', expected: 1 }
+    case 'text':
+    case 'textContains':
+    case 'textMatches':
+    case 'value':
+    case 'valueContains':
+      return { type, expected: '' }
+    case 'attribute':
+      return { type, name: '', match: 'equals', expected: '' }
+    case 'css':
+      return { type, name: '', expected: '' }
+    case 'pageText':
+      return { type, match: 'contains', expected: '' }
+    case 'urlEquals':
+    case 'urlContains':
+    case 'titleEquals':
+    case 'titleContains':
+      return { type, expected: '' }
+    default:
+      return { type }
+  }
+}
+
 function move<T>(arr: T[], from: number, to: number): T[] {
   if (to < 0 || to >= arr.length) return arr
   const next = [...arr]
@@ -26,6 +128,271 @@ function move<T>(arr: T[], from: number, to: number): T[] {
 
 function locatorText(loc: Locator): string {
   return loc.type === 'role' && loc.name ? `${loc.value}「${loc.name}」` : loc.value
+}
+
+const selectClass =
+  'h-8 rounded-md border border-border bg-field px-2 text-xs text-foreground outline-none focus:border-accent/60'
+
+function AssertionEditor({
+  assertion,
+  hasElement,
+  onChange,
+}: {
+  assertion: Assertion | undefined
+  hasElement: boolean
+  onChange: (next: Assertion) => void
+}) {
+  const current = assertion ?? defaultAssertion('visible')
+  const a = current as Record<string, unknown>
+  const type = current.type
+  const patch = (extra: Record<string, unknown>): void =>
+    onChange({ ...current, ...extra } as Assertion)
+
+  const needsExpected = [
+    'text',
+    'textContains',
+    'textMatches',
+    'value',
+    'valueContains',
+    'urlEquals',
+    'urlContains',
+    'titleEquals',
+    'titleContains',
+    'pageText',
+    'css',
+    'attribute',
+  ].includes(type)
+
+  return (
+    <div className="space-y-1.5">
+      <select
+        className={`${selectClass} w-full`}
+        value={type}
+        onChange={(e) => onChange(defaultAssertion(e.target.value as Assertion['type']))}
+        aria-label="断言类型"
+      >
+        {ASSERTION_GROUPS.map((group) => (
+          <optgroup key={group.group} label={group.group}>
+            {group.options.map((opt) => (
+              <option key={opt.value} value={opt.value} disabled={!hasElement && !opt.pageLevel}>
+                {opt.label}
+                {!hasElement && !opt.pageLevel ? '（需元素）' : ''}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+
+      {(type === 'text' ||
+        type === 'textContains' ||
+        type === 'value' ||
+        type === 'valueContains') && (
+        <div className="flex items-center gap-2">
+          <Input
+            className="flex-1"
+            placeholder="期望值"
+            value={String(a.expected ?? '')}
+            onChange={(e) => patch({ expected: e.target.value })}
+          />
+          <label className="flex shrink-0 items-center gap-1 text-[11px] text-muted">
+            <input
+              type="checkbox"
+              checked={Boolean(a.ignoreCase)}
+              onChange={(e) => patch({ ignoreCase: e.target.checked })}
+            />
+            忽略大小写
+          </label>
+        </div>
+      )}
+
+      {(type === 'textMatches' ||
+        type === 'urlEquals' ||
+        type === 'urlContains' ||
+        type === 'titleEquals' ||
+        type === 'titleContains' ||
+        type === 'pageText') && (
+        <Input
+          placeholder={type === 'textMatches' ? '正则表达式' : '期望值'}
+          value={String(a.expected ?? '')}
+          onChange={(e) => patch({ expected: e.target.value })}
+        />
+      )}
+
+      {type === 'pageText' && (
+        <select
+          className={`${selectClass} w-full`}
+          value={String(a.match ?? 'contains')}
+          onChange={(e) => patch({ match: e.target.value })}
+          aria-label="页面文本匹配方式"
+        >
+          <option value="contains">包含</option>
+          <option value="equals">等于</option>
+        </select>
+      )}
+
+      {type === 'count' && (
+        <div className="flex items-center gap-2">
+          <select
+            className={selectClass}
+            value={String(a.op ?? '=')}
+            onChange={(e) => patch({ op: e.target.value })}
+            aria-label="数量比较方式"
+          >
+            <option value="=">=</option>
+            <option value=">=">≥</option>
+            <option value="<=">≤</option>
+          </select>
+          <Input
+            type="number"
+            className="flex-1"
+            placeholder="数量"
+            value={String(a.expected ?? 1)}
+            onChange={(e) => patch({ expected: Number(e.target.value) })}
+          />
+        </div>
+      )}
+
+      {type === 'attribute' && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <Input
+              className="flex-1"
+              placeholder="属性名（如 href）"
+              value={String(a.name ?? '')}
+              onChange={(e) => patch({ name: e.target.value })}
+            />
+            <select
+              className={selectClass}
+              value={String(a.match ?? 'equals')}
+              onChange={(e) => patch({ match: e.target.value })}
+              aria-label="属性匹配方式"
+            >
+              <option value="equals">等于</option>
+              <option value="contains">包含</option>
+              <option value="exists">存在</option>
+            </select>
+          </div>
+          {String(a.match ?? 'equals') !== 'exists' && (
+            <Input
+              placeholder="期望值"
+              value={String(a.expected ?? '')}
+              onChange={(e) => patch({ expected: e.target.value })}
+            />
+          )}
+        </div>
+      )}
+
+      {type === 'css' && (
+        <div className="flex items-center gap-2">
+          <Input
+            className="flex-1"
+            placeholder="属性名（如 color）"
+            value={String(a.name ?? '')}
+            onChange={(e) => patch({ name: e.target.value })}
+          />
+          <Input
+            className="flex-1"
+            placeholder="期望值"
+            value={String(a.expected ?? '')}
+            onChange={(e) => patch({ expected: e.target.value })}
+          />
+        </div>
+      )}
+
+      {needsExpected || type === 'count' ? null : (
+        <p className="text-[11px] text-muted">该断言无需期望值</p>
+      )}
+
+      <div className="flex items-center gap-2 text-[11px] text-muted">
+        <span>超时</span>
+        <Input
+          type="number"
+          className="h-7 w-24"
+          placeholder="5000"
+          value={a.timeoutMs === undefined ? '' : String(a.timeoutMs)}
+          onChange={(e) =>
+            patch({ timeoutMs: e.target.value ? Number(e.target.value) : undefined })
+          }
+        />
+        <span>ms</span>
+      </div>
+
+      {!hasElement && (
+        <p className="text-[11px] text-amber-600 dark:text-amber-400">
+          页面级断言不绑定元素；元素级断言需要通过录制拾取目标。
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ConditionEditor({
+  condition,
+  variables,
+  onChange,
+}: {
+  condition: StepCondition | undefined
+  variables: Record<string, string>
+  onChange: (next: StepCondition | undefined) => void
+}) {
+  const varNames = Object.keys(variables)
+  return (
+    <div className="space-y-1.5 rounded-md border border-border bg-surface-secondary/60 p-2">
+      <label className="flex items-center gap-1.5 text-[11px] text-muted">
+        <input
+          type="checkbox"
+          checked={Boolean(condition)}
+          onChange={(e) =>
+            onChange(
+              e.target.checked
+                ? { variable: varNames[0] ?? 'value', operator: '=', value: '' }
+                : undefined,
+            )
+          }
+        />
+        条件执行（不满足时跳过该步）
+      </label>
+      {condition && (
+        <div className="flex items-center gap-1.5">
+          <Input
+            className="h-7 flex-1"
+            placeholder="变量名"
+            list="atp-case-vars"
+            value={condition.variable}
+            onChange={(e) => onChange({ ...condition, variable: e.target.value })}
+          />
+          <datalist id="atp-case-vars">
+            {varNames.map((name) => (
+              <option key={name} value={name} />
+            ))}
+          </datalist>
+          <select
+            className="h-7 rounded-md border border-border bg-field px-1 text-[11px] outline-none"
+            value={condition.operator}
+            onChange={(e) =>
+              onChange({
+                ...condition,
+                operator: e.target.value as StepCondition['operator'],
+              })
+            }
+            aria-label="条件操作符"
+          >
+            {CONDITION_OPERATORS.map((op) => (
+              <option key={op.value} value={op.value}>
+                {op.label}
+              </option>
+            ))}
+          </select>
+          <Input
+            className="h-7 w-28"
+            placeholder="比较值"
+            value={condition.value ?? ''}
+            onChange={(e) => onChange({ ...condition, value: e.target.value })}
+          />
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function StepPanel() {
@@ -48,8 +415,10 @@ export function StepPanel() {
   const [copied, setCopied] = useState(false)
   const [dragIndex, setDragIndex] = useState<number | null>(null)
   const [overIndex, setOverIndex] = useState<number | null>(null)
+  const [varsOpen, setVarsOpen] = useState(false)
+  const [varRows, setVarRows] = useState<Array<{ id: string; key: string; value: string }>>([])
 
-  useOverlayGuard(exportedCode !== null)
+  useOverlayGuard(exportedCode !== null || varsOpen)
 
   useEffect(() => {
     setDraft(file ?? null)
@@ -120,16 +489,26 @@ export function StepPanel() {
       d.case.steps[idx] = { ...d.case.steps[idx], ...patch }
     })
 
-  const setAssertion = (idx: number, raw: unknown): void =>
-    mutate((d) => {
-      const step = d.case.steps[idx]
-      step.assertion = raw === null ? undefined : (raw as NonNullable<Step['assertion']>)
-    })
-
   const reorder = (from: number, to: number): void =>
     mutate((d) => {
       d.case.steps = move(d.case.steps, from, to)
     })
+
+  const duplicate = (idx: number): void =>
+    mutate((d) => {
+      const source = d.case.steps[idx]
+      d.case.steps.splice(idx + 1, 0, {
+        ...structuredClone(source),
+        id: `${source.id}-copy-${Date.now().toString(36)}`,
+      })
+    })
+
+  const appendStep = (step: Step): void =>
+    mutate((d) => {
+      d.case.steps.push(step)
+    })
+
+  const newId = (): string => `s-${Date.now().toString(36)}`
 
   const exportTs = async (): Promise<void> => {
     if (!caseId) return
@@ -156,11 +535,37 @@ export function StepPanel() {
     }
   }
 
+  const openVariables = (): void => {
+    const current = draft.case.variables ?? {}
+    setVarRows(
+      Object.entries(current).map(([key, value], idx) => ({
+        id: `var-${Date.now().toString(36)}-${idx}`,
+        key,
+        value,
+      })),
+    )
+    setVarsOpen(true)
+  }
+
+  const applyVariables = (): void => {
+    const next: Record<string, string> = {}
+    for (const row of varRows) {
+      const key = row.key.trim()
+      if (key) next[key] = row.value
+    }
+    mutate((d) => {
+      d.case.variables = next
+    })
+    setVarsOpen(false)
+    toast.success('变量已更新，点击「保存」写入用例')
+  }
+
   const steps = draft.case.steps
+  const variables = draft.case.variables ?? {}
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-3">
+      <div className="flex h-11 shrink-0 items-center gap-1.5 border-b border-border px-3">
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{draft.case.name}</span>
         {dirty ? (
           <span className="rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning">
@@ -169,9 +574,60 @@ export function StepPanel() {
         ) : (
           savedAt && <span className="text-[10px] text-muted">{savedAt} 已保存</span>
         )}
+
+        <Dropdown.Root>
+          <Dropdown.Trigger className="grid size-7 place-items-center rounded-md text-muted outline-none hover:bg-default hover:text-foreground">
+            <Plus size={14} />
+          </Dropdown.Trigger>
+          <Dropdown.Popover placement="bottom end">
+            <Dropdown.Menu
+              onAction={(key) => {
+                if (key === 'wait')
+                  appendStep({
+                    id: newId(),
+                    action: 'wait',
+                    params: { kind: 'timeout', ms: 1000 },
+                  })
+                if (key === 'assert')
+                  appendStep({
+                    id: newId(),
+                    action: 'assert',
+                    assertion: { type: 'titleContains', expected: '' },
+                  })
+                if (key === 'scroll')
+                  appendStep({ id: newId(), action: 'scroll', params: { x: 0, y: 0 } })
+              }}
+            >
+              <Dropdown.Item id="wait" textValue="新建等待">
+                新建等待步骤
+              </Dropdown.Item>
+              <Dropdown.Item id="assert" textValue="新建页面断言">
+                新建页面级断言
+              </Dropdown.Item>
+              <Dropdown.Item id="scroll" textValue="新建滚动">
+                新建滚动步骤
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown.Root>
+
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <button
+              type="button"
+              onClick={openVariables}
+              className="grid size-7 place-items-center rounded-md text-muted outline-none hover:bg-default hover:text-foreground"
+              aria-label="用例变量"
+            >
+              <Braces size={14} />
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>用例变量（{Object.keys(variables).length}）</Tooltip.Content>
+        </Tooltip.Root>
+
         <Button size="sm" variant="secondary" onPress={() => void exportTs()}>
           <Download size={12} />
-          导出 TS
+          导出
         </Button>
         <Button
           size="sm"
@@ -242,8 +698,13 @@ export function StepPanel() {
                       {meta.label}
                     </span>
                     <span className="min-w-0 flex-1 truncate">
-                      {element?.name ?? step.elementId ?? '页面级操作'}
+                      {element?.name ?? (step.elementId ? step.elementId : '页面级操作')}
                     </span>
+                    {step.condition && (
+                      <span className="shrink-0 rounded bg-amber-500/10 px-1 text-[10px] text-amber-600 dark:text-amber-400">
+                        条件
+                      </span>
+                    )}
                     {preview && (
                       <span className="max-w-[120px] shrink-0 truncate font-mono text-[11px] text-muted">
                         {preview}
@@ -267,6 +728,14 @@ export function StepPanel() {
                         aria-label="下移"
                       >
                         <ChevronDown size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => duplicate(idx)}
+                        className="grid size-6 place-items-center rounded text-muted hover:bg-default hover:text-foreground"
+                        aria-label="复制步骤"
+                      >
+                        <Copy size={12} />
                       </button>
                       <button
                         type="button"
@@ -299,7 +768,7 @@ export function StepPanel() {
                         </p>
                         {(step.action === 'fill' || step.action === 'select') && (
                           <Input
-                            placeholder="输入值"
+                            placeholder="输入值，可用 ${变量名}"
                             value={(step.params?.value as string) ?? ''}
                             onChange={(e) =>
                               patchStep(idx, {
@@ -310,58 +779,95 @@ export function StepPanel() {
                         )}
                         {step.action === 'press' && (
                           <Input
-                            placeholder="按键（如 Enter）"
+                            placeholder="按键（如 Enter 或 Control+A）"
                             value={(step.params?.key as string) ?? ''}
                             onChange={(e) =>
                               patchStep(idx, { params: { ...step.params, key: e.target.value } })
                             }
                           />
                         )}
-                        {step.action === 'assert' && (
+                        {step.action === 'scroll' && (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              className="flex-1"
+                              placeholder="X"
+                              value={String(step.params?.x ?? 0)}
+                              onChange={(e) =>
+                                patchStep(idx, {
+                                  params: { ...step.params, x: Number(e.target.value) },
+                                })
+                              }
+                            />
+                            <Input
+                              type="number"
+                              className="flex-1"
+                              placeholder="Y"
+                              value={String(step.params?.y ?? 0)}
+                              onChange={(e) =>
+                                patchStep(idx, {
+                                  params: { ...step.params, y: Number(e.target.value) },
+                                })
+                              }
+                            />
+                          </div>
+                        )}
+                        {step.action === 'wait' && (
                           <div className="flex items-center gap-2">
                             <select
-                              className="h-8 rounded-md border border-border bg-field px-2 text-xs outline-none"
-                              value={step.assertion?.type ?? 'visible'}
-                              onChange={(e) => {
-                                const t = e.target.value as 'visible' | 'text' | 'value'
-                                setAssertion(
-                                  idx,
-                                  t === 'visible'
-                                    ? { type: 'visible' }
-                                    : {
-                                        type: t,
-                                        expected:
-                                          step.assertion?.type === t
-                                            ? (step.assertion as { expected: string }).expected
-                                            : '',
-                                      },
-                                )
-                              }}
+                              className={selectClass}
+                              value={String(step.params?.kind ?? 'timeout')}
+                              onChange={(e) =>
+                                patchStep(idx, {
+                                  params: { ...step.params, kind: e.target.value },
+                                })
+                              }
+                              aria-label="等待方式"
                             >
-                              <option value="visible">可见</option>
-                              <option value="text">文本</option>
-                              <option value="value">值</option>
+                              <option value="timeout">固定延时</option>
+                              <option value="networkIdle">网络空闲</option>
+                              <option value="visible">元素可见</option>
+                              <option value="hidden">元素隐藏</option>
                             </select>
-                            {step.assertion && step.assertion.type !== 'visible' && (
+                            {String(step.params?.kind ?? 'timeout') !== 'networkIdle' && (
                               <Input
-                                className="flex-1"
-                                placeholder="期望值"
-                                value={(step.assertion as { expected?: string }).expected ?? ''}
+                                type="number"
+                                className="w-24"
+                                placeholder="毫秒"
+                                value={String(step.params?.ms ?? 1000)}
                                 onChange={(e) =>
-                                  setAssertion(idx, {
-                                    type: step.assertion?.type,
-                                    expected: e.target.value,
+                                  patchStep(idx, {
+                                    params: { ...step.params, ms: Number(e.target.value) },
                                   })
                                 }
                               />
                             )}
                           </div>
                         )}
-                        {(step.action === 'click' || step.action === 'assert') && (
-                          <p className="text-[11px] text-muted">
-                            {step.action === 'click' ? '点击目标元素' : '断言目标元素状态'}
-                          </p>
+                        {step.action === 'assert' && (
+                          <AssertionEditor
+                            assertion={step.assertion}
+                            hasElement={Boolean(step.elementId)}
+                            onChange={(next) =>
+                              patchStep(idx, {
+                                assertion: next,
+                                elementId: [
+                                  'urlEquals',
+                                  'urlContains',
+                                  'titleEquals',
+                                  'titleContains',
+                                  'pageText',
+                                ].includes(next.type)
+                                  ? undefined
+                                  : step.elementId,
+                              })
+                            }
+                          />
                         )}
+                        {(step.action === 'click' || step.action === 'assert') &&
+                          step.action === 'click' && (
+                            <p className="text-[11px] text-muted">点击目标元素</p>
+                          )}
                       </div>
 
                       {element && (
@@ -386,6 +892,12 @@ export function StepPanel() {
                           </div>
                         </div>
                       )}
+
+                      <ConditionEditor
+                        condition={step.condition}
+                        variables={variables}
+                        onChange={(condition) => patchStep(idx, { condition })}
+                      />
                     </div>
                   )}
                 </div>
@@ -434,6 +946,82 @@ export function StepPanel() {
                   </Button>
                   <Button variant="primary" size="sm" onPress={() => setExportedCode(null)}>
                     关闭
+                  </Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal.Root>
+      )}
+
+      {varsOpen && (
+        <Modal.Root isOpen onOpenChange={(open) => !open && setVarsOpen(false)}>
+          <Modal.Backdrop>
+            <Modal.Container size="md">
+              <Modal.Dialog>
+                <Modal.Header>
+                  <Modal.Heading>用例变量</Modal.Heading>
+                  <Modal.CloseTrigger />
+                </Modal.Header>
+                <Modal.Body className="space-y-3">
+                  <p className="text-xs text-muted">
+                    在步骤参数、断言期望、条件值中写 <code>${'{变量名}'}</code> 即可引用。
+                  </p>
+                  <div className="space-y-1.5">
+                    {varRows.map((row, idx) => (
+                      <div key={row.id} className="flex items-center gap-1.5">
+                        <Input
+                          className="flex-1"
+                          placeholder="变量名"
+                          value={row.key}
+                          onChange={(e) =>
+                            setVarRows((rows) =>
+                              rows.map((r, i) => (i === idx ? { ...r, key: e.target.value } : r)),
+                            )
+                          }
+                        />
+                        <Input
+                          className="flex-[2]"
+                          placeholder="值"
+                          value={row.value}
+                          onChange={(e) =>
+                            setVarRows((rows) =>
+                              rows.map((r, i) => (i === idx ? { ...r, value: e.target.value } : r)),
+                            )
+                          }
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setVarRows((rows) => rows.filter((_, i) => i !== idx))}
+                          className="grid size-7 place-items-center rounded text-muted hover:bg-danger/10 hover:text-danger"
+                          aria-label="删除变量"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    {varRows.length === 0 && <p className="text-xs text-muted">还没有变量</p>}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onPress={() =>
+                      setVarRows((rows) => [
+                        ...rows,
+                        { id: `var-${Date.now().toString(36)}`, key: '', value: '' },
+                      ])
+                    }
+                  >
+                    <Plus size={13} />
+                    添加变量
+                  </Button>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="secondary" size="sm" onPress={() => setVarsOpen(false)}>
+                    取消
+                  </Button>
+                  <Button variant="primary" size="sm" onPress={applyVariables}>
+                    应用
                   </Button>
                 </Modal.Footer>
               </Modal.Dialog>

@@ -22,7 +22,7 @@ const idInput = z.object({ id: z.string().min(1) })
 /** 录制实时预览步骤（未绑定元素库的语义动作），RecorderStep 的契约形态；
  * 断言拾取的预览也走此结构（action='assert'） */
 export const liveStepSchema = z.object({
-  action: z.enum(['click', 'fill', 'select', 'press', 'assert']),
+  action: z.enum(['click', 'fill', 'select', 'press', 'assert', 'scroll', 'wait']),
   target: z.object({
     tag: z.string(),
     inputType: z.string().optional(),
@@ -44,6 +44,8 @@ export const liveStepSchema = z.object({
   ts: z.number(),
   value: z.string().optional(),
   key: z.string().optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
 })
 
 export type LiveStep = z.infer<typeof liveStepSchema>
@@ -120,6 +122,19 @@ export const ipcContract = {
     }),
     output: okSchema,
   },
+  [IpcChannel.viewEmulate]: {
+    input: z.union([
+      z.object({ clear: z.literal(true) }),
+      z.object({
+        clear: z.literal(false).optional(),
+        width: z.number().int().positive(),
+        height: z.number().int().positive(),
+        deviceScaleFactor: z.number().positive(),
+        mobile: z.boolean(),
+      }),
+    ]),
+    output: okSchema,
+  },
   [IpcChannel.recordingStart]: { input: z.void(), output: okSchema },
   [IpcChannel.recordingStop]: {
     input: z.void(),
@@ -143,9 +158,13 @@ export const ipcContract = {
   [IpcChannel.recordingAssertArm]: { input: z.void(), output: okSchema },
 
   [IpcChannel.replayStart]: {
-    input: z.object({ caseId: z.string().min(1) }),
+    input: z.object({
+      caseId: z.string().min(1),
+      mode: z.enum(['embedded', 'standalone']).default('embedded'),
+    }),
     output: z.object({ runId: z.string() }),
   },
+  [IpcChannel.replayStop]: { input: z.void(), output: okSchema },
   [IpcChannel.runList]: {
     input: z.object({ caseId: z.string().min(1).optional() }),
     output: z.array(runRowSchema),

@@ -10,6 +10,8 @@ export const caseSchema = z.object({
   moduleId: z.string().optional(),
   /** 录制时自动写入首个访问地址，可编辑 */
   startUrl: z.string().min(1),
+  /** 用例变量：步骤参数中以 ${name} 引用，回放时替换 */
+  variables: z.record(z.string(), z.string()).default({}),
   steps: z.array(stepSchema),
 })
 

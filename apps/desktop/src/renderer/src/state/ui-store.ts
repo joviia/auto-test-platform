@@ -5,6 +5,18 @@ export type SelectedNode = { kind: 'project' | 'module' | 'case'; id: string }
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 
+export type DevicePresetId =
+  | 'responsive'
+  | 'desktop-1440'
+  | 'laptop-1280'
+  | 'tablet-1024'
+  | 'iphone-14'
+  | 'android-412'
+
+export type DeviceOrientation = 'portrait' | 'landscape'
+export type DeviceZoom = 'fit' | 0.5 | 0.75 | 1 | 1.25
+export type ReplayMode = 'embedded' | 'standalone'
+
 export interface RecordingDraft {
   steps: Step[]
   elements: Record<string, Element>
@@ -16,6 +28,8 @@ export interface RecordingDraft {
 }
 
 const THEME_KEY = 'atp.theme'
+const DEVICE_KEY = 'atp.device'
+const REPLAY_MODE_KEY = 'atp.replayMode'
 
 function readStoredTheme(): ThemePreference {
   try {
@@ -32,6 +46,55 @@ function storeTheme(theme: ThemePreference): void {
     localStorage.setItem(THEME_KEY, theme)
   } catch {
     // 忽略写入失败
+  }
+}
+
+interface StoredDevice {
+  presetId: DevicePresetId
+  orientation: DeviceOrientation
+  zoom: DeviceZoom
+}
+
+function readStoredDevice(): StoredDevice {
+  try {
+    const raw = localStorage.getItem(DEVICE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<StoredDevice>
+      if (parsed.presetId) {
+        return {
+          presetId: parsed.presetId,
+          orientation: parsed.orientation === 'landscape' ? 'landscape' : 'portrait',
+          zoom: parsed.zoom === 'fit' || typeof parsed.zoom === 'number' ? parsed.zoom : 'fit',
+        }
+      }
+    }
+  } catch {
+    // 忽略
+  }
+  return { presetId: 'responsive', orientation: 'portrait', zoom: 'fit' }
+}
+
+function storeDevice(device: StoredDevice): void {
+  try {
+    localStorage.setItem(DEVICE_KEY, JSON.stringify(device))
+  } catch {
+    // 忽略
+  }
+}
+
+function readReplayMode(): ReplayMode {
+  try {
+    return localStorage.getItem(REPLAY_MODE_KEY) === 'standalone' ? 'standalone' : 'embedded'
+  } catch {
+    return 'embedded'
+  }
+}
+
+function storeReplayMode(mode: ReplayMode): void {
+  try {
+    localStorage.setItem(REPLAY_MODE_KEY, mode)
+  } catch {
+    // 忽略
   }
 }
 
@@ -64,9 +127,24 @@ interface UiState {
 
   theme: ThemePreference
   setTheme: (theme: ThemePreference) => void
+
+  devicePresetId: DevicePresetId
+  deviceOrientation: DeviceOrientation
+  deviceZoom: DeviceZoom
+  setDevice: (patch: Partial<StoredDevice>) => void
+
+  replayMode: ReplayMode
+  setReplayMode: (mode: ReplayMode) => void
+
+  replayProgress: { runId: string | null; index: number; total: number } | null
+  setReplayProgress: (
+    progress: { runId: string | null; index: number; total: number } | null,
+  ) => void
 }
 
-export const useUiStore = create<UiState>((set) => ({
+const initialDevice = readStoredDevice()
+
+export const useUiStore = create<UiState>((set, get) => ({
   selected: null,
   setSelected: (selected) => set({ selected }),
 
@@ -101,4 +179,31 @@ export const useUiStore = create<UiState>((set) => ({
     storeTheme(theme)
     set({ theme })
   },
+
+  devicePresetId: initialDevice.presetId,
+  deviceOrientation: initialDevice.orientation,
+  deviceZoom: initialDevice.zoom,
+  setDevice: (patch) => {
+    const current = get()
+    const next: StoredDevice = {
+      presetId: patch.presetId ?? current.devicePresetId,
+      orientation: patch.orientation ?? current.deviceOrientation,
+      zoom: patch.zoom ?? current.deviceZoom,
+    }
+    storeDevice(next)
+    set({
+      devicePresetId: next.presetId,
+      deviceOrientation: next.orientation,
+      deviceZoom: next.zoom,
+    })
+  },
+
+  replayMode: readReplayMode(),
+  setReplayMode: (mode) => {
+    storeReplayMode(mode)
+    set({ replayMode: mode })
+  },
+
+  replayProgress: null,
+  setReplayProgress: (replayProgress) => set({ replayProgress }),
 }))

@@ -19,6 +19,8 @@ const ACTION_LABEL: Record<string, string> = {
   select: '选择',
   press: '按键',
   assert: '断言',
+  scroll: '滚动',
+  wait: '等待',
 }
 
 function formatTime(value: string | null | undefined): string {
@@ -129,7 +131,9 @@ export function ReportPanel() {
                             }`}
                           >
                             <div className="flex items-center gap-1.5 text-xs">
-                              {s.status === 'passed' ? (
+                              {s.skipped ? (
+                                <span className="size-3 rounded-full border border-muted/60" />
+                              ) : s.status === 'passed' ? (
                                 <CheckCircle2
                                   size={12}
                                   className="text-green-600 dark:text-green-400"
@@ -142,12 +146,20 @@ export function ReportPanel() {
                                 {ACTION_LABEL[s.action] ?? s.action}
                               </span>
                               <span className="text-[10px] text-muted">{s.durationMs}ms</span>
+                              {s.skipped && (
+                                <span className="rounded bg-surface-secondary px-1 text-[10px] text-muted">
+                                  已跳过
+                                </span>
+                              )}
                               {s.locatorHit && (
                                 <span className="rounded bg-surface-secondary px-1 font-mono text-[10px] text-muted">
                                   候选 #{s.locatorHit.tier} · {s.locatorHit.locator.type}
                                 </span>
                               )}
                             </div>
+                            {s.skipped && s.error && (
+                              <p className="mt-1 text-[11px] text-muted">{s.error}</p>
+                            )}
                             {s.status === 'failed' && (
                               <div className="mt-1.5 space-y-0.5 text-[11px] text-red-700 dark:text-red-400">
                                 {(s.triedCandidates ?? []).map((c, i) => (

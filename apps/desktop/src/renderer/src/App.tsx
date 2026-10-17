@@ -12,6 +12,7 @@ import { CaseTree } from './tree/CaseTree'
 export function App() {
   const setRecording = useUiStore((s) => s.setRecording)
   const pushLiveStep = useUiStore((s) => s.pushLiveStep)
+  const setReplayProgress = useUiStore((s) => s.setReplayProgress)
   const theme = useUiStore((s) => s.theme)
   const currentProjectId = useUiStore((s) => s.currentProjectId)
   const setCurrentProjectId = useUiStore((s) => s.setCurrentProjectId)
@@ -46,11 +47,15 @@ export function App() {
   useEffect(() => {
     const offStatus = window.atp.on('event:recording-status', (p) => setRecording(p.recording))
     const offStep = window.atp.on('event:recording-step', (p) => pushLiveStep(p))
+    const offReplay = window.atp.on('event:replay-progress', (p) =>
+      setReplayProgress({ runId: p.runId, index: p.index, total: p.total }),
+    )
     return () => {
       offStatus()
       offStep()
+      offReplay()
     }
-  }, [setRecording, pushLiveStep])
+  }, [setRecording, pushLiveStep, setReplayProgress])
 
   return (
     <>

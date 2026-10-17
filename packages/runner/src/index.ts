@@ -1,4 +1,4 @@
-export { replayCaseFile, type ReplayOptions } from './engine'
+export { type RunCaseOptions, replayCaseFile, runCaseOnPage, type ReplayOptions } from './engine'
 export { resolveElement, toPlaywrightLocator } from './resolve-locator'
 export { performAction } from './actions'
 export { AssertionError, performAssertion } from './assertions'
