@@ -68,8 +68,8 @@ export function AppBar() {
         </Dropdown.Popover>
       </Dropdown.Root>
 
-      <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-muted">
-        <span className="truncate">{project?.name ?? '用例库'}</span>
+      <div className="flex min-w-0 items-center gap-1.5 text-[13px]">
+        <span className="text-muted">用例</span>
         <span className="text-separator">/</span>
         <span className="truncate text-foreground">
           {currentCase?.name ?? (selected?.kind === 'case' ? '未命名用例' : '未选择用例')}

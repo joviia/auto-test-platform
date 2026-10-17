@@ -1,8 +1,10 @@
 import { Tab, TabIndicator, TabList, TabListContainer, TabPanel, TabsRoot } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 import { qk } from '../api/client'
 import { ElementPanel } from '../elements/ElementPanel'
 import { useUiStore } from '../state/ui-store'
+import { LiveStepsPanel } from '../steps/LiveStepsPanel'
 import { StepPanel } from '../steps/StepPanel'
 import { ReportPanel } from './ReportPanel'
 
@@ -16,7 +18,15 @@ function CountBadge({ value }: { value: number }) {
 
 export function RightPanel() {
   const selected = useUiStore((s) => s.selected)
+  const recording = useUiStore((s) => s.recording)
+  const liveSteps = useUiStore((s) => s.liveSteps)
   const caseId = selected?.kind === 'case' ? selected.id : null
+  const [tab, setTab] = useState('steps')
+
+  // 开始录制时自动回到「步骤」页，确保实时步骤可见
+  useEffect(() => {
+    if (recording) setTab('steps')
+  }, [recording])
 
   // 与 StepPanel/ElementPanel 共用同一 query key，用于标签计数
   const { data: file } = useQuery({
@@ -29,11 +39,16 @@ export function RightPanel() {
     queryFn: () => window.atp.invoke('run:list', caseId ? { caseId } : {}),
   })
 
-  const stepCount = file?.case.steps.length ?? 0
+  const stepCount = recording ? liveSteps.length : (file?.case.steps.length ?? 0)
   const elementCount = file ? Object.keys(file.elements).length : 0
 
   return (
-    <TabsRoot variant="secondary" className="flex h-full flex-col">
+    <TabsRoot
+      variant="secondary"
+      className="flex h-full flex-col"
+      selectedKey={tab}
+      onSelectionChange={(key) => setTab(String(key))}
+    >
       <TabListContainer className="h-[52px] shrink-0 px-3">
         <TabList className="h-full gap-0">
           <Tab id="steps" className="h-full flex-1 justify-center text-[13px]">
@@ -54,7 +69,7 @@ export function RightPanel() {
         </TabList>
       </TabListContainer>
       <TabPanel id="steps" className="min-h-0 flex-1 overflow-hidden">
-        <StepPanel />
+        {recording ? <LiveStepsPanel /> : <StepPanel />}
       </TabPanel>
       <TabPanel id="elements" className="min-h-0 flex-1 overflow-hidden">
         <ElementPanel />

@@ -148,7 +148,7 @@ console.log('[e2e] 登录流程已执行 ✓')
 
 // 6. 停止录制并保存
 await ui.bringToFront()
-await ui.getByText('停止录制').click()
+await ui.getByRole('button', { name: '停止录制' }).click()
 await ui.getByPlaceholder('例如：登录成功').fill(CASE_NAME)
 await ui.getByText('保存用例').click()
 console.log('[e2e] 已保存:', CASE_NAME)

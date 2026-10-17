@@ -6,14 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { qk } from '../api/client'
 import { EmptyHint } from '../components/EmptyHint'
 import { useUiStore } from '../state/ui-store'
-
-const ACTION_META: Record<Step['action'], { label: string; className: string }> = {
-  click: { label: '点击', className: 'bg-blue-500/10 text-blue-600 dark:text-blue-400' },
-  fill: { label: '输入', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' },
-  select: { label: '选择', className: 'bg-violet-500/10 text-violet-600 dark:text-violet-400' },
-  press: { label: '按键', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400' },
-  assert: { label: '断言', className: 'bg-rose-500/10 text-rose-600 dark:text-rose-400' },
-}
+import { ACTION_META } from './step-meta'
 
 const LOCATOR_LABEL: Record<Locator['type'], string> = {
   testId: 'testId',

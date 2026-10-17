@@ -4,14 +4,7 @@ import { AlertTriangle, FileCheck2, Layers, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { qk, useModules, useProjects } from '../api/client'
 import { useUiStore } from '../state/ui-store'
-
-const ACTION_LABEL: Record<string, string> = {
-  click: '点击',
-  fill: '输入',
-  select: '选择',
-  press: '按键',
-  assert: '断言',
-}
+import { actionMeta } from '../steps/step-meta'
 
 /** 停止录制后的保存对话框：命名 + 归属项目/模块，元素随用例 upsert 进元素库 */
 export function SaveCaseDialog() {
@@ -142,7 +135,7 @@ export function SaveCaseDialog() {
                           {idx + 1}
                         </span>
                         <span className="rounded bg-surface-secondary px-1 text-[10px] text-muted">
-                          {ACTION_LABEL[step.action] ?? step.action}
+                          {actionMeta(step.action).label}
                         </span>
                         <span className="min-w-0 flex-1 truncate">
                           {draft.elements[step.elementId ?? '']?.name ?? step.elementId ?? '页面级'}
