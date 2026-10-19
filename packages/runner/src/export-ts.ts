@@ -1,6 +1,6 @@
 import type { Assertion, CaseFile, Element, Step } from '@atp/model'
 import { isPageLevelAssertion } from '@atp/model'
-import { evaluateCondition, substituteStep } from './variables'
+import { evaluateCondition, substituteStep } from './variables.js'
 
 function quote(s: string): string {
   return JSON.stringify(s)
@@ -8,7 +8,10 @@ function quote(s: string): string {
 
 /** 元素 → Playwright 定位器表达式（取第一候选，语义优先） */
 function locatorExpr(element: Element, root = 'page'): string {
-  const loc = element.locators[0]
+  return exprOf(element.locators[0], root)
+}
+
+function exprOf(loc: Element['locators'][number], root: string): string {
   switch (loc.type) {
     case 'testId':
       return `${root}.getByTestId(${quote(loc.value)})`
@@ -20,6 +23,14 @@ function locatorExpr(element: Element, root = 'page'): string {
       return `${root}.getByText(${quote(loc.value)}, { exact: true })`
     case 'css':
       return `${root}.locator(${quote(loc.value)})`
+    case 'xpath':
+      return `${root}.locator(${quote(`xpath=${loc.value}`)})`
+    case 'within': {
+      const scope = exprOf(loc.scope, root)
+      // 导出代码里用 first/last 近似作用域裁决；z-index 排序无法直接表达
+      const scopedRoot = `${scope}.${loc.topmost ? 'last' : 'first'}()`
+      return exprOf(loc.target, scopedRoot)
+    }
   }
 }
 
@@ -117,7 +128,14 @@ function stepLines(step: Step, elements: Record<string, Element>): string[] {
       if (loc) lines.push(`await ${loc}.fill(${quote(String(params.value ?? ''))})`)
       break
     case 'select':
-      if (loc) lines.push(`await ${loc}.selectOption(${quote(String(params.value ?? ''))})`)
+      if (loc) {
+        const value = quote(String(params.value ?? ''))
+        lines.push(
+          params.mode === 'custom'
+            ? `await selectCustom(${loc}, ${value})`
+            : `await ${loc}.selectOption(${value})`,
+        )
+      }
       break
     case 'press':
       lines.push(`await page.keyboard.press(${quote(String(params.key ?? 'Enter'))})`)
@@ -171,6 +189,9 @@ export function toPlaywrightSpec(caseFile: CaseFile): string {
   const { case: c, elements } = caseFile
   const variables = c.variables ?? {}
   const body: string[] = []
+  const needsCustomSelect = c.steps.some(
+    (step) => step.action === 'select' && step.params?.mode === 'custom',
+  )
 
   for (const rawStep of c.steps) {
     const step = substituteStep(rawStep, variables)
@@ -182,12 +203,29 @@ export function toPlaywrightSpec(caseFile: CaseFile): string {
     for (const line of lines) body.push(`    ${line}`)
   }
 
+  const helper = needsCustomSelect
+    ? `
+/** 自定义下拉：点击触发器 → 等待弹层 → 按 option/menuitem/文本选择 */
+async function selectCustom(trigger: Locator, value: string) {
+  await trigger.click()
+  const popup = trigger.page().locator('[role="listbox"]:visible, [role="menu"]:visible').last()
+  await popup.waitFor({ state: 'visible', timeout: 3000 })
+  await popup
+    .getByRole('option', { name: value, exact: true })
+    .or(popup.getByRole('menuitem', { name: value, exact: true }))
+    .or(popup.getByText(value, { exact: true }))
+    .first()
+    .click()
+}
+`
+    : ''
+
   return `// 由自动化测试平台导出 · 用例「${c.name}」(${c.id})
 // 定位器取元素库第一候选；多候选回退逻辑见平台内回放引擎
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 
 const variables = ${JSON.stringify(variables, null, 2)}
-
+${helper}
 test(${quote(c.name)}, async ({ page }) => {
     await page.goto(${quote(c.startUrl)})
 ${body.join('\n')}

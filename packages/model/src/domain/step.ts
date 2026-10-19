@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { assertionSchema, isPageLevelAssertion } from './assertion'
+import { assertionSchema, isPageLevelAssertion } from './assertion.js'
+import { stepDisplaySchema } from './semantic.js'
 
 /** M1 动作集：点击 / 输入 / 选择 / 按键 / 断言 / 滚动 / 等待 / 拖拽 */
 export const actionSchema = z.enum([
@@ -16,7 +17,11 @@ export const actionSchema = z.enum([
 export type Action = z.infer<typeof actionSchema>
 
 export const fillParamsSchema = z.object({ value: z.string() })
-export const selectParamsSchema = z.object({ value: z.string() })
+export const selectParamsSchema = z.object({
+  value: z.string(),
+  /** native = 原生 <select>；custom = 自定义下拉（点击触发器再点选项） */
+  mode: z.enum(['native', 'custom']).default('native'),
+})
 export const pressParamsSchema = z.object({ key: z.string() })
 /** 页面滚动：绝对坐标（录制时取 window.scrollX/Y） */
 export const scrollParamsSchema = z.object({ x: z.number(), y: z.number() })
@@ -65,6 +70,10 @@ export const stepSchema = z
     params: z.record(z.string(), z.unknown()).optional(),
     assertion: assertionSchema.optional(),
     condition: stepConditionSchema.optional(),
+    /** 意图层：所属分组（弹窗 / 区块 / 导航） */
+    groupId: z.string().optional(),
+    /** 意图层：自然语言投影；缺省时 UI 回退到原始动作 */
+    display: stepDisplaySchema.optional(),
   })
   .superRefine((step, ctx) => {
     if (step.action === 'assert' && !step.assertion) {

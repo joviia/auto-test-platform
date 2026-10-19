@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { caseFileSchema, runResultSchema, stepSchema } from './index'
+import { caseFileSchema, runResultSchema, stepSchema } from './index.js'
 
 const docExample = {
   case: {
@@ -45,7 +45,7 @@ describe('caseFileSchema（方案 §4.3 示例）', () => {
 
   it('非法定位器类型被拒绝', () => {
     const bad = structuredClone(docExample)
-    bad.elements['el-003'].locators[0] = { type: 'xpath', value: '//button' } as never
+    bad.elements['el-003'].locators[0] = { type: 'magic', value: '//button' } as never
     expect(caseFileSchema.safeParse(bad).success).toBe(false)
   })
 

@@ -1,0 +1,59 @@
+{
+  "name": "@atp/agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ATP 本地 Agent：启动本地服务并用真实 Chrome 录制/回放",
+  "type": "module",
+  "bin": {
+    "atp-agent": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.17"
+  },
+  "scripts": {
+    "build": "tsup && node scripts/copy-web.mjs",
+    "dev": "pnpm build && node dist/cli.js",
+    "demo": "pnpm build && node dist/cli.js --demo",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "@mikro-orm/core": "^7.2.5",
+    "@mikro-orm/migrations": "^7.2.5",
+    "@mikro-orm/sqlite": "^7.2.5",
+    "better-sqlite3": "^13.0.3",
+    "commander": "^15.0.0",
+    "execa": "^10.2.0",
+    "hono": "^4.13.13",
+    "open": "^11.0.4",
+    "ora": "^9.4.1",
+    "picocolors": "^1.1.1",
+    "playwright": "^1.64.1",
+    "proper-lockfile": "^4.1.2",
+    "semver": "^7.8.5",
+    "signal-exit": "^4.1.0",
+    "tar": "^7.5.22",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@atp/core": "workspace:*",
+    "@atp/model": "workspace:*",
+    "@atp/recorder": "workspace:*",
+    "@atp/runner": "workspace:*",
+    "@types/node": "^22.13.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/semver": "^7.7.0",
+    "tsup": "^9.0.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import type { Locator as ModelLocator } from '@atp/model'
 import { caseFileSchema } from '@atp/model'
-import { replayCaseFile } from './engine'
-import { toStartUrl } from './start-url'
+import { replayCaseFile } from './engine.js'
+import { toStartUrl } from './start-url.js'
+
+function locatorLabel(loc: ModelLocator): string {
+  if (loc.type === 'within') {
+    return `${locatorLabel(loc.scope)} → ${locatorLabel(loc.target)}`
+  }
+  return `${loc.type}:${loc.value}`
+}
 
 function render(result: Awaited<ReturnType<typeof replayCaseFile>>): void {
   const mark = result.status === 'passed' ? '✅ 通过' : '❌ 失败'
@@ -11,13 +19,15 @@ function render(result: Awaited<ReturnType<typeof replayCaseFile>>): void {
   if (result.error) console.log(`  运行错误：${result.error}`)
 
   for (const s of result.steps) {
-    const hit = s.locatorHit ? ` [命中候选#${s.locatorHit.tier} ${s.locatorHit.locator.type}]` : ''
+    const hit = s.locatorHit
+      ? ` [命中候选#${s.locatorHit.tier} ${locatorLabel(s.locatorHit.locator)}${s.locatorHit.degraded ? ' 降级' : ''}]`
+      : ''
     console.log(
       `  ${s.status === 'passed' ? '✓' : '✗'} #${s.index + 1} ${s.action} ${s.durationMs}ms${hit}`,
     )
     if (s.status === 'failed') {
       for (const c of s.triedCandidates ?? []) {
-        console.log(`      候选 ${c.locator.type}:${c.locator.value} → 未命中（${c.error ?? ''}）`)
+        console.log(`      候选 ${locatorLabel(c.locator)} → 未命中（${c.error ?? ''}）`)
       }
       if (s.assertion) {
         console.log(

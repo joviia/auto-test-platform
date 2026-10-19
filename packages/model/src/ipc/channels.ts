@@ -36,6 +36,7 @@ export const IpcChannel = {
   planRunGet: 'plan:run-get',
   // 受控浏览器与录制
   browserNavigate: 'browser:navigate',
+  browserFocus: 'browser:focus',
   viewBoundsSet: 'view:bounds-set',
   viewEmulate: 'view:emulate',
   recordingStart: 'recording:start',

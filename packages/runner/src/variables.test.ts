@@ -1,6 +1,6 @@
 import type { Step } from '@atp/model'
 import { describe, expect, it } from 'vitest'
-import { evaluateCondition, substituteStep, substituteVariables } from './variables'
+import { evaluateCondition, substituteStep, substituteVariables } from './variables.js'
 
 describe('substituteVariables', () => {
   it('替换已知变量并保留未知占位符', () => {

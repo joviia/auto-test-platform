@@ -28,7 +28,7 @@
       <p id="message" role="status" data-testid="login-message"></p>
     </main>
     <script>
-      document.getElementById('login-form').addEventListener('submit', function (e) {
+      document.getElementById('login-form').addEventListener('submit', (e) => {
         e.preventDefault()
         var u = document.getElementById('username').value
         var p = document.getElementById('password').value

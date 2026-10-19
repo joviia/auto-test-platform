@@ -9,3 +9,5 @@ artifacts/
 .env*
 apps/desktop/release/
 apps/desktop/dist-builder/
+.snapshot-*
+release/

@@ -1,13 +1,13 @@
 import { join } from 'node:path'
 import type { CaseFile, Element, RunResult, Step, StepResult } from '@atp/model'
 import { isPageLevelAssertion } from '@atp/model'
-import { chromium } from 'playwright'
 import type { Page } from 'playwright'
-import { performAction } from './actions'
-import { AssertionError, performAssertion } from './assertions'
-import { EvidenceCollector } from './evidence'
-import { resolveElement, resolveElementForAssertion } from './resolve-locator'
-import { evaluateCondition, substituteStep } from './variables'
+import { chromium } from 'playwright'
+import { performAction } from './actions.js'
+import { AssertionError, performAssertion } from './assertions.js'
+import { EvidenceCollector } from './evidence.js'
+import { resolveElement, resolveElementForAssertion } from './resolve-locator.js'
+import { evaluateCondition, substituteStep } from './variables.js'
 
 export interface RunCaseOptions {
   evidenceDir: string
@@ -224,7 +224,7 @@ async function runStep(
       }
     }
 
-    const locator = resolved.base.first()
+    const locator = resolved.locator ?? resolved.base.first()
     try {
       if (step.action === 'assert' && step.assertion) {
         const assertion = await performAssertion(page, locator, resolved.base, step.assertion)

@@ -1,8 +1,8 @@
 import {
-  type Step,
   dragParamsSchema,
   fillParamsSchema,
   pressParamsSchema,
+  type Step,
   scrollParamsSchema,
   selectParamsSchema,
   waitParamsSchema,
@@ -25,10 +25,16 @@ export async function performAction(
       if (!locator) throw new Error('输入步骤缺少定位器')
       await locator.fill(fillParamsSchema.parse(params).value)
       return
-    case 'select':
+    case 'select': {
       if (!locator) throw new Error('选择步骤缺少定位器')
-      await locator.selectOption(selectParamsSchema.parse(params).value)
+      const select = selectParamsSchema.parse(params)
+      if (select.mode === 'custom') {
+        await selectCustom(page, locator, select.value)
+      } else {
+        await locator.selectOption(select.value)
+      }
       return
+    }
     case 'press':
       await page.keyboard.press(pressParamsSchema.parse(params).key)
       return
@@ -77,5 +83,99 @@ export async function performAction(
     }
     case 'assert':
       throw new Error('assert 步骤应走 performAssertion')
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+async function selectDiagnostics(page: Page, trigger: Locator): Promise<string> {
+  const popups = await page
+    .locator(
+      '[role="listbox"]:visible, [role="menu"]:visible, .el-select-dropdown:visible, .el-dropdown-menu:visible, .ant-select-dropdown:visible',
+    )
+    .count()
+  const options = await page
+    .locator('[role="option"]:visible, [role="menuitem"]:visible, li[role="option"]:visible')
+    .allTextContents()
+  const triggerText = await trigger.evaluate((el) => ({
+    text: (el.textContent ?? '').trim().slice(0, 80),
+    value: (el as HTMLInputElement).value ?? '',
+    expanded: el.getAttribute('aria-expanded'),
+  }))
+  const visibleOptions = options
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .slice(0, 20)
+  return [
+    `可见弹层：${popups}`,
+    `触发器：text=${JSON.stringify(triggerText.text)} value=${JSON.stringify(triggerText.value)} aria-expanded=${triggerText.expanded}`,
+    visibleOptions.length ? `可见选项：${visibleOptions.join(' / ')}` : '可见选项：无',
+  ].join('；')
+}
+
+/**
+ * 自定义下拉：点击触发器 → 等待可见弹层 → 按 option/menuitem/文本找选项 →
+ * 校验选中结果。失败时给出弹层、选项与触发器状态。
+ */
+async function selectCustom(page: Page, trigger: Locator, value: string): Promise<void> {
+  await trigger.click()
+
+  const popupSelector =
+    '[role="listbox"]:visible, [role="menu"]:visible, .el-select-dropdown:visible, .el-dropdown-menu:visible, .ant-select-dropdown:visible, .ant-dropdown:visible'
+  const popup = page.locator(popupSelector).last()
+  try {
+    await popup.waitFor({ state: 'visible', timeout: 3000 })
+  } catch {
+    throw new Error(`自定义下拉「${value}」未出现弹层。${await selectDiagnostics(page, trigger)}`)
+  }
+
+  const exact = new RegExp(`^\\s*${escapeRegExp(value)}\\s*$`)
+  const option = popup
+    .getByRole('option', { name: exact })
+    .or(popup.getByRole('menuitem', { name: exact }))
+    .or(popup.getByText(exact))
+    .first()
+
+  if ((await option.count()) === 0) {
+    throw new Error(`下拉选项「${value}」不存在。${await selectDiagnostics(page, trigger)}`)
+  }
+  await option.click()
+
+  // 选中校验：触发器文本/值包含选项，或 option 标记 aria-selected
+  const selected = await page
+    .waitForFunction(
+      ({ value }: { value: string }) => {
+        const options = Array.from(document.querySelectorAll('[role="option"], [role="menuitem"]'))
+        if (
+          options.some(
+            (el) =>
+              el.getAttribute('aria-selected') === 'true' &&
+              (el.textContent ?? '').trim() === value,
+          )
+        ) {
+          return true
+        }
+        return false
+      },
+      { value },
+      { timeout: 1500 },
+    )
+    .then(() => true)
+    .catch(() => false)
+
+  if (!selected) {
+    const triggerSelected = await trigger
+      .evaluate((el, value) => {
+        const text = `${el.textContent ?? ''} ${(el as HTMLInputElement).value ?? ''}`
+        return text.includes(value)
+      }, value)
+      .catch(() => false)
+    if (!triggerSelected) {
+      throw new Error(
+        `已点击选项「${value}」，但未观察到选中结果。${await selectDiagnostics(page, trigger)}`,
+      )
+    }
   }
 }

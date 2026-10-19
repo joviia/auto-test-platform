@@ -6,7 +6,7 @@ import {
   locatorHitSchema,
   locatorSchema,
   stepConditionSchema,
-} from '../domain'
+} from '../domain/index.js'
 
 /** 七张表的行 DTO（locators/params/assertion 落 JSON 列，进库前用 domain schema 校验） */
 

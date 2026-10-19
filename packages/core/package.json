@@ -1,0 +1,34 @@
+{
+  "name": "@atp/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@atp/model": "workspace:*",
+    "@mikro-orm/core": "^7.2.5",
+    "@mikro-orm/migrations": "^7.2.5",
+    "@mikro-orm/sqlite": "^7.2.5",
+    "better-sqlite3": "^13.0.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@mikro-orm/cli": "^7.2.5",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.13.0",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

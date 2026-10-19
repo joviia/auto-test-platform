@@ -31,14 +31,67 @@ describe('collector 在真实页面上', () => {
     )) as Array<{ kind: string; candidates: Array<{ type: string; value: string; name?: string }> }>
     await browser.close()
 
-    expect(events.map((e) => e.kind)).toEqual(['fill', 'fill', 'click'])
+    const actions = events.filter((e) => e.kind !== 'probe')
+    expect(actions.map((e) => e.kind)).toEqual(['fill', 'fill', 'click'])
 
-    const click = events[2]
+    const click = actions[2]
     expect(click.candidates[0].type).toBe('testId')
     expect(click.candidates.map((c) => c.type)).toEqual(
       expect.arrayContaining(['testId', 'role', 'text', 'css']),
     )
     const role = click.candidates.find((c) => c.type === 'role')
     expect(role?.name).toBe('登录')
+  }, 30000)
+
+  it('弹窗内元素产出作用域候选与 XPath 兜底', async () => {
+    const browser = await chromium.launch({ headless: true })
+    const page = await browser.newPage()
+    await page.setContent(`
+      <div>
+        <label>内容名称 <input aria-label="内容名称"></label>
+      </div>
+      <div role="dialog" aria-modal="true" aria-label="新建内容">
+        <label>内容名称 <input aria-label="内容名称"></label>
+      </div>
+    `)
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __atpEvents: unknown[]
+        __atpBridge: { send: (e: unknown) => void }
+      }
+      w.__atpEvents = []
+      w.__atpBridge = { send: (e: unknown) => w.__atpEvents.push(e) }
+    })
+    await page.evaluate(collectorSource())
+
+    await page
+      .getByRole('dialog', { name: '新建内容' })
+      .getByRole('textbox', { name: '内容名称' })
+      .click()
+    await page.waitForTimeout(100)
+
+    const events = (await page.evaluate(
+      () => (window as unknown as { __atpEvents: unknown[] }).__atpEvents,
+    )) as Array<{
+      kind: string
+      candidates: Array<{
+        type: string
+        scope?: Array<{ type: string; value: string; name?: string; topmost?: boolean }>
+        topmost?: boolean
+      }>
+    }>
+    await browser.close()
+
+    const actions = events.filter((e) => e.kind !== 'probe')
+    expect(actions.map((e) => e.kind)).toEqual(['click'])
+    const candidates = actions[0].candidates
+    const scoped = candidates.find((c) => c.scope && c.scope.length > 0)
+    expect(scoped?.scope?.[0]).toMatchObject({
+      type: 'role',
+      value: 'dialog',
+      name: '新建内容',
+      topmost: true,
+    })
+    expect(candidates.at(-1)?.type).toBe('xpath')
   }, 30000)
 })

@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { elementSchema } from './element'
-import { stepSchema } from './step'
+import { elementSchema } from './element.js'
+import { caseGroupSchema } from './semantic.js'
+import { stepSchema } from './step.js'
 
 /** 用例定义（与执行记录严格分离） */
 export const caseSchema = z.object({
@@ -12,6 +13,10 @@ export const caseSchema = z.object({
   startUrl: z.string().min(1),
   /** 用例变量：步骤参数中以 ${name} 引用，回放时替换 */
   variables: z.record(z.string(), z.string()).default({}),
+  /** 意图层：整条用例的一句话摘要 */
+  intent: z.string().optional(),
+  /** 意图层：步骤分组（弹窗 / 区块 / 导航） */
+  groups: z.array(caseGroupSchema).optional(),
   steps: z.array(stepSchema),
 })
 

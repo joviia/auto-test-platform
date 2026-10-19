@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { locatorSchema } from './locator'
-import { actionSchema } from './step'
+import { locatorSchema } from './locator.js'
+import { actionSchema } from './step.js'
 
 export const stepStatusSchema = z.enum(['passed', 'failed'])
 
@@ -11,6 +11,20 @@ export const candidateAttemptSchema = z.object({
   locator: locatorSchema,
   ok: z.boolean(),
   error: z.string().optional(),
+  /** 该候选匹配到的元素数 */
+  matchCount: z.number().int().nonnegative().optional(),
+  /** 每个匹配的可用性诊断 */
+  matches: z
+    .array(
+      z.object({
+        index: z.number().int().nonnegative(),
+        visible: z.boolean(),
+        actionable: z.boolean(),
+        reason: z.string().optional(),
+        coveredBy: z.string().optional(),
+      }),
+    )
+    .optional(),
 })
 
 export type CandidateAttempt = z.infer<typeof candidateAttemptSchema>
@@ -19,6 +33,10 @@ export type CandidateAttempt = z.infer<typeof candidateAttemptSchema>
 export const locatorHitSchema = z.object({
   tier: z.number().int().nonnegative(),
   locator: locatorSchema,
+  /** 命中了多少个元素（>1 表示靠作用域/最上层裁决） */
+  matchCount: z.number().int().nonnegative().optional(),
+  /** 使用了结构定位（css/xpath）兜底 */
+  degraded: z.boolean().optional(),
 })
 
 export type LocatorHit = z.infer<typeof locatorHitSchema>

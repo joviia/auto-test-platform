@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { locatorSchema } from './locator'
+import { locatorSchema } from './locator.js'
 
 /**
  * 元素库条目：集中登记、多候选定位器、跨用例复用。

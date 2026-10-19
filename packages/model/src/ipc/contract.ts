@@ -1,6 +1,12 @@
-import { z } from 'zod'
 import type { ZodType } from 'zod'
-import { caseFileSchema, elementSchema, stepSchema, stepStatusSchema } from '../domain'
+import { z } from 'zod'
+import {
+  caseFileSchema,
+  caseGroupSchema,
+  elementSchema,
+  stepSchema,
+  stepStatusSchema,
+} from '../domain/index.js'
 import {
   caseRowSchema,
   elementRowSchema,
@@ -11,8 +17,8 @@ import {
   runRowSchema,
   runStepRowSchema,
   suiteRowSchema,
-} from '../dto/rows'
-import { IpcChannel, IpcEvent } from './channels'
+} from '../dto/rows.js'
+import { IpcChannel, IpcEvent } from './channels.js'
 
 export interface IpcEndpoint<I = unknown, O = unknown> {
   input: ZodType<I>
@@ -29,6 +35,27 @@ const planPolicySchema = z.object({
 
 /** 录制实时预览步骤（未绑定元素库的语义动作），RecorderStep 的契约形态；
  * 断言拾取的预览也走此结构（action='assert'） */
+export interface LiveCandidate {
+  type: 'testId' | 'role' | 'text' | 'css' | 'xpath'
+  value: string
+  name?: string
+  count?: number | null
+  /** 语义作用域链（从外到内） */
+  scope?: LiveCandidate[]
+  topmost?: boolean
+}
+
+const liveCandidateSchema: z.ZodType<LiveCandidate> = z.lazy(() =>
+  z.object({
+    type: z.enum(['testId', 'role', 'text', 'css', 'xpath']),
+    value: z.string(),
+    name: z.string().optional(),
+    count: z.number().nullable().optional(),
+    scope: z.array(liveCandidateSchema).optional(),
+    topmost: z.boolean().optional(),
+  }),
+)
+
 export const liveStepSchema = z.object({
   action: z.enum(['click', 'fill', 'select', 'press', 'assert', 'scroll', 'wait', 'drag']),
   target: z.object({
@@ -40,14 +67,7 @@ export const liveStepSchema = z.object({
     value: z.string().optional(),
     placeholder: z.string().optional(),
   }),
-  candidates: z.array(
-    z.object({
-      type: z.enum(['testId', 'role', 'text', 'css']),
-      value: z.string(),
-      name: z.string().optional(),
-      count: z.number().nullable().optional(),
-    }),
-  ),
+  candidates: z.array(liveCandidateSchema),
   url: z.string(),
   ts: z.number(),
   value: z.string().optional(),
@@ -217,6 +237,7 @@ export const ipcContract = {
     input: z.object({ url: z.string().min(1) }),
     output: okSchema,
   },
+  [IpcChannel.browserFocus]: { input: z.void(), output: okSchema },
   [IpcChannel.viewBoundsSet]: {
     input: z.object({
       x: z.number(),
@@ -246,6 +267,8 @@ export const ipcContract = {
       steps: z.array(stepSchema),
       elements: z.record(z.string(), elementSchema),
       startUrl: z.string(),
+      intent: z.string().optional(),
+      groups: z.array(caseGroupSchema).optional(),
       /** 采集诊断：原始事件数 + 每个 frame 的注入状态 */
       diagnostics: z.object({
         rawEvents: z.number().int().nonnegative(),

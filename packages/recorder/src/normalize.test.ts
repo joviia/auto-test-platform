@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { RawRecorderEvent } from './collector'
-import { normalizeEvents } from './normalize'
+import type { RawActionEvent } from './collector.js'
+import { normalizeEvents } from './normalize.js'
 
-function ev(
-  partial: Partial<RawRecorderEvent> & { kind: RawRecorderEvent['kind'] },
-): RawRecorderEvent {
+function ev(partial: Partial<RawActionEvent> & { kind: RawActionEvent['kind'] }): RawActionEvent {
   return {
     url: 'file:///fixture',
     ts: 1000,
@@ -58,6 +56,39 @@ describe('normalizeEvents', () => {
       ev({ kind: 'fill', value: 'b', ts: 1100, url: 'https://b.test/frame.html' }),
     ])
     expect(steps).toHaveLength(2)
+  })
+
+  it('同元素 click 后紧接 fill：丢弃冗余 click', () => {
+    const steps = normalizeEvents([
+      ev({ kind: 'click', ts: 1000 }),
+      ev({ kind: 'fill', value: 'admin', ts: 1100 }),
+    ])
+    expect(steps).toHaveLength(1)
+    expect(steps[0].action).toBe('fill')
+    expect(steps[0].value).toBe('admin')
+  })
+
+  it('同元素 click 后紧接 select：丢弃冗余 click', () => {
+    const steps = normalizeEvents([
+      ev({ kind: 'click', ts: 1000 }),
+      ev({ kind: 'select', value: 'beijing', ts: 1100 }),
+    ])
+    expect(steps).toHaveLength(1)
+    expect(steps[0].action).toBe('select')
+  })
+
+  it('不同元素 click 后 fill：保留 click', () => {
+    const steps = normalizeEvents([
+      ev({ kind: 'click', ts: 1000 }),
+      ev({
+        kind: 'fill',
+        value: 'admin',
+        ts: 1100,
+        candidates: [{ type: 'css', value: '#password', count: 1 }],
+      }),
+    ])
+    expect(steps).toHaveLength(2)
+    expect(steps[0].action).toBe('click')
   })
 
   it('连续 scroll 合并为一条并保留最终位置', () => {

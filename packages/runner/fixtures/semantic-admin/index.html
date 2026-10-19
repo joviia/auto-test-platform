@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>语义管理台</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; margin: 24px; color: #111827; }
+  button, input, label { font: inherit; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .field { margin: 10px 0; display: flex; flex-direction: column; gap: 4px; }
+  .field > label, .field > .label { font-weight: 600; }
+  [role="combobox"] { width: 240px; text-align: left; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; }
+  [role="listbox"] { margin: 4px 0 0; padding: 4px; width: 240px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; }
+  [role="listbox"][hidden] { display: none; }
+  [role="option"] { padding: 6px 8px; border-radius: 4px; cursor: pointer; }
+  [role="option"]:hover, [role="option"][aria-selected="true"] { background: #eef2ff; }
+  dialog { border: 1px solid #d1d5db; border-radius: 10px; padding: 18px; width: 420px; }
+  dialog::backdrop { background: rgba(0,0,0,.25); }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  fieldset { border: 0; padding: 0; margin: 10px 0; }
+  legend { font-weight: 600; padding: 0; margin-bottom: 4px; }
+  #content-list { padding-left: 18px; }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <button id="open-create" type="button">新建内容</button>
+  </div>
+
+  <ul id="content-list"></ul>
+
+  <dialog id="create-dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <h2 id="dialog-title">新建内容</h2>
+    <form id="create-form" method="dialog">
+      <div class="field">
+        <label for="content-name">内容名称</label>
+        <input id="content-name" name="contentName" placeholder="请输入内容名称">
+      </div>
+
+      <div class="field">
+        <span class="label" id="genre-label">节目类型</span>
+        <button id="genre-trigger" type="button" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="genre-label genre-value">
+          <span id="genre-value">请选择</span>
+        </button>
+        <div id="genre-listbox" role="listbox" aria-labelledby="genre-label" hidden>
+          <div role="option" tabindex="-1" aria-selected="false">电影</div>
+          <div role="option" tabindex="-1" aria-selected="false">剧集</div>
+          <div role="option" tabindex="-1" aria-selected="false">综艺</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>
+          <input id="show-title" type="checkbox" name="showTitle"> 显示标题
+        </label>
+      </div>
+
+      <fieldset aria-label="独播标识">
+        <legend>独播标识</legend>
+        <label><input type="radio" name="solo" value="独播"> 独播</label>
+        <label><input type="radio" name="solo" value="非独播"> 非独播</label>
+      </fieldset>
+
+      <div class="actions">
+        <button id="cancel-create" type="button">取消</button>
+        <button id="save-create" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+<script>
+  const dialog = document.getElementById('create-dialog')
+  const trigger = document.getElementById('genre-trigger')
+  const listbox = document.getElementById('genre-listbox')
+  const value = document.getElementById('genre-value')
+
+  document.getElementById('open-create').addEventListener('click', () => {
+    dialog.showModal()
+  })
+
+  trigger.addEventListener('click', () => {
+    const open = listbox.hidden
+    listbox.hidden = !open
+    trigger.setAttribute('aria-expanded', String(open))
+  })
+
+  for (const option of listbox.querySelectorAll('[role="option"]')) {
+    option.addEventListener('click', () => {
+      for (const node of listbox.querySelectorAll('[role="option"]')) {
+        node.setAttribute('aria-selected', String(node === option))
+      }
+      value.textContent = option.textContent.trim()
+      listbox.hidden = true
+      trigger.setAttribute('aria-expanded', 'false')
+    })
+  }
+
+  dialog.addEventListener('close', () => {
+    trigger.setAttribute('aria-expanded', 'false')
+    listbox.hidden = true
+  })
+
+  document.getElementById('cancel-create').addEventListener('click', () => {
+    dialog.close()
+  })
+
+  document.getElementById('create-form').addEventListener('submit', (event) => {
+    event.preventDefault()
+    const name = document.getElementById('content-name').value.trim()
+    if (!name) return
+    const item = document.createElement('li')
+    item.textContent = name
+    document.getElementById('content-list').appendChild(item)
+    dialog.close()
+  })
+</script>
+</body>
+</html>
