@@ -1,7 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import type { AiConfig, AiEnvironment } from '@atp/model'
+import type { AiConfig, AiEnvironment, CaseFile } from '@atp/model'
 import { type LanguageModel, type ModelMessage, stepCountIs, streamText, type ToolSet } from 'ai'
 import type { AiThinking, ResolvedAiProfile } from './config.js'
 
@@ -31,6 +31,29 @@ export interface CopilotProvider {
   readonly model: string
   readonly stub: boolean
   run(input: ProviderRunInput): Promise<ModelMessage[]>
+}
+
+function lastUserText(messages: ModelMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role !== 'user') continue
+    if (typeof message.content === 'string') return message.content
+    if (Array.isArray(message.content)) {
+      return message.content
+        .map((part) => (part.type === 'text' ? part.text : ''))
+        .filter(Boolean)
+        .join(' ')
+    }
+    return ''
+  }
+  return ''
+}
+
+function asCaseFile(value: unknown): CaseFile | null {
+  if (!value || typeof value !== 'object') return null
+  const file = value as { case?: { id?: unknown; steps?: unknown } }
+  if (typeof file.case?.id !== 'string' || !Array.isArray(file.case.steps)) return null
+  return value as CaseFile
 }
 
 class StubProvider implements CopilotProvider {
@@ -65,13 +88,31 @@ class StubProvider implements CopilotProvider {
       }
     }
 
+    let caseFile: CaseFile | null = null
     if (context.caseId) {
       try {
-        await input.callTool('case_get', { id: context.caseId })
+        caseFile = asCaseFile(await input.callTool('case_get', { id: context.caseId }))
         await pause()
         input.onText('用例结构已读取。\n\n')
       } catch {
         input.onText('用例读取失败。\n\n')
+      }
+    }
+
+    // 演示模式也覆盖「提议 → diff → 应用」：识别修改意图后移除最后一步
+    const wantsEdit = /修改用例|精简|清理冗余|删.*步骤|改一下/.test(lastUserText(input.messages))
+    if (wantsEdit && caseFile && caseFile.case.steps.length > 1) {
+      const lastStep = caseFile.case.steps[caseFile.case.steps.length - 1]
+      try {
+        await input.callTool('case_propose', {
+          caseId: caseFile.case.id,
+          summary: '演示：移除最后一步，展示修改建议与确认流程',
+          operations: [{ op: 'remove_step', stepId: lastStep.id }],
+        })
+        await pause()
+        input.onText('已生成修改建议，请在输入框上方确认是否应用。\n\n')
+      } catch (err) {
+        input.onText(`修改建议生成失败：${err instanceof Error ? err.message : String(err)}\n\n`)
       }
     }
 

@@ -65,6 +65,7 @@ const SYSTEM_PROMPT = `你是 ATP（本地 Web UI 自动化测试平台）的测
 - 不确定平台里有什么项目、用例、计划或运行记录时，调用 workspace_state。
 - 受控浏览器只用于被测系统。ATP 平台自身的界面不在这里，不要导航到平台 UI 去找用例页。
 - 用例、计划、运行记录都用平台工具读取；用户要求执行或回放用例时直接调用 case_run，不要让用户手动去点回放。
+- 修改已有用例：先用 case_get 读取，再用 case_propose 提交操作列表。平台会显示 diff 卡，用户确认后才写入；不要声称已经修改。
 - 单轮最多 50 次工具调用。不要因为需要用户点击而停下；如果达到上限，明确说明已完成和未完成。
 
 工作方式：
@@ -133,6 +134,8 @@ function toolLabel(name: string, input: Record<string, unknown>): string {
       return '查看用例库'
     case 'case_get':
       return '读取用例'
+    case 'case_propose':
+      return '提议修改用例'
     case 'run_list':
       return '查看执行记录'
     case 'run_get':

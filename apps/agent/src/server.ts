@@ -85,7 +85,7 @@ function evidenceContent(file: string): string {
  */
 function shimSource(): string {
   return `(() => {
-  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error', 'ai-recording-draft'];
+  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error', 'ai-recording-draft', 'ai-case-proposal'];
   const listeners = new Map(names.map((name) => [name, new Set()]));
   const last = new Map();
   const source = new EventSource('/events');

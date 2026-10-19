@@ -114,6 +114,12 @@ export function App() {
       useUiStore.getState().setDraftRecording(p)
       useUiStore.getState().setRightTab('steps')
     })
+    // AI 修改用例：只收起建议，等用户在 diff 卡里确认
+    const offAiProposal = window.atp.on('event:ai-case-proposal', (p) => {
+      useUiStore.getState().addAiProposal(p)
+      useUiStore.getState().setAiOpen(true)
+      useUiStore.getState().setRightTab('copilot')
+    })
     return () => {
       offStatus()
       offStep()
@@ -126,6 +132,7 @@ export function App() {
       offAiDone()
       offAiError()
       offAiDraft()
+      offAiProposal()
     }
   }, [
     setRecording,

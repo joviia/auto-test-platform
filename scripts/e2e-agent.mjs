@@ -305,6 +305,27 @@ try {
   }
   console.log('[agent] 环境面板 ✓')
 
+  // 用例修改建议：stub 生成 diff → 应用 → 撤销
+  await page.getByText('Agent E2E 用例', { exact: true }).first().click()
+  await page.waitForTimeout(300)
+  await composer.fill('请修改用例，精简冗余步骤')
+  await composer.press('Enter')
+  await page.getByText('修改建议', { exact: true }).waitFor({ timeout: 20_000 })
+  await page.getByText('4 步 → 3 步', { exact: false }).waitFor({ timeout: 20_000 })
+  await page.getByRole('button', { name: '应用修改' }).click()
+  await page.getByText('已写入用例', { exact: false }).waitFor({ timeout: 20_000 })
+  const applied = await invoke(origin, 'case:get', { id: cases[0].id })
+  if (applied.case.steps.length !== 3) {
+    throw new Error(`应用修改后期望 3 个步骤，实际 ${applied.case.steps.length} 个`)
+  }
+  await page.getByRole('button', { name: '撤销' }).first().click()
+  await page.getByRole('button', { name: '应用修改' }).waitFor({ timeout: 20_000 })
+  const undone = await invoke(origin, 'case:get', { id: cases[0].id })
+  if (undone.case.steps.length !== 4) {
+    throw new Error(`撤销后期望 4 个步骤，实际 ${undone.case.steps.length} 个`)
+  }
+  console.log('[agent] 用例修改建议 ✓ diff / 应用 / 撤销')
+
   if (errors.length > 0) throw new Error(`页面错误：${errors.join(' / ')}`)
   console.log('[agent] 通过 ✅')
 } finally {

@@ -105,6 +105,22 @@ const skillManifestSchema = z.object({
   example: z.string().optional(),
 })
 
+/** AI 对用例的修改建议。只提议，不写入；由用户在前端确认后调用 case:update */
+const aiCaseProposalSchema = z.object({
+  proposalId: z.string().min(1),
+  caseId: z.string().min(1),
+  caseName: z.string().min(1),
+  /** 一句话说明改了什么、为什么 */
+  summary: z.string().min(1),
+  /** 生成建议时用例的 updatedAt；应用前用于检测用例是否已被改动 */
+  baseUpdatedAt: z.string(),
+  /** 生成建议时的用例快照：用于稳定展示 diff 和撤销 */
+  before: caseFileSchema,
+  /** 修改后的完整用例文件 */
+  after: caseFileSchema,
+  createdAt: z.string(),
+})
+
 /** 录制草稿：recording:stop 与 AI 停止录制事件共用 */
 const recordedDraftSchema = z.object({
   steps: z.array(stepSchema),
@@ -539,6 +555,8 @@ export const ipcEventContract = {
   }),
   /** AI 停止录制后把完整草稿交给界面，复用保存用例对话框 */
   [IpcEvent.aiRecordingDraft]: recordedDraftSchema,
+  /** AI 提出用例修改建议；前端展示 diff，由用户确认后写入 */
+  [IpcEvent.aiCaseProposal]: aiCaseProposalSchema,
 }
 
 /** Copilot 事件与上下文类型（agent / web 共用） */
@@ -561,6 +579,7 @@ export type AiEnvironment = z.output<typeof aiEnvironmentSchema>
 export type SkillParam = z.output<typeof skillParamSchema>
 export type SkillManifest = z.output<typeof skillManifestSchema>
 export type RecordedDraft = z.output<typeof recordedDraftSchema>
+export type AiCaseProposal = z.output<typeof aiCaseProposalSchema>
 
 export type IpcEventPayload<K extends keyof typeof ipcEventContract> = z.output<
   (typeof ipcEventContract)[K]

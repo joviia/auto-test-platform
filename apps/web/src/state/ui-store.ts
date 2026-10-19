@@ -1,4 +1,5 @@
 import type {
+  AiCaseProposal as AiCaseProposalPayload,
   AiConfig,
   AiToolEndPayload,
   AiToolStartPayload,
@@ -44,6 +45,11 @@ export interface RecordingDraft {
     rawEvents: number
     frames: Array<{ url: string; injected: boolean }>
   }
+}
+
+/** Copilot 的用例修改建议：pending 等用户确认，applied 已写入（可撤销） */
+export interface AiCaseProposal extends AiCaseProposalPayload {
+  status: 'pending' | 'applied'
 }
 
 const THEME_KEY = 'atp.theme'
@@ -218,6 +224,7 @@ interface UiState {
   aiActiveTool: { callId: string; name: string; label: string; startedAt: number } | null
   aiTarget: { target: NonNullable<AiToolEndPayload['target']>; label: string } | null
   aiSeed: AiSeed | null
+  aiProposals: AiCaseProposal[]
 
   addAiUserMessage: (text: string) => void
   startAiMessage: (sessionId: string, messageId: string) => void
@@ -230,6 +237,9 @@ interface UiState {
   addAiErrorMessage: (error: string) => void
   requestAi: (message: string, context?: AiContext) => void
   consumeAiSeed: (id: string) => void
+  addAiProposal: (proposal: AiCaseProposalPayload) => void
+  patchAiProposal: (proposalId: string, patch: Partial<AiCaseProposal>) => void
+  removeAiProposal: (proposalId: string) => void
   resetAi: () => void
 }
 
@@ -338,6 +348,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   aiActiveTool: null,
   aiTarget: null,
   aiSeed: null,
+  aiProposals: [],
 
   addAiUserMessage: (text) =>
     set((s) => ({
@@ -515,6 +526,26 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   consumeAiSeed: (id) => set((s) => (s.aiSeed?.id === id ? { aiSeed: null } : {})),
 
+  addAiProposal: (proposal) =>
+    set((s) => ({
+      aiProposals: [
+        { ...proposal, status: 'pending' as const },
+        ...s.aiProposals.filter((item) => item.proposalId !== proposal.proposalId),
+      ].slice(0, 8),
+    })),
+
+  patchAiProposal: (proposalId, patch) =>
+    set((s) => ({
+      aiProposals: s.aiProposals.map((item) =>
+        item.proposalId === proposalId ? { ...item, ...patch } : item,
+      ),
+    })),
+
+  removeAiProposal: (proposalId) =>
+    set((s) => ({
+      aiProposals: s.aiProposals.filter((item) => item.proposalId !== proposalId),
+    })),
+
   resetAi: () =>
     set({
       aiSessionId: null,
@@ -524,5 +555,6 @@ export const useUiStore = create<UiState>((set, get) => ({
       aiActiveTool: null,
       aiTarget: null,
       aiSeed: null,
+      aiProposals: [],
     }),
 }))

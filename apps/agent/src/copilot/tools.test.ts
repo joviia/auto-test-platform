@@ -23,6 +23,7 @@ function context(platform: Partial<CopilotPlatform>): CopilotToolContext {
       runCase: async () => {
         throw new Error('runCase 不应被调用')
       },
+      proposeCase: () => undefined,
       ...platform,
     },
     signal: new AbortController().signal,

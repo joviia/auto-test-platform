@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCases, usePlans, useProjects } from '../api/client'
 import { useUiStore } from '../state/ui-store'
+import { CaseProposalList } from './CaseProposalCard'
 import { Markdown } from './Markdown'
 import type { AiContext, AiMessage, AiToolCall } from './types'
 
@@ -454,6 +455,8 @@ export function CopilotPanel() {
           )}
         </div>
       </div>
+
+      <CaseProposalList />
 
       <div className="shrink-0 border-t border-border p-2.5">
         <div className="rounded-lg border border-border bg-field p-2 transition-colors focus-within:border-accent/60 focus-within:ring-2 focus-within:ring-accent/10">

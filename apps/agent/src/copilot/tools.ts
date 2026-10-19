@@ -1,9 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDb } from '@atp/core'
-import type { AiTarget } from '@atp/model'
+import type { AiCaseProposal, AiTarget } from '@atp/model'
 import { z } from 'zod'
 import type { ChromeController, RecordedDraft } from '../browser.js'
+import { buildCaseProposal, type CaseProposalInput, caseProposalOpsSchema } from './proposals.js'
 import { SKILL_MANIFESTS, SKILL_MAP } from './skills.js'
 
 export interface CopilotCaseRun {
@@ -27,6 +28,8 @@ export interface CopilotPlatform {
   stopRecording: () => Promise<RecordedDraft>
   notifyRecordingDraft: (draft: RecordedDraft) => void
   runCase: (caseId: string) => Promise<CopilotCaseRun>
+  /** 把修改建议交给界面展示 diff；真正写入要等用户确认 */
+  proposeCase: (proposal: AiCaseProposal) => void
 }
 
 export interface CopilotToolContext {
@@ -569,6 +572,64 @@ export const COPILOT_TOOLS: CopilotTool[] = [
       const file = await getDb().uow().cases.get(String(input.id))
       if (!file) throw new Error(`用例不存在：${String(input.id)}`)
       return { result: file, label: `读取用例「${file.case.name}」` }
+    },
+  },
+  {
+    name: 'case_propose',
+    description:
+      '提议修改一条已有用例。先 case_get 读取当前用例，再提交操作列表：remove_step / update_step / add_step / move_step / update_case / upsert_element / remove_element。' +
+      '平台会展示 diff 卡，由用户确认后才写入；不要声称已经修改。' +
+      '清理冗余步骤用 remove_step；改参数用 update_step（保留该步骤原有的 action、elementId、display 等字段）；新增步骤的 id 必须唯一。' +
+      '只有用户明确要求修改用例时才调用。',
+    schema: z.object({
+      caseId: z.string().min(1),
+      summary: z.string().min(1).describe('一句话说明改了什么、为什么'),
+      operations: caseProposalOpsSchema,
+    }),
+    async run(input, ctx) {
+      checkAbort(ctx)
+      const parsed = z
+        .object({
+          caseId: z.string().min(1),
+          summary: z.string().min(1),
+          operations: caseProposalOpsSchema,
+        })
+        .parse(input)
+      const uow = getDb().uow()
+      const current = await uow.cases.get(parsed.caseId)
+      if (!current) throw new Error(`用例不存在：${parsed.caseId}`)
+      const rows = await uow.cases.list(current.case.projectId)
+      const row = rows.find((item) => item.id === parsed.caseId)
+
+      const { proposal, diff } = buildCaseProposal(
+        current,
+        { summary: parsed.summary, operations: parsed.operations } satisfies CaseProposalInput,
+        {
+          proposalId: `p-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          baseUpdatedAt: row?.updatedAt ?? new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+        },
+      )
+      ctx.platform.proposeCase(proposal)
+
+      const counts = [
+        diff.removed ? `-${diff.removed}` : '',
+        diff.added ? `+${diff.added}` : '',
+        diff.changed ? `~${diff.changed}` : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+      return {
+        result: {
+          ok: true,
+          proposalId: proposal.proposalId,
+          caseId: proposal.caseId,
+          summary: proposal.summary,
+          diff,
+          note: 'diff 卡已显示，等待用户确认应用；不要声称已经修改。',
+        },
+        label: `提议修改用例「${current.case.name}」${counts ? ` · ${counts}` : ''}`,
+      }
     },
   },
   {

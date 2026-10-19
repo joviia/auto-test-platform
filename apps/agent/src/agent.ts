@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { getDb, initDb, initEvidence, runDir } from '@atp/core'
 import type {
+  AiCaseProposal,
   AiConfig,
   AiModelsInput,
   AiModelsResult,
@@ -57,6 +58,7 @@ export type AgentEvent =
   | { type: 'step'; step: LiveStep }
   | { type: 'draft'; stepCount: number; rawEvents: number; startUrl: string }
   | ({ type: 'ai-recording-draft' } & RecordedDraft)
+  | ({ type: 'ai-case-proposal' } & AiCaseProposal)
   | {
       type: 'replay-progress'
       runId: string
@@ -102,6 +104,7 @@ export class Agent {
         startRecording: () => this.startRecording(),
         stopRecording: () => this.stopRecording(),
         notifyRecordingDraft: (draft) => this.emit({ type: 'ai-recording-draft', ...draft }),
+        proposeCase: (proposal) => this.emit({ type: 'ai-case-proposal', ...proposal }),
         runCase: async (caseId) => {
           const result = await this.replayCase(caseId)
           return {
