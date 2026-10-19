@@ -7,6 +7,22 @@ import { useOverlayGuard } from '../hooks/use-overlay-guard'
 import { useUiStore } from '../state/ui-store'
 import { actionMeta } from '../steps/step-meta'
 
+const SAVE_TIMEOUT_MS = 30_000
+
+async function withTimeout<T>(work: Promise<T>, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), SAVE_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 /** 停止录制后的保存对话框：命名 + 归属项目/模块，元素随用例 upsert 进元素库 */
 export function SaveCaseDialog() {
   const qc = useQueryClient()
@@ -43,23 +59,29 @@ export function SaveCaseDialog() {
     if (!draft || !projectId || !name.trim()) return
     setSaving(true)
     try {
-      const created = await window.atp.invoke('case:create', {
-        projectId,
-        moduleId: moduleId || null,
-        name: name.trim(),
-        startUrl: draft.startUrl || 'about:blank',
-      })
-      const saved = await window.atp.invoke('case:update', {
-        case: {
-          ...created.case,
+      const created = await withTimeout(
+        window.atp.invoke('case:create', {
+          projectId,
+          moduleId: moduleId || null,
           name: name.trim(),
-          startUrl: draft.startUrl || created.case.startUrl,
-          steps: draft.steps,
-          intent: draft.intent,
-          groups: draft.groups,
-        },
-        elements: draft.elements,
-      })
+          startUrl: draft.startUrl || 'about:blank',
+        }),
+        '创建用例超时（30 秒）。请先看用例列表：若已出现同名用例，不要再重复保存',
+      )
+      const saved = await withTimeout(
+        window.atp.invoke('case:update', {
+          case: {
+            ...created.case,
+            name: name.trim(),
+            startUrl: draft.startUrl || created.case.startUrl,
+            steps: draft.steps,
+            intent: draft.intent,
+            groups: draft.groups,
+          },
+          elements: draft.elements,
+        }),
+        '写入用例超时（30 秒）。请检查左侧用例列表与 Agent 日志后再决定是否重试',
+      )
       void qc.invalidateQueries({ queryKey: qk.cases(projectId) })
       void qc.invalidateQueries({ queryKey: qk.caseFile(saved.case.id) })
       setCurrentProjectId(projectId)

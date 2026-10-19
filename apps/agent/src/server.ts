@@ -88,6 +88,18 @@ function shimSource(): string {
   const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error', 'ai-recording-draft', 'ai-case-proposal', 'ai-state'];
   const listeners = new Map(names.map((name) => [name, new Set()]));
   const last = new Map();
+  const reportClientError = (message) => {
+    try {
+      navigator.sendBeacon('/api/client-log', JSON.stringify({ message: String(message).slice(0, 4000) }));
+    } catch {}
+  };
+  window.addEventListener('error', (event) => {
+    reportClientError((event.message || 'error') + ' @ ' + (event.filename || '') + ':' + (event.lineno || 0));
+  });
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    reportClientError((reason && (reason.stack || reason.message)) || reason || 'unhandledrejection');
+  });
   const source = new EventSource('/events');
   for (const name of names) {
     source.addEventListener(name, (event) => {
@@ -103,11 +115,22 @@ function shimSource(): string {
   window.atp = {
     mode: 'web',
     invoke: async (channel, payload) => {
-      const res = await fetch('/api/invoke', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ channel, payload }),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 60000);
+      let res;
+      try {
+        res = await fetch('/api/invoke', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ channel, payload }),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (controller.signal.aborted) throw new Error('请求超时（60 秒），请重试');
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
       let data = {};
       try { data = await res.json(); } catch {}
       if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
@@ -162,6 +185,7 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
   const rendererDir = opts.rendererDir ?? defaultRendererDir()
   const hasRenderer = existsSync(join(rendererDir, 'index.html'))
   const invoke: InvokeRouter = createInvokeRouter(agent, opts.dataDir)
+  let sseClients = 0
 
   const app = new Hono()
   app.use('*', localOnly)
@@ -196,6 +220,8 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
       const send = (event: string, data: unknown): Promise<void> =>
         stream.writeSSE({ event, data: JSON.stringify(data) })
 
+      sseClients += 1
+      console.log(`[sse] connect clients=${sseClients}`)
       let closed = false
       const close = (): void => {
         closed = true
@@ -244,6 +270,8 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
       stream.onAbort(() => {
         clearInterval(timer)
         unsubscribe()
+        sseClients = Math.max(0, sseClients - 1)
+        console.log(`[sse] disconnect clients=${sseClients}`)
       })
 
       // 保持连接：客户端断开时 onAbort 触发，handler 结束
@@ -264,15 +292,40 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
     }
     const channel = typeof body.channel === 'string' ? body.channel : ''
     if (!channel) return c.json({ error: '缺少 channel' }, 400)
+    const startedAt = Date.now()
+    console.log(`[ipc] -> ${channel}`)
     try {
       const result = await invoke(channel, body.payload)
+      console.log(`[ipc] <- ${channel} ${Date.now() - startedAt}ms`)
       return c.json({ result })
     } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
+      const message = err instanceof Error ? err.message : String(err)
+      console.log(`[ipc] !! ${channel} ${Date.now() - startedAt}ms: ${message}`)
+      return c.json({ error: message }, 500)
     }
   })
 
-  app.get('/api/state', async (c) => c.json(await agent.describe()))
+  app.get('/api/state', async (c) =>
+    c.json({
+      ...(await agent.describe()),
+      sseClients,
+      liveSubscribers: agent.liveSubscriberCount(),
+    }),
+  )
+
+  // 前端未捕获错误上报到本地日志：用户不必打开 DevTools 也能定位卡死原因
+  app.post('/api/client-log', async (c) => {
+    const length = Number(c.req.header('content-length') ?? '0')
+    if (length > 16 * 1024) return c.json({ error: '日志过大' }, 413)
+    try {
+      const body = await c.req.json<{ message?: unknown }>()
+      const message = typeof body.message === 'string' ? body.message : ''
+      console.log(`[client] ${message.slice(0, 4000).replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***')}`)
+      return c.json({ ok: true })
+    } catch {
+      return c.json({ error: '日志格式错误' }, 400)
+    }
+  })
 
   /**
    * 真实 Chrome 的只读实时画面（MJPEG）。
@@ -287,6 +340,7 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
       closed = true
       unsubscribe?.()
       unsubscribe = null
+      console.log(`[live] stream closed subscribers=${agent.liveSubscriberCount()}`)
     }
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -310,6 +364,7 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
         }
         try {
           unsubscribe = agent.subscribeLive(write)
+          console.log(`[live] stream open subscribers=${agent.liveSubscriberCount()}`)
         } catch {
           close()
           controller.close()

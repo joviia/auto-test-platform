@@ -4,6 +4,8 @@ import { Globe, Loader2, MonitorPlay } from 'lucide-react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 const RETRY_MS = 3000
+/** 暂停时把 <img> 的 src 换成 1x1，显式结束 MJPEG 请求；仅卸载元素浏览器不一定断开连接 */
+const BLANK_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 
 /**
  * 真实 Chrome 的只读实时镜像。
@@ -26,18 +28,43 @@ interface Box {
 export function LiveMirror({
   onTakeover,
   highlight,
+  paused = false,
 }: {
   onTakeover: () => void
   highlight?: MirrorHighlight | null
+  /** 弹层/下拉打开时暂停拉流，避免后台解码占用主线程 */
+  paused?: boolean
 }) {
   const [epoch, setEpoch] = useState(0)
   const [status, setStatus] = useState<'connecting' | 'live' | 'error'>('connecting')
   const [imageBox, setImageBox] = useState<Box | null>(null)
+  const [visible, setVisible] = useState(() => document.visibilityState === 'visible')
   const rootRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
+  const active = visible && !paused
+  const activeRef = useRef(active)
+
+  // 多标签页 / 弹层遮挡时停止拉流：MJPEG 是长连接，后台标签也会解码每一帧
+  useEffect(() => {
+    const onChange = (): void => setVisible(document.visibilityState === 'visible')
+    document.addEventListener('visibilitychange', onChange)
+    return () => document.removeEventListener('visibilitychange', onChange)
+  }, [])
+
+  useEffect(() => {
+    if (activeRef.current === active) return
+    activeRef.current = active
+    setStatus('connecting')
+    // 隐藏时就换 epoch：恢复时首帧直接请求新地址，避免同一轮发两次流
+    if (!active) setEpoch((value) => value + 1)
+  }, [active])
 
   // 镜像按 object-contain 显示，记下图片实际占用的矩形，用来把页面坐标映射到舞台
   useLayoutEffect(() => {
+    if (!active) {
+      setImageBox(null)
+      return
+    }
     const update = (): void => {
       const root = rootRef.current
       const image = imageRef.current
@@ -61,10 +88,10 @@ export function LiveMirror({
       observer.disconnect()
       window.removeEventListener('resize', update)
     }
-  }, [])
+  }, [active])
 
   const highlightBox =
-    highlight && imageBox && status === 'live'
+    active && highlight && imageBox && status === 'live'
       ? {
           left:
             imageBox.left +
@@ -85,13 +112,13 @@ export function LiveMirror({
 
   // 流断开后自动重连；每次重连换一个 URL 参数，确保 <img> 重新发起请求
   useEffect(() => {
-    if (status !== 'error') return
+    if (status !== 'error' || !active) return
     const timer = setTimeout(() => {
       setStatus('connecting')
       setEpoch((value) => value + 1)
     }, RETRY_MS)
     return () => clearTimeout(timer)
-  }, [status])
+  }, [status, active])
 
   const labelBelow =
     highlightBox !== null && imageBox !== null && highlightBox.top - imageBox.top < 24
@@ -101,18 +128,31 @@ export function LiveMirror({
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <img
           ref={imageRef}
-          src={`/api/live/stream?v=${epoch}`}
+          src={active ? `/api/live/stream?v=${epoch}` : BLANK_IMAGE}
           alt="Chrome 实时画面"
           draggable={false}
-          onLoad={() => setStatus('live')}
-          onError={() => setStatus('error')}
-          className={`max-h-full max-w-full rounded-md border border-border bg-white object-contain shadow-[0_18px_50px_rgba(10,16,28,0.22)] transition-opacity ${
-            status === 'live' ? 'opacity-100' : 'opacity-0'
-          }`}
+          onLoad={() => {
+            if (active) setStatus('live')
+          }}
+          onError={() => {
+            if (active) setStatus('error')
+          }}
+          className={
+            active
+              ? `max-h-full max-w-full rounded-md border border-border bg-white object-contain shadow-[0_18px_50px_rgba(10,16,28,0.22)] transition-opacity ${
+                  status === 'live' ? 'opacity-100' : 'opacity-0'
+                }`
+              : 'hidden'
+          }
         />
+        {!active && (
+          <div className="rounded-md border border-border bg-surface px-3 py-2 text-[11px] text-muted shadow-surface">
+            {paused ? '弹层打开中，实时画面已暂停' : '标签页在后台，实时画面已暂停'}
+          </div>
+        )}
       </div>
 
-      {status === 'connecting' && (
+      {active && status === 'connecting' && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
           <span className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[11.5px] text-muted shadow-surface">
             <Loader2 size={13} className="animate-spin text-accent" />
@@ -121,7 +161,7 @@ export function LiveMirror({
         </div>
       )}
 
-      {status === 'error' && (
+      {active && status === 'error' && (
         <div className="absolute inset-0 grid place-items-center p-6">
           <div className="max-w-sm text-center">
             <div className="mx-auto grid size-12 place-items-center rounded-xl border border-border bg-surface-secondary text-muted">

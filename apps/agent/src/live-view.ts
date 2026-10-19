@@ -1,7 +1,7 @@
 import type { CDPSession, Page } from 'playwright'
 
-/** 上限 8 fps：页面重绘再快，也不需要把每帧都推给 UI */
-const FRAME_INTERVAL_MS = 125
+/** 上限约 6 fps：页面重绘再快，也不需要把每帧都推给 UI */
+const FRAME_INTERVAL_MS = 160
 /** 最后一个订阅者离开后延迟停止，避免刷新/切换页面时反复启停 */
 const IDLE_STOP_MS = 1200
 /** CDP 不可用时的兜底轮询间隔 */
@@ -41,6 +41,10 @@ export class LiveView {
 
   get running(): boolean {
     return this.session !== null || this.fallbackTimer !== null
+  }
+
+  get subscriberCount(): number {
+    return this.listeners.size
   }
 
   subscribe(listener: LiveFrameListener): () => void {
@@ -162,10 +166,11 @@ export class LiveView {
     try {
       await session.send('Page.startScreencast', {
         format: 'jpeg',
-        quality: 60,
-        maxWidth: 1600,
-        maxHeight: 1000,
-        everyNthFrame: 1,
+        quality: 55,
+        maxWidth: 1280,
+        maxHeight: 800,
+        // 页面重绘可能 30–60fps；先让 Chrome 降频，服务端再按 6fps 分发
+        everyNthFrame: 3,
       })
     } catch {
       this.generation++

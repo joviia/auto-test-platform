@@ -122,6 +122,18 @@ try {
   )
   console.log('[agent] 实时镜像 ✓')
 
+  // 实时画面按订阅数管理：弹层打开时暂停，关闭后恢复；避免长连接泄漏拖垮浏览器
+  const liveCount = async () => (await (await fetch(`${origin}/api/state`)).json()).liveSubscribers
+  if ((await liveCount()) !== 1) throw new Error('实时画面订阅数不是 1')
+  await page.locator('button[aria-label="模型设置"]').click()
+  await page.getByRole('heading', { name: '模型设置' }).waitFor({ timeout: 10_000 })
+  await page.waitForTimeout(900)
+  if ((await liveCount()) !== 0) throw new Error('弹层打开后实时画面没有暂停')
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(1600)
+  if ((await liveCount()) !== 1) throw new Error('弹层关闭后实时画面没有恢复')
+  console.log('[agent] 实时画面暂停/恢复 ✓')
+
   // 录制：UI 负责开关，演示操作由内置脚本完成（真实 Chrome 里执行）
   await page.getByRole('button', { name: '开始录制' }).click()
   await page.waitForTimeout(300)

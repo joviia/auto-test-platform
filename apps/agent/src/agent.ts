@@ -181,6 +181,10 @@ export class Agent {
     return this.requireBrowser().live.subscribe(listener)
   }
 
+  liveSubscriberCount(): number {
+    return this.browser?.live.subscriberCount ?? 0
+  }
+
   async emulate(metrics: DeviceMetrics | null): Promise<void> {
     await this.requireBrowser().emulate(metrics)
   }

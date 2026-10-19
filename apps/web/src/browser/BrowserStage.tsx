@@ -593,7 +593,11 @@ export function BrowserStage() {
 
       <div ref={stageRef} className="atp-stage relative min-h-0 flex-1 overflow-hidden">
         {webMode ? (
-          <LiveMirror highlight={aiTarget} onTakeover={() => void focusChrome()} />
+          <LiveMirror
+            highlight={aiTarget}
+            paused={hideForOverlay}
+            onTakeover={() => void focusChrome()}
+          />
         ) : (
           !url &&
           !recording && (
