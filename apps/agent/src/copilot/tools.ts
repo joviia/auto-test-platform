@@ -3,13 +3,22 @@ import { join } from 'node:path'
 import { getDb } from '@atp/core'
 import type { AiTarget } from '@atp/model'
 import { z } from 'zod'
-import type { ChromeController } from '../browser.js'
+import type { ChromeController, RecordedDraft } from '../browser.js'
+import { SKILL_MANIFESTS, SKILL_MAP } from './skills.js'
+
+export interface CopilotPlatform {
+  isRecording: () => boolean
+  startRecording: () => void
+  stopRecording: () => Promise<RecordedDraft>
+  notifyRecordingDraft: (draft: RecordedDraft) => void
+}
 
 export interface CopilotToolContext {
   sessionId: string
   callId: string
   dataDir: string
   browser: () => ChromeController | null
+  platform: CopilotPlatform
   signal: AbortSignal
 }
 
@@ -261,6 +270,228 @@ export const COPILOT_TOOLS: CopilotTool[] = [
         label: `断言「${resolved.target.name || clippedName(input.name) || ref}」${visible ? '可见' : '不可见'}`,
         target: resolved.target,
         evidenceUrl: await saveEvidence(ctx),
+      }
+    },
+  },
+  {
+    name: 'browser_hover',
+    description:
+      '把鼠标悬停到元素上，用于展开 hover 菜单或提示框。菜单类控件优先用 skill_run(hover_menu)。',
+    schema: refInput,
+    run: (input, ctx) => act(ctx, input, '悬停', ({ locator }) => locator.hover({ timeout: 6000 })),
+  },
+  {
+    name: 'browser_drag',
+    description:
+      '从元素中心拖拽 (dx, dy) 像素。适合画布、排序、滑块等场景；滑块优先用 skill_run(slider_set)。',
+    schema: z.object({
+      ref: z.string().min(1),
+      dx: z.number(),
+      dy: z.number().default(0),
+      durationMs: z.number().int().min(50).max(3000).default(320),
+      name: z.string().optional(),
+    }),
+    async run(input, ctx) {
+      checkAbort(ctx)
+      const browser = requireBrowser(ctx)
+      const ref = String(input.ref)
+      const resolved = await browser.resolveRef(ref)
+      if (!resolved) throw new Error('ref 已失效：请先调用 browser_snapshot 获取最新元素')
+      const box = await resolved.locator.boundingBox()
+      if (!box) throw new Error('无法获取元素位置')
+      const dx = Number(input.dx ?? 0)
+      const dy = Number(input.dy ?? 0)
+      const total = 16
+      const delay = Math.max(4, Math.round(Number(input.durationMs ?? 320) / total))
+      const startX = box.x + box.width / 2
+      const startY = box.y + box.height / 2
+      const page = await browser.runnerPage()
+      await page.mouse.move(startX, startY)
+      await page.mouse.down()
+      for (let i = 1; i <= total; i++) {
+        const t = i / total
+        await page.mouse.move(startX + dx * t, startY + dy * t)
+        await page.waitForTimeout(delay)
+      }
+      await page.mouse.up()
+      await page.waitForTimeout(120)
+      const name = resolved.target.name || clippedName(input.name) || ref
+      return {
+        result: { ok: true, dx, dy },
+        label: `拖拽「${name}」(${dx}, ${dy})`,
+        evidenceUrl: await saveEvidence(ctx),
+        target: resolved.target,
+      }
+    },
+  },
+  {
+    name: 'browser_wait_for',
+    description:
+      '等待条件成立：元素可见/隐藏、文本出现、网络空闲。比固定 browser_wait 更可靠；超时会返回原因。',
+    schema: z.object({
+      kind: z.enum(['visible', 'hidden', 'text', 'networkIdle']),
+      ref: z.string().optional().describe('visible / hidden 时必填'),
+      text: z.string().optional().describe('text 时必填'),
+      timeoutMs: z.number().int().positive().max(30000).default(10000),
+    }),
+    async run(input, ctx) {
+      checkAbort(ctx)
+      const browser = requireBrowser(ctx)
+      const page = await browser.runnerPage()
+      const timeout = Number(input.timeoutMs ?? 10000)
+      const kind = String(input.kind)
+      if (kind === 'visible' || kind === 'hidden') {
+        const ref = typeof input.ref === 'string' ? input.ref : ''
+        if (!ref) throw new Error(`${kind} 需要提供 ref`)
+        const resolved = await browser.resolveRef(ref)
+        if (!resolved) throw new Error('ref 已失效：请先调用 browser_snapshot')
+        await resolved.locator.waitFor({
+          state: kind === 'hidden' ? 'hidden' : 'visible',
+          timeout,
+        })
+        return {
+          result: { ok: true, kind },
+          label: `等待「${resolved.target.name || ref}」${kind === 'hidden' ? '隐藏' : '可见'}`,
+          target: resolved.target,
+        }
+      }
+      if (kind === 'text') {
+        const text = typeof input.text === 'string' ? input.text.trim() : ''
+        if (!text) throw new Error('text 等待需要提供文本')
+        await page.getByText(text, { exact: false }).first().waitFor({ state: 'visible', timeout })
+        return { result: { ok: true, kind, text }, label: `等待文本「${text}」` }
+      }
+      await page.waitForLoadState('networkidle', { timeout })
+      return { result: { ok: true, kind }, label: '等待网络空闲' }
+    },
+  },
+  {
+    name: 'skill_list',
+    description:
+      '查看操作库里的技能与参数。遇到滑块、文件上传、hover 菜单等复杂控件时，先查技能再调用 skill_run，不要自己猜坐标。',
+    schema: z.object({}),
+    async run() {
+      return {
+        result: { skills: SKILL_MANIFESTS },
+        label: `查看操作库 · ${SKILL_MANIFESTS.length} 个技能`,
+      }
+    },
+  },
+  {
+    name: 'skill_run',
+    description:
+      '运行操作库技能。先调用 skill_list 查看技能 id 和参数；input 里必须带 browser_snapshot 的 ref。技能会自己做验证，失败会返回具体原因。',
+    schema: z.object({
+      id: z.string().min(1),
+      input: z.record(z.string(), z.unknown()).default({}),
+    }),
+    async run(input, ctx) {
+      checkAbort(ctx)
+      const skill = SKILL_MAP.get(String(input.id))
+      if (!skill) {
+        throw new Error(`未知技能：${String(input.id)}，请先调用 skill_list`)
+      }
+      const parsed = skill.schema.parse(input.input ?? {}) as Record<string, unknown>
+      const browser = requireBrowser(ctx)
+      const ref = String(parsed.ref ?? '')
+      const resolved = await browser.resolveRef(ref)
+      if (!resolved) throw new Error('ref 已失效：请先调用 browser_snapshot')
+      const page = await browser.runnerPage()
+      const outcome = await skill.run(parsed, {
+        page,
+        locator: resolved.locator,
+        target: resolved.target,
+        dataDir: ctx.dataDir,
+        signal: ctx.signal,
+      })
+      return {
+        result: outcome.result,
+        label: outcome.label,
+        target: resolved.target,
+        evidenceUrl: await saveEvidence(ctx),
+      }
+    },
+  },
+  {
+    name: 'workspace_state',
+    description:
+      '读取平台当前状态：项目、每个项目的用例/计划/元素数量、最近运行、可用技能、是否正在录制。不确定当前平台里有什么时调用。',
+    schema: z.object({}),
+    async run(_input, ctx) {
+      const uow = getDb().uow()
+      const projects = await uow.projects.list()
+      const rows = []
+      for (const project of projects.slice(0, 20)) {
+        const [cases, plans, elements] = await Promise.all([
+          uow.cases.list(project.id),
+          uow.plans.list(project.id),
+          uow.elements.list(project.id),
+        ])
+        rows.push({
+          id: project.id,
+          name: project.name,
+          caseCount: cases.length,
+          planCount: plans.length,
+          elementCount: elements.length,
+        })
+      }
+      const runs = await uow.runs.list({})
+      return {
+        result: {
+          recording: ctx.platform.isRecording(),
+          url: ctx.browser()?.currentUrl ?? null,
+          projects: rows,
+          recentRuns: runs.slice(0, 10).map((run) => ({
+            id: run.id,
+            caseId: run.caseId,
+            caseName: run.caseName,
+            status: run.status,
+            startedAt: run.startedAt,
+          })),
+          skills: SKILL_MANIFESTS.map((skill) => ({
+            id: skill.id,
+            name: skill.name,
+            description: skill.description,
+          })),
+        },
+        label: `读取平台状态 · ${rows.length} 个项目`,
+      }
+    },
+  },
+  {
+    name: 'recording_start',
+    description:
+      '开始录制。用户说「录制」「录一条用例」时使用。录制期间你的页面操作会被采集为步骤；完成后必须调用 recording_stop。',
+    schema: z.object({}),
+    async run(_input, ctx) {
+      checkAbort(ctx)
+      if (ctx.platform.isRecording()) throw new Error('已经在录制中')
+      ctx.platform.startRecording()
+      return {
+        result: { ok: true, url: ctx.browser()?.currentUrl ?? null },
+        label: '开始录制',
+      }
+    },
+  },
+  {
+    name: 'recording_stop',
+    description:
+      '停止录制并生成草稿。平台会弹出「保存录制的用例」对话框，由用户确认保存；不要说已经保存。',
+    schema: z.object({}),
+    async run(_input, ctx) {
+      checkAbort(ctx)
+      if (!ctx.platform.isRecording()) throw new Error('当前没有在录制')
+      const draft = await ctx.platform.stopRecording()
+      ctx.platform.notifyRecordingDraft(draft)
+      return {
+        result: {
+          ok: true,
+          steps: draft.steps.length,
+          elements: Object.keys(draft.elements).length,
+          startUrl: draft.startUrl,
+          note: '保存用例对话框已打开，等待用户命名并保存',
+        },
+        label: `停止录制 · ${draft.steps.length} 步`,
       }
     },
   },

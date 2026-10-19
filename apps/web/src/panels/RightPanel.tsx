@@ -1,12 +1,13 @@
 import { Tab, TabIndicator, TabList, TabListContainer, TabPanel, TabsRoot } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
-import { ListChecks } from 'lucide-react'
+import { ListChecks, Wrench } from 'lucide-react'
 import { useEffect } from 'react'
 import { CopilotPanel } from '../ai/CopilotPanel'
 import { qk } from '../api/client'
 import { EmptyHint } from '../components/EmptyHint'
 import { ElementPanel } from '../elements/ElementPanel'
 import { PlanPanel } from '../plans/PlanPanel'
+import { SkillPanel } from '../skills/SkillPanel'
 import { useUiStore } from '../state/ui-store'
 import { DraftStepsPanel } from '../steps/DraftStepsPanel'
 import { LiveStepsPanel } from '../steps/LiveStepsPanel'
@@ -29,6 +30,16 @@ export function RightPanel() {
 
   // Copilot 是全局的：即使当前停在计划上，AI 面板也能占住右侧
   if (aiOpen && rightTab === 'copilot') return <CaseRightPanel />
+  if (navTab === 'skills' && !aiOpen) {
+    if (selected?.kind === 'skill') return <SkillPanel skillId={selected.id} />
+    return (
+      <EmptyHint
+        icon={Wrench}
+        title="选择一个操作"
+        description="操作库把滑块、上传、悬浮菜单等复杂控件封装成可复用的确定性技能，Copilot 可以直接调用。"
+      />
+    )
+  }
   if (selected?.kind === 'plan') return <PlanPanel planId={selected.id} />
   if (navTab === 'plans' && !aiOpen) {
     return (

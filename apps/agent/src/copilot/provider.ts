@@ -1,7 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import type { AiConfig } from '@atp/model'
+import type { AiConfig, AiEnvironment } from '@atp/model'
 import { type LanguageModel, type ModelMessage, stepCountIs, streamText, type ToolSet } from 'ai'
 import type { AiThinking, ResolvedAiProfile } from './config.js'
 
@@ -10,6 +10,7 @@ export interface ProviderContext {
   caseId?: string
   caseName?: string
   runId?: string
+  environment?: AiEnvironment
 }
 
 export interface ProviderRunInput {

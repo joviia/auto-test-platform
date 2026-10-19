@@ -5,6 +5,7 @@ import { getDb } from '@atp/core'
 import { IpcChannel, type IpcContract, parseIpcInput } from '@atp/model'
 import { toPlaywrightSpec } from '@atp/runner'
 import type { Agent } from './agent.js'
+import { SKILL_MANIFESTS } from './copilot/skills.js'
 
 type Handler = (input: never) => Promise<unknown>
 
@@ -168,6 +169,7 @@ export function createInvokeRouter(agent: Agent, dataDir: string) {
   route(IpcChannel.aiSaveConfig, async (input) => agent.aiSaveConfig(input))
   route(IpcChannel.aiTest, async (input) => agent.aiTest(input))
   route(IpcChannel.aiModels, async (input) => agent.aiModels(input))
+  route(IpcChannel.skillList, async () => SKILL_MANIFESTS)
 
   return async (channel: string, payload: unknown): Promise<unknown> => {
     const handler = routes.get(channel)

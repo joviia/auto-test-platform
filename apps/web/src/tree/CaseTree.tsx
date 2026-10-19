@@ -260,7 +260,7 @@ export function CaseTree() {
   const remove = async (): Promise<void> => {
     if (!selected) return
     const { kind, id } = selected
-    if (kind === 'plan') return
+    if (kind === 'plan' || kind === 'skill') return
     const target = { kind, id }
     try {
       await deleteNode.mutateAsync(target)

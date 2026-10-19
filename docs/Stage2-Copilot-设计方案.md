@@ -436,6 +436,7 @@ URL: http://…/demo
 
 ### Stage 2.2：Browser Use 操作 + 中栏可视化（关键切片）
 
+> **状态（2026-10-19）**：部分交付。环境快照、平台工具（录制/平台状态）、drag/hover/wait_for、操作库 v1（slider_set / hover_menu / upload_file）与左栏「操作库」已落地，详见 <Stage2.2-环境感知与操作库.md>。iframe、Shadow DOM、自定义下拉与完整动作验证仍在后续。
 - 语义 ref 快照、`browser.navigate/click/fill/select/check/press/scroll/wait/assert`。
 - Browser Use 循环：观察 → 决策 → 操作 → 验证；自动快照、失败重试、最大步数/时长。
 - 顶部 AI 状态条（步号 / 工具 / 耗时 / 停止 / 接管）。

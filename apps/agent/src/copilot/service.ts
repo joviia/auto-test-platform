@@ -1,5 +1,6 @@
 import type {
   AiConfig,
+  AiEnvironment,
   AiModelsInput,
   AiModelsResult,
   AiSaveConfigInput,
@@ -21,7 +22,12 @@ import {
   type ProviderBundle,
   type ProviderContext,
 } from './provider.js'
-import { COPILOT_TOOL_MAP, type CopilotTool, type CopilotToolContext } from './tools.js'
+import {
+  COPILOT_TOOL_MAP,
+  type CopilotPlatform,
+  type CopilotTool,
+  type CopilotToolContext,
+} from './tools.js'
 
 export type CopilotEvent =
   | { type: 'ai-start'; sessionId: string; messageId: string }
@@ -45,21 +51,28 @@ interface Session {
 export interface CopilotServiceOptions {
   dataDir: string
   getBrowser: () => ChromeController | null
+  platform: CopilotPlatform
   onEvent: (event: CopilotEvent) => void
 }
 
 const SYSTEM_PROMPT = `你是 ATP（本地 Web UI 自动化测试平台）的测试 Copilot。
 
-你能直接操作受控的真实 Chrome，也能读取用例库与执行记录。
+平台模型：
+- 项目 > 模块 > 用例。用例由步骤和元素库组成，可以回放并产生执行记录。
+- 测试计划把多条用例组织起来批量执行。
+- 平台有录制模式。用户说「录制」「录一条用例」时，调用 recording_start，完成操作后调用 recording_stop；平台会弹出保存对话框，由用户确认保存。
+- 操作库里有确定性技能（滑块、文件上传、悬停菜单）。遇到这些控件先 skill_list，再 skill_run，不要自己猜坐标。
+- 不确定平台里有什么项目、用例、计划或运行记录时，调用 workspace_state。
 
 工作方式：
 1. 操作前先调用 browser_snapshot 观察页面；不要猜 CSS/XPath。
 2. 需要确认视觉状态时调用 browser_screenshot。
-3. 每次操作后用 browser_snapshot 或 browser_assert_visible 验证结果；失败时说明原因，必要时重试一次。
+3. 每次操作后用 browser_snapshot、browser_assert_visible 或 browser_wait_for 验证结果；失败时说明原因，必要时重试一次。
 4. 超过 3 步的任务先给出简短计划，再逐步执行。
 5. 只操作被测页面；不要访问与任务无关的站点。
-6. 结束时用三行总结：已验证 / 假设 / 未完成。
-7. 用中文回答，简洁，不展示内部推理过程。`
+6. 不要声称已经保存用例；只有用户确认保存对话框，或后续查询确实返回了用例，才算保存成功。
+7. 结束时用三行总结：已验证 / 假设 / 未完成。
+8. 用中文回答，简洁，不展示内部推理过程。`
 
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
@@ -93,6 +106,22 @@ function toolLabel(name: string, input: Record<string, unknown>): string {
       return `滚动页面`
     case 'browser_wait':
       return `等待 ${String(input.ms ?? 0)}ms`
+    case 'browser_hover':
+      return `悬停「${target}」`
+    case 'browser_drag':
+      return `拖拽「${target}」(${String(input.dx ?? 0)}, ${String(input.dy ?? 0)})`
+    case 'browser_wait_for':
+      return input.kind === 'networkIdle' ? '等待网络空闲' : `等待 ${String(input.kind ?? '')}`
+    case 'skill_list':
+      return '查看操作库'
+    case 'skill_run':
+      return `使用技能 ${String(input.id ?? '')}`
+    case 'workspace_state':
+      return '读取平台状态'
+    case 'recording_start':
+      return '开始录制'
+    case 'recording_stop':
+      return '停止录制'
     case 'browser_assert_visible':
       return `断言「${target}」可见`
     case 'case_list':
@@ -334,6 +363,7 @@ export class CopilotService {
       caseId: input.context?.caseId,
       caseName: input.context?.caseName,
       runId: input.context?.runId,
+      environment: input.context?.environment,
     }
     this.options.onEvent({ type: 'ai-start', sessionId: session.id, messageId })
     void this.run(session, messageId, input.message, context, abort).catch((err: unknown) => {
@@ -475,6 +505,7 @@ export class CopilotService {
       callId,
       dataDir: this.options.dataDir,
       browser: this.options.getBrowser,
+      platform: this.options.platform,
       signal,
     }
     try {
@@ -508,15 +539,49 @@ export class CopilotService {
   }
 }
 
+const MODE_LABEL: Record<AiEnvironment['mode'], string> = {
+  launch: '启动台（还没有打开页面）',
+  editing: '编辑/浏览',
+  recording: '录制中',
+  replaying: '回放中',
+  plan: '计划执行中',
+}
+
 function buildSystemPrompt(context: ProviderContext): string {
-  const lines = [SYSTEM_PROMPT, '', '当前上下文：']
+  const lines = [SYSTEM_PROMPT, '', '当前环境：']
+  const env = context.environment
   lines.push(`- 页面：${context.url ?? '（尚未打开页面）'}`)
-  if (context.caseId) {
-    lines.push(`- 用例：${context.caseName ?? context.caseId}（id=${context.caseId}）`)
+  if (env) {
+    lines.push(`- 模式：${MODE_LABEL[env.mode]}`)
+    if (env.projectName || env.projectId) {
+      lines.push(`- 项目：${env.projectName ?? env.projectId}`)
+    }
+    if (env.caseName || context.caseId) {
+      lines.push(`- 用例：${env.caseName ?? context.caseName ?? context.caseId}`)
+    }
+    if (env.planName) lines.push(`- 测试计划：${env.planName}`)
+    if (env.runId || context.runId) {
+      lines.push(`- 运行记录：${env.runId ?? context.runId}`)
+    }
+    if (env.recording) lines.push(`- 录制：进行中，已捕获 ${env.recordedSteps ?? 0} 步`)
+    if (env.draftSteps) lines.push(`- 待保存草稿：${env.draftSteps} 步`)
+    if (env.replaying) lines.push('- 回放：进行中')
+    if (env.planProgress) {
+      const progress = env.planProgress
+      lines.push(
+        `- 计划进度：${progress.caseName ?? ''}（${progress.caseIndex + 1}/${progress.caseTotal}）`,
+      )
+    }
+    if (env.navTab) lines.push(`- 左侧页签：${env.navTab}`)
+    if (env.selectedKind) lines.push(`- 当前选中：${env.selectedKind}`)
   } else {
-    lines.push('- 用例：未选择')
+    if (context.caseId) {
+      lines.push(`- 用例：${context.caseName ?? context.caseId}（id=${context.caseId}）`)
+    } else {
+      lines.push('- 用例：未选择')
+    }
+    if (context.runId) lines.push(`- 运行记录：${context.runId}（可调用 run_get 查看步骤）`)
+    else lines.push('- 运行记录：未选择')
   }
-  if (context.runId) lines.push(`- 运行记录：${context.runId}（可调用 run_get 查看步骤）`)
-  else lines.push('- 运行记录：未选择')
   return lines.join('\n')
 }

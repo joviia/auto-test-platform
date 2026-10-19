@@ -11,9 +11,12 @@ import type {
 import { create } from 'zustand'
 import type { AiContext, AiMessage, AiRightTab, AiSeed } from '../ai/types'
 
-export type SelectedNode = { kind: 'project' | 'module' | 'case' | 'plan'; id: string }
+export type SelectedNode = {
+  kind: 'project' | 'module' | 'case' | 'plan' | 'skill'
+  id: string
+}
 
-export type NavTab = 'cases' | 'plans'
+export type NavTab = 'cases' | 'plans' | 'skills'
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 

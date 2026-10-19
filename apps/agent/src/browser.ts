@@ -74,6 +74,11 @@ export interface SnapshotElement {
   disabled?: boolean
   tag: string
   inViewport: boolean
+  /** 滑块类控件的范围信息，帮助模型理解如何设值 */
+  min?: number
+  max?: number
+  step?: number
+  orientation?: 'horizontal' | 'vertical'
 }
 
 export interface PageSnapshot {
@@ -441,6 +446,7 @@ export class ChromeController {
           const type = (el as HTMLInputElement).type
           if (type === 'checkbox') return 'checkbox'
           if (type === 'radio') return 'radio'
+          if (type === 'range') return 'slider'
           if (type === 'submit' || type === 'button' || type === 'reset') return 'button'
           return 'textbox'
         }
@@ -491,6 +497,10 @@ export class ChromeController {
         disabled?: boolean
         tag: string
         inViewport: boolean
+        min?: number
+        max?: number
+        step?: number
+        orientation?: 'horizontal' | 'vertical'
       }> = []
       let index = 0
       for (const el of nodes) {
@@ -511,11 +521,30 @@ export class ChromeController {
           if (el.type === 'checkbox' || el.type === 'radio') entry.checked = el.checked
           else if (el.type !== 'password') entry.value = el.value
           entry.disabled = el.disabled
+          if (el.type === 'range') {
+            const min = Number(el.min)
+            const max = Number(el.max)
+            const step = Number(el.step)
+            if (Number.isFinite(min)) entry.min = min
+            if (Number.isFinite(max)) entry.max = max
+            if (Number.isFinite(step) && step > 0) entry.step = step
+            entry.orientation = 'horizontal'
+          }
         } else if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
           entry.value = el.value
           entry.disabled = el.disabled
-        } else if (el.getAttribute('aria-disabled') === 'true') {
-          entry.disabled = true
+        } else {
+          if (el.getAttribute('aria-disabled') === 'true') entry.disabled = true
+          if (el.getAttribute('role') === 'slider') {
+            const now = el.getAttribute('aria-valuenow')
+            if (now !== null) entry.value = now
+            const min = Number(el.getAttribute('aria-valuemin'))
+            const max = Number(el.getAttribute('aria-valuemax'))
+            if (Number.isFinite(min)) entry.min = min
+            if (Number.isFinite(max)) entry.max = max
+            entry.orientation =
+              el.getAttribute('aria-orientation') === 'vertical' ? 'vertical' : 'horizontal'
+          }
         }
         elements.push(entry)
       }

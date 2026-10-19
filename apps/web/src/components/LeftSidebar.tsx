@@ -1,22 +1,27 @@
-import { FlaskConical, ListChecks } from 'lucide-react'
+import { FlaskConical, ListChecks, Wrench } from 'lucide-react'
 import { PlanList } from '../plans/PlanList'
-import { useUiStore } from '../state/ui-store'
+import { SkillList } from '../skills/SkillList'
+import { type NavTab, useUiStore } from '../state/ui-store'
 import { CaseTree } from '../tree/CaseTree'
 
-const TABS = [
-  { id: 'cases' as const, label: '用例', icon: FlaskConical },
-  { id: 'plans' as const, label: '测试计划', icon: ListChecks },
+const TABS: Array<{ id: NavTab; label: string; icon: typeof FlaskConical }> = [
+  { id: 'cases', label: '用例', icon: FlaskConical },
+  { id: 'plans', label: '计划', icon: ListChecks },
+  { id: 'skills', label: '操作库', icon: Wrench },
 ]
 
 export function LeftSidebar() {
   const navTab = useUiStore((s) => s.navTab)
   const setNavTab = useUiStore((s) => s.setNavTab)
   const setSelected = useUiStore((s) => s.setSelected)
+  const setAiOpen = useUiStore((s) => s.setAiOpen)
 
-  const switchTab = (tab: 'cases' | 'plans'): void => {
+  const switchTab = (tab: NavTab): void => {
     if (tab === navTab) return
     setNavTab(tab)
     setSelected(null)
+    // 操作库需要右侧详情，进入时收起 Copilot；需要时可从顶栏再次打开
+    if (tab === 'skills') setAiOpen(false)
   }
 
   return (
@@ -45,7 +50,7 @@ export function LeftSidebar() {
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        {navTab === 'cases' ? <CaseTree /> : <PlanList />}
+        {navTab === 'cases' ? <CaseTree /> : navTab === 'plans' ? <PlanList /> : <SkillList />}
       </div>
     </div>
   )

@@ -1,3 +1,4 @@
+import type { AiEnvironment } from '@atp/model'
 import { Button, toast } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -5,6 +6,7 @@ import {
   Camera,
   Check,
   ChevronDown,
+  ChevronUp,
   CircleAlert,
   FileText,
   Globe,
@@ -18,7 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useCases } from '../api/client'
+import { useCases, usePlans, useProjects } from '../api/client'
 import { useUiStore } from '../state/ui-store'
 import type { AiContext, AiMessage, AiToolCall } from './types'
 
@@ -34,6 +36,14 @@ function formatJson(value: unknown): string {
   } catch {
     return String(value)
   }
+}
+
+const MODE_LABEL: Record<AiEnvironment['mode'], string> = {
+  launch: '启动台',
+  editing: '编辑/浏览',
+  recording: '录制中',
+  replaying: '回放中',
+  plan: '计划执行中',
 }
 
 function hostOf(url: string): string {
@@ -59,9 +69,18 @@ export function CopilotPanel() {
   const selected = useUiStore((s) => s.selected)
   const selectedRunId = useUiStore((s) => s.selectedRunId)
   const currentProjectId = useUiStore((s) => s.currentProjectId)
+  const recording = useUiStore((s) => s.recording)
+  const liveSteps = useUiStore((s) => s.liveSteps)
+  const draftRecording = useUiStore((s) => s.draftRecording)
+  const replaying = useUiStore((s) => s.replaying)
+  const planProgress = useUiStore((s) => s.planProgress)
+  const navTab = useUiStore((s) => s.navTab)
   const { data: cases = [] } = useCases(currentProjectId)
+  const { data: projects = [] } = useProjects()
+  const { data: plans = [] } = usePlans(currentProjectId)
 
   const [text, setText] = useState('')
+  const [envOpen, setEnvOpen] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -90,8 +109,68 @@ export function CopilotPanel() {
   const caseName =
     selected?.kind === 'case' ? cases.find((item) => item.id === selected.id)?.name : undefined
 
+  const environment = useMemo<AiEnvironment>(() => {
+    const mode: AiEnvironment['mode'] = recording
+      ? 'recording'
+      : replaying
+        ? 'replaying'
+        : planProgress
+          ? 'plan'
+          : url
+            ? 'editing'
+            : 'launch'
+    const project = projects.find((item) => item.id === currentProjectId)
+    const plan =
+      selected?.kind === 'plan' ? plans.find((item) => item.id === selected.id) : undefined
+    const value: AiEnvironment = { mode, navTab }
+    if (url) value.url = url
+    if (selected) value.selectedKind = selected.kind
+    if (project) {
+      value.projectId = project.id
+      value.projectName = project.name
+    }
+    if (selected?.kind === 'case') {
+      value.caseId = selected.id
+      if (caseName) value.caseName = caseName
+    }
+    if (plan) {
+      value.planId = plan.id
+      value.planName = plan.name
+    }
+    if (selectedRunId) value.runId = selectedRunId
+    if (recording) {
+      value.recording = true
+      value.recordedSteps = liveSteps.length
+    }
+    if (draftRecording) value.draftSteps = draftRecording.steps.length
+    if (replaying) value.replaying = true
+    if (planProgress) {
+      value.planProgress = {
+        caseName: planProgress.caseName,
+        caseIndex: planProgress.caseIndex,
+        caseTotal: planProgress.caseTotal,
+        attempt: planProgress.attempt,
+      }
+    }
+    return value
+  }, [
+    url,
+    navTab,
+    selected,
+    caseName,
+    selectedRunId,
+    projects,
+    currentProjectId,
+    plans,
+    recording,
+    liveSteps.length,
+    draftRecording,
+    replaying,
+    planProgress,
+  ])
+
   const context = useMemo<AiContext>(() => {
-    const value: AiContext = {}
+    const value: AiContext = { environment }
     if (url) value.url = url
     if (selected?.kind === 'case') {
       value.caseId = selected.id
@@ -99,7 +178,7 @@ export function CopilotPanel() {
     }
     if (selectedRunId) value.runId = selectedRunId
     return value
-  }, [url, selected, caseName, selectedRunId])
+  }, [environment, url, selected, caseName, selectedRunId])
 
   const submit = useCallback(
     async (message: string, override?: AiContext): Promise<void> => {
@@ -208,26 +287,112 @@ export function CopilotPanel() {
         </div>
       </div>
 
-      {hasContext && (
-        <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border px-3 py-1.5">
-          {url && (
-            <span className="flex max-w-[70%] shrink-0 items-center gap-1 rounded border border-border bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">
-              <Globe size={9} className="shrink-0" />
-              <span className="truncate">{hostOf(url)}</span>
-            </span>
-          )}
-          {selected?.kind === 'case' && (
-            <span className="flex shrink-0 items-center gap-1 rounded border border-border bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">
-              <FileText size={9} className="shrink-0" />
-              <span className="max-w-[140px] truncate">{caseName ?? selected.id}</span>
-            </span>
-          )}
-          {selectedRunId && (
-            <span className="flex shrink-0 items-center gap-1 rounded border border-border bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">
-              <History size={9} className="shrink-0" />
-              运行 {selectedRunId.slice(0, 8)}
-            </span>
-          )}
+      <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border px-3 py-1.5">
+        {url && (
+          <span className="flex max-w-[60%] shrink-0 items-center gap-1 rounded border border-border bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">
+            <Globe size={9} className="shrink-0" />
+            <span className="truncate">{hostOf(url)}</span>
+          </span>
+        )}
+        {selected?.kind === 'case' && (
+          <span className="flex shrink-0 items-center gap-1 rounded border border-border bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">
+            <FileText size={9} className="shrink-0" />
+            <span className="max-w-[140px] truncate">{caseName ?? selected.id}</span>
+          </span>
+        )}
+        {selectedRunId && (
+          <span className="flex shrink-0 items-center gap-1 rounded border border-border bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">
+            <History size={9} className="shrink-0" />
+            运行 {selectedRunId.slice(0, 8)}
+          </span>
+        )}
+        {recording && (
+          <span className="flex shrink-0 items-center gap-1 rounded border border-rose-500/30 bg-rose-500/[0.06] px-1.5 py-0.5 text-[10px] text-rose-600 dark:text-rose-400">
+            <span className="size-1.5 animate-pulse rounded-full bg-rose-500" />
+            录制 {liveSteps.length} 步
+          </span>
+        )}
+        {draftRecording && (
+          <span className="shrink-0 rounded border border-amber-500/30 bg-amber-500/[0.06] px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+            待保存 {draftRecording.steps.length} 步
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => setEnvOpen((value) => !value)}
+          aria-expanded={envOpen}
+          aria-label="环境"
+          className={`ml-auto flex shrink-0 items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] outline-none hover:bg-default ${
+            envOpen ? 'text-foreground' : 'text-muted'
+          }`}
+          title="查看发送给模型的环境上下文"
+        >
+          <Info size={9} />
+          环境
+          {envOpen ? <ChevronUp size={9} /> : <ChevronDown size={9} />}
+        </button>
+      </div>
+
+      {envOpen && (
+        <div className="shrink-0 border-b border-border bg-surface-secondary/40 px-3 py-2">
+          <dl className="grid grid-cols-[52px_1fr] gap-x-2 gap-y-1 text-[10px] leading-4">
+            <dt className="text-muted">模式</dt>
+            <dd>{MODE_LABEL[environment.mode]}</dd>
+            {environment.projectName && (
+              <>
+                <dt className="text-muted">项目</dt>
+                <dd className="truncate">{environment.projectName}</dd>
+              </>
+            )}
+            {environment.caseName && (
+              <>
+                <dt className="text-muted">用例</dt>
+                <dd className="truncate">{environment.caseName}</dd>
+              </>
+            )}
+            {environment.planName && (
+              <>
+                <dt className="text-muted">计划</dt>
+                <dd className="truncate">{environment.planName}</dd>
+              </>
+            )}
+            {environment.runId && (
+              <>
+                <dt className="text-muted">运行</dt>
+                <dd className="truncate font-mono">{environment.runId.slice(0, 12)}</dd>
+              </>
+            )}
+            {environment.url && (
+              <>
+                <dt className="text-muted">页面</dt>
+                <dd className="truncate">{hostOf(environment.url)}</dd>
+              </>
+            )}
+            {environment.recording && (
+              <>
+                <dt className="text-muted">录制</dt>
+                <dd>进行中 · {environment.recordedSteps ?? 0} 步</dd>
+              </>
+            )}
+            {environment.draftSteps !== undefined && (
+              <>
+                <dt className="text-muted">草稿</dt>
+                <dd>{environment.draftSteps} 步待保存</dd>
+              </>
+            )}
+            {environment.planProgress && (
+              <>
+                <dt className="text-muted">进度</dt>
+                <dd className="truncate">
+                  {environment.planProgress.caseName ?? '计划'} ·{' '}
+                  {environment.planProgress.caseIndex + 1}/{environment.planProgress.caseTotal}
+                </dd>
+              </>
+            )}
+          </dl>
+          <p className="mt-1.5 border-t border-border/60 pt-1.5 text-[9.5px] leading-4 text-muted">
+            这些字段会随每条消息发送给模型。{hasContext ? '' : '当前没有页面或用例上下文。'}
+          </p>
         </div>
       )}
 

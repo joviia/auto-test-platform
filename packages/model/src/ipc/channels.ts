@@ -54,6 +54,8 @@ export const IpcChannel = {
   aiSaveConfig: 'ai:saveConfig',
   aiTest: 'ai:test',
   aiModels: 'ai:models',
+  // 操作库
+  skillList: 'skill:list',
 } as const
 
 /** 推送类 channel：main → renderer（webContents.send） */
@@ -68,6 +70,7 @@ export const IpcEvent = {
   aiToolEnd: 'event:ai-tool-end',
   aiDone: 'event:ai-done',
   aiError: 'event:ai-error',
+  aiRecordingDraft: 'event:ai-recording-draft',
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]

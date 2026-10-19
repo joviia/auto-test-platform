@@ -21,6 +21,18 @@ export function demoHtml(): string {
   input[type="text"], select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #d1d5db;
     border-radius: 8px; background: #fff; font: inherit; outline: none; }
   input[type="text"]:focus, select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+  input[type="range"] { width: 100%; accent-color: #2563eb; }
+  input[type="file"] { font-size: 12px; color: #6b7280; }
+  output { color: #2563eb; font-weight: 600; }
+  .menu-wrap { position: relative; }
+  .menu-button { width: auto; height: 32px; padding: 0 12px; border: 1px solid #d1d5db;
+    border-radius: 8px; background: #fff; color: #374151; font-size: 12px; font-weight: 500; }
+  .menu-button:hover { background: #f9fafb; }
+  .popup { position: absolute; left: 0; top: 36px; z-index: 5; min-width: 140px; padding: 4px;
+    border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(15,23,42,.1); }
+  .popup button { display: block; width: 100%; height: 30px; padding: 0 10px; border: 0; border-radius: 6px;
+    background: transparent; color: #171717; font-size: 12px; font-weight: 500; text-align: left; }
+  .popup button:hover { background: #f3f4f6; }
   .check { display: flex; align-items: center; gap: 8px; margin: 4px 0 20px; font-size: 13px; }
   button { width: 100%; height: 40px; border: 0; border-radius: 8px; background: #2563eb; color: #fff;
     font: inherit; font-weight: 600; cursor: pointer; }
@@ -47,6 +59,24 @@ export function demoHtml(): string {
         <option value="variety">综艺</option>
       </select>
     </label>
+    <label class="field">
+      <span>音量 <output id="volume-value">50</output></span>
+      <input type="range" id="volume" data-testid="volume" aria-label="音量" min="0" max="100" step="1" value="50" />
+    </label>
+    <div class="field">
+      <span>用户</span>
+      <div class="menu-wrap">
+        <button type="button" id="user-menu" data-testid="user-menu" class="menu-button" aria-label="用户菜单">用户菜单</button>
+        <div id="user-popup" class="popup" role="menu" hidden>
+          <button type="button" role="menuitem">个人资料</button>
+          <button type="button" role="menuitem">退出登录</button>
+        </div>
+      </div>
+    </div>
+    <label class="field">
+      <span>头像</span>
+      <input type="file" id="avatar" data-testid="avatar" aria-label="头像" accept="image/*" />
+    </label>
     <label class="check">
       <input type="checkbox" id="show-title" data-testid="show-title" aria-label="显示标题" />
       显示标题
@@ -56,6 +86,22 @@ export function demoHtml(): string {
   <div id="toast" role="status" aria-live="polite"></div>
 </main>
 <script>
+  var volume = document.getElementById('volume');
+  var volumeValue = document.getElementById('volume-value');
+  volume.addEventListener('input', function () { volumeValue.textContent = volume.value; });
+
+  var menuWrap = document.querySelector('.menu-wrap');
+  var popup = document.getElementById('user-popup');
+  menuWrap.addEventListener('mouseenter', function () { popup.hidden = false; });
+  menuWrap.addEventListener('mouseleave', function () { popup.hidden = true; });
+  Array.prototype.forEach.call(document.querySelectorAll('#user-popup [role="menuitem"]'), function (item) {
+    item.addEventListener('click', function () {
+      var toast = document.getElementById('toast');
+      toast.textContent = '菜单：' + item.textContent;
+      toast.className = 'ok';
+    });
+  });
+
   document.getElementById('form').addEventListener('submit', function (event) {
     event.preventDefault();
     var name = document.getElementById('content-name').value.trim();

@@ -11,6 +11,7 @@ export const qk = {
   plan: (planId: string) => ['plan', planId] as const,
   planRuns: (planId: string) => ['planRuns', planId] as const,
   planRun: (planRunId: string) => ['planRun', planRunId] as const,
+  skills: ['skills'] as const,
 }
 
 export function useProjects() {
@@ -70,6 +71,14 @@ export function usePlanRuns(planId: string | null) {
     queryKey: planId ? qk.planRuns(planId) : ['planRuns', 'none'],
     queryFn: () => window.atp.invoke('plan:run-list', { planId: planId as string }),
     enabled: Boolean(planId),
+  })
+}
+
+export function useSkills() {
+  return useQuery({
+    queryKey: qk.skills,
+    queryFn: () => window.atp.invoke('skill:list'),
+    staleTime: Number.POSITIVE_INFINITY,
   })
 }
 

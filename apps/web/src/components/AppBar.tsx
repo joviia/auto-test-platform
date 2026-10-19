@@ -9,7 +9,7 @@ import {
   Sparkles,
   Sun,
 } from 'lucide-react'
-import { useCases, usePlans, useProjects } from '../api/client'
+import { useCases, usePlans, useProjects, useSkills } from '../api/client'
 import { useUiStore } from '../state/ui-store'
 
 const THEME_LABEL = { system: '跟随系统', light: '浅色', dark: '深色' } as const
@@ -30,7 +30,10 @@ export function AppBar() {
 
   const { data: cases = [] } = useCases(currentProjectId)
   const { data: plans = [] } = usePlans(currentProjectId)
+  const { data: skills = [] } = useSkills()
   const project = projects.find((p) => p.id === currentProjectId)
+  const currentSkill =
+    selected?.kind === 'skill' ? skills.find((skill) => skill.id === selected.id) : undefined
   const currentCase =
     selected?.kind === 'case' ? cases.find((c) => c.id === selected.id) : undefined
   const currentPlan =
@@ -79,13 +82,22 @@ export function AppBar() {
 
       <div className="flex min-w-0 items-center gap-1.5 text-[13px]">
         <span className="text-muted">
-          {selected?.kind === 'plan' || navTab === 'plans' ? '测试计划' : '用例'}
+          {navTab === 'skills'
+            ? '操作库'
+            : selected?.kind === 'plan' || navTab === 'plans'
+              ? '测试计划'
+              : '用例'}
         </span>
         <span className="text-separator">/</span>
         <span className="truncate text-foreground">
-          {currentPlan?.name ??
+          {currentSkill?.name ??
+            currentPlan?.name ??
             currentCase?.name ??
-            (selected?.kind === 'plan' || navTab === 'plans' ? '未选择计划' : '未选择用例')}
+            (navTab === 'skills'
+              ? '未选择操作'
+              : selected?.kind === 'plan' || navTab === 'plans'
+                ? '未选择计划'
+                : '未选择用例')}
         </span>
       </div>
 

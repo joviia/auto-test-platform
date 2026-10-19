@@ -268,6 +268,38 @@ try {
   }
   console.log('[agent] 模型设置 ✓ 清除密钥')
 
+  // 操作库：IPC、左栏页签、右侧参数详情
+  const skills = await invoke(origin, 'skill:list')
+  const skillIds = skills.map((skill) => skill.id).sort()
+  if (skillIds.join(',') !== 'hover_menu,slider_set,upload_file') {
+    throw new Error(`操作库技能不正确：${skillIds.join(',')}`)
+  }
+  await page.getByRole('button', { name: '操作库', exact: true }).click()
+  await page.getByText('设置滑块', { exact: true }).waitFor({ timeout: 10_000 })
+  await page.getByText('展开悬停菜单', { exact: true }).waitFor({ timeout: 10_000 })
+  await page.getByText('上传文件', { exact: true }).waitFor({ timeout: 10_000 })
+  await page.getByText('设置滑块', { exact: true }).click()
+  await page.getByText('skill_run({', { exact: false }).waitFor({ timeout: 10_000 })
+  await page.getByText('value', { exact: true }).waitFor({ timeout: 10_000 })
+  console.log('[agent] 操作库 ✓ 3 个技能与参数详情')
+
+  // 环境面板：切回用例，打开 Copilot，检查模型实际收到的环境
+  await page.getByRole('button', { name: '用例', exact: true }).click()
+  await page
+    .getByRole('button', { name: /Copilot/ })
+    .first()
+    .click()
+  await page.locator('button[aria-label="环境"]').waitFor({ timeout: 10_000 })
+  await page.locator('button[aria-label="环境"]').click()
+  await page.getByText('这些字段会随每条消息发送给模型', { exact: false }).waitFor({
+    timeout: 10_000,
+  })
+  const envText = await page.locator('body').innerText()
+  for (const label of ['模式', '项目', '默认项目', '页面']) {
+    if (!envText.includes(label)) throw new Error(`环境面板缺少「${label}」`)
+  }
+  console.log('[agent] 环境面板 ✓')
+
   if (errors.length > 0) throw new Error(`页面错误：${errors.join(' / ')}`)
   console.log('[agent] 通过 ✅')
 } finally {

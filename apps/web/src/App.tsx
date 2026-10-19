@@ -94,6 +94,12 @@ export function App() {
       if (p.messageId) failAiMessage(p.messageId, p.error)
       else toast.danger(p.error)
     })
+    // AI 停止录制：把完整草稿交给现有的保存对话框
+    const offAiDraft = window.atp.on('event:ai-recording-draft', (p) => {
+      if (!Array.isArray(p.steps)) return
+      useUiStore.getState().setDraftRecording(p)
+      useUiStore.getState().setRightTab('steps')
+    })
     return () => {
       offStatus()
       offStep()
@@ -105,6 +111,7 @@ export function App() {
       offAiToolEnd()
       offAiDone()
       offAiError()
+      offAiDraft()
     }
   }, [
     setRecording,

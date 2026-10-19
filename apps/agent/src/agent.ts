@@ -56,6 +56,7 @@ export type AgentEvent =
     }
   | { type: 'step'; step: LiveStep }
   | { type: 'draft'; stepCount: number; rawEvents: number; startUrl: string }
+  | ({ type: 'ai-recording-draft' } & RecordedDraft)
   | {
       type: 'replay-progress'
       runId: string
@@ -96,6 +97,12 @@ export class Agent {
     this.copilot = new CopilotService({
       dataDir: this.options.dataDir,
       getBrowser: () => this.browser,
+      platform: {
+        isRecording: () => this.browser?.isRecording ?? false,
+        startRecording: () => this.startRecording(),
+        stopRecording: () => this.stopRecording(),
+        notifyRecordingDraft: (draft) => this.emit({ type: 'ai-recording-draft', ...draft }),
+      },
       onEvent: (event) => this.emit(event),
     })
     await this.copilot.init()

@@ -59,6 +59,70 @@ const aiModelSchema = z.object({
   maxOutputTokens: z.number().int().positive().optional(),
   inputModalities: z.array(z.string()).optional(),
 })
+
+/** Copilot 每次请求携带的工作环境；前端从 ui-store 组装 */
+const aiEnvironmentSchema = z.object({
+  mode: z.enum(['launch', 'editing', 'recording', 'replaying', 'plan']),
+  url: z.string().optional(),
+  navTab: z.enum(['cases', 'plans', 'skills']).optional(),
+  selectedKind: z.enum(['project', 'module', 'case', 'plan', 'skill']).optional(),
+  projectId: z.string().optional(),
+  projectName: z.string().optional(),
+  caseId: z.string().optional(),
+  caseName: z.string().optional(),
+  planId: z.string().optional(),
+  planName: z.string().optional(),
+  runId: z.string().optional(),
+  recording: z.boolean().optional(),
+  recordedSteps: z.number().int().nonnegative().optional(),
+  draftSteps: z.number().int().nonnegative().optional(),
+  replaying: z.boolean().optional(),
+  planProgress: z
+    .object({
+      caseName: z.string().optional(),
+      caseIndex: z.number().int().nonnegative(),
+      caseTotal: z.number().int().nonnegative(),
+      attempt: z.number().int().positive().optional(),
+    })
+    .optional(),
+})
+
+/** 操作库技能对外的参数说明 */
+const skillParamSchema = z.object({
+  name: z.string(),
+  type: z.enum(['string', 'number']),
+  required: z.boolean(),
+  description: z.string(),
+  default: z.union([z.string(), z.number()]).optional(),
+})
+
+const skillManifestSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  category: z.enum(['input', 'pointer', 'file']),
+  params: z.array(skillParamSchema),
+  example: z.string().optional(),
+})
+
+/** 录制草稿：recording:stop 与 AI 停止录制事件共用 */
+const recordedDraftSchema = z.object({
+  steps: z.array(stepSchema),
+  elements: z.record(z.string(), elementSchema),
+  startUrl: z.string(),
+  intent: z.string().optional(),
+  groups: z.array(caseGroupSchema).optional(),
+  /** 采集诊断：原始事件数 + 每个 frame 的注入状态 */
+  diagnostics: z.object({
+    rawEvents: z.number().int().nonnegative(),
+    frames: z.array(
+      z.object({
+        url: z.string(),
+        injected: z.boolean(),
+      }),
+    ),
+  }),
+})
 const planPolicySchema = z.object({
   retries: z.number().int().min(0).max(10),
   timeoutMs: z.number().int().positive(),
@@ -295,23 +359,7 @@ export const ipcContract = {
   [IpcChannel.recordingStart]: { input: z.void(), output: okSchema },
   [IpcChannel.recordingStop]: {
     input: z.void(),
-    output: z.object({
-      steps: z.array(stepSchema),
-      elements: z.record(z.string(), elementSchema),
-      startUrl: z.string(),
-      intent: z.string().optional(),
-      groups: z.array(caseGroupSchema).optional(),
-      /** 采集诊断：原始事件数 + 每个 frame 的注入状态 */
-      diagnostics: z.object({
-        rawEvents: z.number().int().nonnegative(),
-        frames: z.array(
-          z.object({
-            url: z.string(),
-            injected: z.boolean(),
-          }),
-        ),
-      }),
-    }),
+    output: recordedDraftSchema,
   },
 
   [IpcChannel.recordingAssertArm]: { input: z.void(), output: okSchema },
@@ -347,6 +395,7 @@ export const ipcContract = {
           caseId: z.string().optional(),
           caseName: z.string().optional(),
           runId: z.string().optional(),
+          environment: aiEnvironmentSchema.optional(),
         })
         .optional(),
     }),
@@ -389,6 +438,11 @@ export const ipcContract = {
       models: z.array(aiModelSchema),
       error: z.string().optional(),
     }),
+  },
+
+  [IpcChannel.skillList]: {
+    input: z.void(),
+    output: z.array(skillManifestSchema),
   },
 } satisfies Record<string, IpcEndpoint>
 
@@ -482,6 +536,8 @@ export const ipcEventContract = {
     messageId: z.string().optional(),
     error: z.string(),
   }),
+  /** AI 停止录制后把完整草稿交给界面，复用保存用例对话框 */
+  [IpcEvent.aiRecordingDraft]: recordedDraftSchema,
 }
 
 /** Copilot 事件与上下文类型（agent / web 共用） */
@@ -500,6 +556,10 @@ export type AiTestResult = z.output<(typeof ipcContract)[typeof IpcChannel.aiTes
 export type AiModelInfo = z.output<typeof aiModelSchema>
 export type AiModelsInput = z.output<(typeof ipcContract)[typeof IpcChannel.aiModels]['input']>
 export type AiModelsResult = z.output<(typeof ipcContract)[typeof IpcChannel.aiModels]['output']>
+export type AiEnvironment = z.output<typeof aiEnvironmentSchema>
+export type SkillParam = z.output<typeof skillParamSchema>
+export type SkillManifest = z.output<typeof skillManifestSchema>
+export type RecordedDraft = z.output<typeof recordedDraftSchema>
 
 export type IpcEventPayload<K extends keyof typeof ipcEventContract> = z.output<
   (typeof ipcEventContract)[K]
