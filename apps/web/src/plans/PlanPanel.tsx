@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { qk, useCases, usePlan, usePlanRun, usePlanRuns } from '../api/client'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { EmptyHint } from '../components/EmptyHint'
+import { toEvidenceUrl } from '../lib/evidence'
 import { useUiStore } from '../state/ui-store'
 import { ACTION_META } from '../steps/step-meta'
 import { PlanDialog } from './PlanDialogs'
@@ -31,14 +32,6 @@ const STATUS_META: Record<
   passed: { label: '通过', className: 'text-green-600 dark:text-green-400', icon: CheckCircle2 },
   failed: { label: '失败', className: 'text-red-600 dark:text-red-400', icon: XCircle },
   cancelled: { label: '已取消', className: 'text-muted', icon: Circle },
-}
-
-function toEvidenceUrl(path: string | null | undefined): string | undefined {
-  if (!path) return undefined
-  const idx = path.indexOf('runs/')
-  if (idx < 0) return undefined
-  const rel = path.slice(idx + 5)
-  return `/evidence/${rel}`
 }
 
 function formatTime(value: string | null | undefined): string {

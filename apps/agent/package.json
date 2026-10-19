@@ -49,6 +49,7 @@
     "@atp/model": "workspace:*",
     "@atp/recorder": "workspace:*",
     "@atp/runner": "workspace:*",
+    "@atp/web": "workspace:*",
     "@types/node": "^22.13.0",
     "@types/proper-lockfile": "^4.1.4",
     "@types/semver": "^7.7.0",

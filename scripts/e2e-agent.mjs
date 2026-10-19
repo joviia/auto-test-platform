@@ -92,10 +92,11 @@ try {
   await page.waitForFunction(() => (document.querySelector('#root')?.childElementCount ?? 0) > 0)
 
   // 打开演示页
-  const urlInput = page.getByPlaceholder('输入被测页面地址，回车打开（https://… 或本地文件路径）')
+  const urlInput = page.getByPlaceholder('输入被测页面地址')
   await urlInput.fill(`${origin}/demo`)
   await urlInput.press('Enter')
-  await page.waitForTimeout(500)
+  await page.getByPlaceholder(/输入被测页面地址，回车打开/).waitFor({ state: 'visible' })
+  await page.waitForTimeout(300)
 
   // 录制：UI 负责开关，演示操作由内置脚本完成（真实 Chrome 里执行）
   await page.getByRole('button', { name: '开始录制' }).click()

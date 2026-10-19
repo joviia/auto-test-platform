@@ -1,7 +1,6 @@
 import { Dropdown, Tooltip } from '@heroui/react'
 import { ChevronDown, FlaskConical, FolderKanban, Monitor, Moon, Sun } from 'lucide-react'
 import { useCases, usePlans, useProjects } from '../api/client'
-import { useElapsed } from '../hooks/use-elapsed'
 import { useUiStore } from '../state/ui-store'
 
 const THEME_LABEL = { system: '跟随系统', light: '浅色', dark: '深色' } as const
@@ -13,8 +12,6 @@ export function AppBar() {
   const currentProjectId = useUiStore((s) => s.currentProjectId)
   const setCurrentProjectId = useUiStore((s) => s.setCurrentProjectId)
   const selected = useUiStore((s) => s.selected)
-  const recording = useUiStore((s) => s.recording)
-  const recordingStartedAt = useUiStore((s) => s.recordingStartedAt)
   const theme = useUiStore((s) => s.theme)
   const setTheme = useUiStore((s) => s.setTheme)
   const navTab = useUiStore((s) => s.navTab)
@@ -26,7 +23,6 @@ export function AppBar() {
     selected?.kind === 'case' ? cases.find((c) => c.id === selected.id) : undefined
   const currentPlan =
     selected?.kind === 'plan' ? plans.find((p) => p.id === selected.id) : undefined
-  const elapsed = useElapsed(recordingStartedAt)
 
   const ThemeIcon = THEME_ICON[theme]
 
@@ -36,10 +32,7 @@ export function AppBar() {
         <div className="grid size-8 place-items-center rounded-md bg-accent text-accent-foreground shadow-surface">
           <FlaskConical size={17} />
         </div>
-        <div className="leading-tight">
-          <div className="text-[13px] font-semibold tracking-tight">AutoTest</div>
-          <div className="text-[10px] font-medium text-muted">UI 自动化测试平台</div>
-        </div>
+        <div className="text-[13px] font-semibold tracking-tight">ATP</div>
       </div>
 
       <div className="h-5 w-px bg-separator" />
@@ -85,13 +78,6 @@ export function AppBar() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        {recording && (
-          <div className="flex items-center gap-2 rounded-full border border-red-500/30 bg-red-500/10 py-1 pl-2.5 pr-3 text-xs font-medium text-red-600 dark:text-red-400">
-            <span className="atp-rec-dot size-2 rounded-full bg-red-500" />
-            录制中
-            <span className="font-mono tabular-nums">{elapsed}</span>
-          </div>
-        )}
         <Tooltip.Root>
           <Tooltip.Trigger>
             <button

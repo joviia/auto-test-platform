@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   Circle,
   Globe,
+  House,
   ListChecks,
   Loader2,
   MonitorSmartphone,
@@ -16,6 +17,8 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { EmptyHint } from '../components/EmptyHint'
 import { useElapsed } from '../hooks/use-elapsed'
+import { Launchpad } from '../launch/Launchpad'
+import { RunReview } from '../review/RunReview'
 import {
   type DeviceOrientation,
   type DevicePresetId,
@@ -48,7 +51,6 @@ export function BrowserStage() {
   const stageRef = useRef<HTMLDivElement>(null)
   const webMode = window.atp.mode === 'web'
   const [input, setInput] = useState('')
-  const [replaying, setReplaying] = useState(false)
   const [frame, setFrame] = useState<FrameRect | null>(null)
   const [domOverlay, setDomOverlay] = useState(false)
 
@@ -59,6 +61,7 @@ export function BrowserStage() {
   const resetLiveSteps = useUiStore((s) => s.resetLiveSteps)
   const setDraftRecording = useUiStore((s) => s.setDraftRecording)
   const selected = useUiStore((s) => s.selected)
+  const setSelected = useUiStore((s) => s.setSelected)
   const overlayDepth = useUiStore((s) => s.overlayDepth)
   const devicePresetId = useUiStore((s) => s.devicePresetId)
   const deviceOrientation = useUiStore((s) => s.deviceOrientation)
@@ -66,6 +69,10 @@ export function BrowserStage() {
   const setDevice = useUiStore((s) => s.setDevice)
   const replayMode = useUiStore((s) => s.replayMode)
   const setReplayMode = useUiStore((s) => s.setReplayMode)
+  const replaying = useUiStore((s) => s.replaying)
+  const setReplaying = useUiStore((s) => s.setReplaying)
+  const draftRecording = useUiStore((s) => s.draftRecording)
+  const selectedRunId = useUiStore((s) => s.selectedRunId)
   const replayProgress = useUiStore((s) => s.replayProgress)
   const setReplayProgress = useUiStore((s) => s.setReplayProgress)
   const planProgress = useUiStore((s) => s.planProgress)
@@ -298,9 +305,35 @@ export function BrowserStage() {
     setDevice({ orientation: next })
   }
 
+  // 回到启动台：只收起舞台，不关闭 Chrome 里的页面
+  const goHome = (): void => {
+    setUrl('')
+    setInput('')
+    setSelected(null)
+  }
+
+  if (selectedRunId) return <RunReview runId={selectedRunId} />
+  if (!url && !recording && !draftRecording && !replaying && !planRunning) {
+    return <Launchpad />
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-border bg-surface px-3">
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <button
+              type="button"
+              onClick={goHome}
+              disabled={recording || draftRecording !== null || busy}
+              className="grid size-8 shrink-0 place-items-center rounded-md text-muted hover:bg-default hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              aria-label="返回启动台"
+            >
+              <House size={15} />
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>返回启动台（不关闭 Chrome）</Tooltip.Content>
+        </Tooltip.Root>
         <div className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md border border-border bg-surface-secondary px-2.5 transition-colors focus-within:border-accent/60 focus-within:bg-surface focus-within:ring-2 focus-within:ring-accent/15">
           <Globe size={14} className="shrink-0 text-muted" />
           <input

@@ -41,6 +41,7 @@ function CaseRightPanel() {
   const recording = useUiStore((s) => s.recording)
   const liveSteps = useUiStore((s) => s.liveSteps)
   const draftRecording = useUiStore((s) => s.draftRecording)
+  const selectedRunId = useUiStore((s) => s.selectedRunId)
   const caseId = selected?.kind === 'case' ? selected.id : null
   const [tab, setTab] = useState('steps')
 
@@ -48,6 +49,11 @@ function CaseRightPanel() {
   useEffect(() => {
     if (recording || draftRecording) setTab('steps')
   }, [recording, draftRecording])
+
+  // 在舞台中打开运行记录时，右侧直接切到报告
+  useEffect(() => {
+    if (selectedRunId) setTab('report')
+  }, [selectedRunId])
 
   // 与 StepPanel/ElementPanel 共用同一 query key，用于标签计数
   const { data: file } = useQuery({

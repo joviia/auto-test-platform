@@ -151,6 +151,13 @@ interface UiState {
     progress: { runId: string | null; index: number; total: number } | null,
   ) => void
 
+  replaying: boolean
+  setReplaying: (replaying: boolean) => void
+
+  /** 中栏回看：选中的运行记录 */
+  selectedRunId: string | null
+  setSelectedRunId: (runId: string | null) => void
+
   planProgress: IpcEventPayload<'event:plan-progress'> | null
   setPlanProgress: (progress: IpcEventPayload<'event:plan-progress'> | null) => void
 }
@@ -222,6 +229,12 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   replayProgress: null,
   setReplayProgress: (replayProgress) => set({ replayProgress }),
+
+  replaying: false,
+  setReplaying: (replaying) => set({ replaying }),
+
+  selectedRunId: null,
+  setSelectedRunId: (selectedRunId) => set({ selectedRunId }),
 
   planProgress: null,
   setPlanProgress: (planProgress) => set({ planProgress }),

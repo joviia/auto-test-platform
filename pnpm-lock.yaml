@@ -23,21 +23,21 @@ importers:
 
   apps/agent:
     dependencies:
-      '@atp/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@atp/model':
-        specifier: workspace:*
-        version: link:../../packages/model
-      '@atp/recorder':
-        specifier: workspace:*
-        version: link:../../packages/recorder
-      '@atp/runner':
-        specifier: workspace:*
-        version: link:../../packages/runner
       '@hono/node-server':
         specifier: ^2.1.5
         version: 2.1.5(hono@4.13.13)
+      '@mikro-orm/core':
+        specifier: ^7.2.5
+        version: 7.2.5
+      '@mikro-orm/migrations':
+        specifier: ^7.2.5
+        version: 7.2.5(@mikro-orm/core@7.2.5)
+      '@mikro-orm/sqlite':
+        specifier: ^7.2.5
+        version: 7.2.5(@mikro-orm/core@7.2.5)
+      better-sqlite3:
+        specifier: ^13.0.3
+        version: 13.0.3
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -75,6 +75,21 @@ importers:
         specifier: ^4.6.7
         version: 4.6.7
     devDependencies:
+      '@atp/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@atp/model':
+        specifier: workspace:*
+        version: link:../../packages/model
+      '@atp/recorder':
+        specifier: workspace:*
+        version: link:../../packages/recorder
+      '@atp/runner':
+        specifier: workspace:*
+        version: link:../../packages/runner
+      '@atp/web':
+        specifier: workspace:*
+        version: link:../web
       '@types/node':
         specifier: ^22.13.0
         version: 22.20.5

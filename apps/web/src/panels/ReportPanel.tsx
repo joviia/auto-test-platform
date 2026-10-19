@@ -5,16 +5,8 @@ import { CheckCircle2, ChevronDown, ChevronRight, FileVideo, History, XCircle } 
 import { useEffect, useState } from 'react'
 import { usePlans } from '../api/client'
 import { EmptyHint } from '../components/EmptyHint'
+import { toEvidenceUrl } from '../lib/evidence'
 import { useUiStore } from '../state/ui-store'
-
-/** 文件绝对路径 → /evidence/<runId>/<file>（本地 Agent 的 HTTP 证据服务） */
-function toEvidenceUrl(path: string | null | undefined): string | undefined {
-  if (!path) return undefined
-  const idx = path.indexOf('runs/')
-  if (idx < 0) return undefined
-  const rel = path.slice(idx + 5)
-  return `/evidence/${rel}`
-}
 
 const ACTION_LABEL: Record<string, string> = {
   click: '点击',
@@ -35,6 +27,8 @@ function formatTime(value: string | null | undefined): string {
 export function ReportPanel() {
   const selected = useUiStore((s) => s.selected)
   const currentProjectId = useUiStore((s) => s.currentProjectId)
+  const selectedRunId = useUiStore((s) => s.selectedRunId)
+  const setSelectedRunId = useUiStore((s) => s.setSelectedRunId)
   const caseId = selected?.kind === 'case' ? selected.id : undefined
   const { data: plans = [] } = usePlans(currentProjectId)
   const [planFilter, setPlanFilter] = useState('')
@@ -54,6 +48,11 @@ export function ReportPanel() {
       }),
   })
   const [openRunId, setOpenRunId] = useState<string | null>(null)
+
+  // 从舞台返回时保持对应记录展开；在舞台中打开时自动展开
+  useEffect(() => {
+    if (selectedRunId) setOpenRunId(selectedRunId)
+  }, [selectedRunId])
   const { data: detail } = useQuery({
     queryKey: ['run', openRunId],
     queryFn: () => window.atp.invoke('run:get', { runId: openRunId as string }),
@@ -154,10 +153,19 @@ export function ReportPanel() {
 
                   {open && detail && detail.run.id === run.id && (
                     <div className="atp-fade-in space-y-2 border-t border-border p-2">
-                      <p className="text-[11px] text-muted">
-                        {formatTime(detail.run.startedAt)} → {formatTime(detail.run.finishedAt)}
-                        {detail.run.error ? ` · 运行错误：${detail.run.error}` : ''}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="min-w-0 flex-1 text-[11px] text-muted">
+                          {formatTime(detail.run.startedAt)} → {formatTime(detail.run.finishedAt)}
+                          {detail.run.error ? ` · 运行错误：${detail.run.error}` : ''}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRunId(run.id)}
+                          className="shrink-0 rounded border border-border bg-surface px-2 py-1 text-[10px] font-medium text-foreground hover:border-accent/50 hover:bg-accent/5"
+                        >
+                          在舞台中查看
+                        </button>
+                      </div>
 
                       <div className="space-y-1.5">
                         {detail.steps.map((s: RunStepRow) => (

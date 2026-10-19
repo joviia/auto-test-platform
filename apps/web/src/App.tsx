@@ -17,6 +17,16 @@ export function App() {
   const theme = useUiStore((s) => s.theme)
   const currentProjectId = useUiStore((s) => s.currentProjectId)
   const setCurrentProjectId = useUiStore((s) => s.setCurrentProjectId)
+  const url = useUiStore((s) => s.url)
+  const recording = useUiStore((s) => s.recording)
+  const draftRecording = useUiStore((s) => s.draftRecording)
+  const selectedRunId = useUiStore((s) => s.selectedRunId)
+  const navTab = useUiStore((s) => s.navTab)
+  const selected = useUiStore((s) => s.selected)
+  // 项目/模块只是树上的定位，不算「打开了东西」；启动台仍应保持干净的整幅舞台
+  const openedNode = selected?.kind === 'case' || selected?.kind === 'plan'
+  const launchMode =
+    navTab === 'cases' && !url && !recording && !draftRecording && !selectedRunId && !openedNode
   const { data: projects = [] } = useProjects()
 
   // 明暗：跟随系统；手动切换时以 html class 覆盖（Tailwind dark: 已改为 class 策略）
@@ -71,9 +81,11 @@ export function App() {
           <main className="flex min-w-0 flex-1 flex-col">
             <BrowserStage />
           </main>
-          <aside className="flex w-[404px] shrink-0 flex-col border-l border-border bg-surface">
-            <RightPanel />
-          </aside>
+          {!launchMode && (
+            <aside className="flex w-[404px] shrink-0 flex-col border-l border-border bg-surface">
+              <RightPanel />
+            </aside>
+          )}
         </div>
         <StatusBar />
       </div>
