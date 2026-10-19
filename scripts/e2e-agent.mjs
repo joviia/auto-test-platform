@@ -412,6 +412,33 @@ try {
   await page.getByRole('button', { name: '关闭', exact: true }).last().click()
   console.log('[agent] 单步调试 ✓ 暂停 / 下一步 / 断点 / 完成')
 
+  // 调试恢复与导航接管：新窗口能看到控制条；手动导航自动结束调试而不是报错
+  await page.getByRole('button', { name: '调试', exact: true }).click()
+  await page.getByText('已暂停', { exact: true }).waitFor({ timeout: 20_000 })
+
+  const debugPage = await browser.newPage()
+  debugPage.on('pageerror', (err) => errors.push(err.message))
+  await debugPage.goto(uiUrl, { waitUntil: 'networkidle' })
+  await debugPage.getByText('已暂停', { exact: true }).waitFor({ timeout: 20_000 })
+  await debugPage.getByRole('button', { name: '下一步', exact: true }).waitFor({ timeout: 10_000 })
+  await debugPage.close()
+
+  const takeover = await invoke(origin, 'browser:navigate', { url: `${origin}/demo?takeover=1` })
+  if (!takeover?.ok) throw new Error('调试中手动导航应自动接管并成功')
+  let stoppedState
+  for (let i = 0; i < 100; i += 1) {
+    const state = await invoke(origin, 'debug:state')
+    if (state?.status === 'stopped') {
+      stoppedState = state
+      break
+    }
+    await new Promise((r) => setTimeout(r, 100))
+  }
+  if (!stoppedState) throw new Error('手动导航后调试会话应结束为 stopped')
+  await page.getByText('已停止', { exact: true }).first().waitFor({ timeout: 10_000 })
+  await page.getByRole('button', { name: '关闭', exact: true }).last().click()
+  console.log('[agent] 单步调试 ✓ 刷新恢复控制条 / 导航自动接管')
+
   // 运行态恢复：吞掉 ai-done，模拟 SSE 断线丢事件；5s 心跳应自动解除执行态
   const resumePage = await browser.newPage()
   resumePage.on('pageerror', (err) => errors.push(err.message))

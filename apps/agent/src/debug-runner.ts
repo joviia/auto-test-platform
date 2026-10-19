@@ -14,6 +14,8 @@ export class DebugController {
   private currentState: DebugState | null = null
   private abort: AbortController | null = null
   private release: (() => void) | null = null
+  private done: Promise<void> | null = null
+  private resolveDone: (() => void) | null = null
   private mode: 'step' | 'continue' = 'step'
   private breakpoints = new Set<string>()
 
@@ -33,9 +35,13 @@ export class DebugController {
     this.breakpoints = new Set(breakpoints)
     this.mode = 'step'
     this.abort = new AbortController()
+    this.done = new Promise<void>((resolve) => {
+      this.resolveDone = resolve
+    })
     this.currentState = {
       caseId: file.case.id,
       runId,
+      startUrl: file.case.startUrl,
       status: 'running',
       index: 0,
       total: file.case.steps.length,
@@ -46,6 +52,15 @@ export class DebugController {
     this.onState(this.currentState)
     void this.run(page, file, runId)
     return { runId }
+  }
+
+  /** 停止并等待当前步骤结束、执行器退出；用于用户手动接管导航 */
+  async stopAndWait(): Promise<void> {
+    if (!this.abort) return
+    const done = this.done
+    this.abort.abort()
+    this.release?.()
+    await done
   }
 
   command(action: DebugAction, breakpoints?: string[]): void {
@@ -109,6 +124,8 @@ export class DebugController {
         stepId: undefined,
         step: undefined,
       })
+      this.resolveDone?.()
+      this.resolveDone = null
     }
   }
 

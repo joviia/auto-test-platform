@@ -183,7 +183,8 @@ export class Agent {
     if (this.browser?.isRecording) throw new Error('录制中不能导航，请先停止录制')
     if (this.replayAbort) throw new Error('回放中不能导航')
     if (this.planDraftAbort) throw new Error('AI 计划执行中不能导航')
-    if (this.debugRunner.active) throw new Error('调试中不能导航，请先停止调试')
+    // 用户手动导航视为接管：先结束调试会话，等待当前步骤退出后再导航
+    if (this.debugRunner.active) await this.debugRunner.stopAndWait()
     if (isPlanRunning()) throw new Error('计划执行中不能导航')
     const browser = this.requireBrowser()
     const url = await browser.navigate(input)

@@ -242,7 +242,10 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
       await send('ai-state', agent.aiState())
       // 调试暂停可能发生在断线期间；重连时补一份当前状态
       const debugState = agent.debugState()
-      if (debugState) await send('debug-state', debugState)
+      // 只恢复仍在进行的调试；已结束（通过/失败/停止）的结果属于当前窗口，不跨刷新回放
+      if (debugState && (debugState.status === 'paused' || debugState.status === 'running')) {
+        await send('debug-state', debugState)
+      }
 
       const unsubscribe = agent.onEvent((event: AgentEvent) => {
         if (closed) return

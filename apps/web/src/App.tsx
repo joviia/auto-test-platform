@@ -133,9 +133,13 @@ export function App() {
       useUiStore.getState().applyAiPlanResult(p),
     )
     // 单步调试：暂停 / 运行 / 结束状态
-    const offDebug = window.atp.on('event:debug-state', (p) =>
-      useUiStore.getState().setDebugState(p),
-    )
+    const offDebug = window.atp.on('event:debug-state', (p) => {
+      const store = useUiStore.getState()
+      store.setDebugState(p)
+      // 刷新 / 新窗口后没有本地 url 与选中项；用调试状态恢复舞台与步骤面板
+      if (p.startUrl && !store.url) store.setUrl(p.startUrl)
+      if (!store.selected) store.setSelected({ kind: 'case', id: p.caseId })
+    })
     // SSE 建连 / 重连时的运行快照：清掉错过的 ai-done 留下的转圈状态
     const offAiState = window.atp.on('event:ai-state', (p) => {
       // 只处理「服务端已结束」：running=true 不重建消息，避免停止过程中的竞态

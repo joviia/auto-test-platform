@@ -200,6 +200,8 @@ const debugResultSchema = z.object({
 export const debugStateSchema = z.object({
   caseId: z.string(),
   runId: z.string(),
+  /** 调试页面的起始地址；刷新 / 新开窗口后用于恢复舞台 */
+  startUrl: z.string(),
   status: z.enum(['paused', 'running', 'passed', 'failed', 'stopped']),
   /** 当前/下一步的 0-based 下标；结束时等于 total */
   index: z.number().int().nonnegative(),
