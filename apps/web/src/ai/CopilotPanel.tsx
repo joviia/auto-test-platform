@@ -22,6 +22,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCases, usePlans, useProjects } from '../api/client'
 import { useUiStore } from '../state/ui-store'
+import { Markdown } from './Markdown'
 import type { AiContext, AiMessage, AiToolCall } from './types'
 
 function clip(text: string, max = 1400): string {
@@ -553,14 +554,7 @@ function MessageItem({ message }: { message: AiMessage }) {
         </div>
       )}
 
-      {message.text && (
-        <p className="whitespace-pre-wrap break-words text-[12.5px] leading-[1.7] text-foreground">
-          {message.text}
-          {streaming && (
-            <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-accent align-text-bottom" />
-          )}
-        </p>
-      )}
+      {message.text && <Markdown text={message.text} streaming={streaming} />}
 
       <ToolGroup tools={message.tools} pending={streaming} />
 
