@@ -1,4 +1,4 @@
-export { performAction } from './actions.js'
+export { performAction, selectCustom } from './actions.js'
 export { AssertionError, performAssertion } from './assertions.js'
 export { type ReplayOptions, type RunCaseOptions, replayCaseFile, runCaseOnPage } from './engine.js'
 export { EvidenceCollector } from './evidence.js'

@@ -2,6 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDb } from '@atp/core'
 import type { AiCaseProposal, AiTarget } from '@atp/model'
+import { selectCustom } from '@atp/runner'
 import { z } from 'zod'
 import type { ChromeController, RecordedDraft } from '../browser.js'
 import { buildCaseProposal, type CaseProposalInput, caseProposalOpsSchema } from './proposals.js'
@@ -192,7 +193,8 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
   {
     name: 'browser_select',
-    description: '在下拉框里选择一个选项（按 value 或可见文本匹配）。',
+    description:
+      '在下拉框里选择一个选项。原生 <select> 可传 value 或可见文本；Element Plus / Ant Design 等自定义下拉按可见文本匹配，会自动展开并点击选项，不要自己猜坐标。',
     schema: z.object({
       ref: z.string().min(1),
       value: z.string().min(1),
@@ -201,11 +203,19 @@ export const COPILOT_TOOLS: CopilotTool[] = [
     run: (input, ctx) =>
       act(ctx, input, '选择', async ({ locator }) => {
         const value = String(input.value)
-        try {
-          await locator.selectOption(value, { timeout: 6000 })
-        } catch {
-          await locator.selectOption({ label: value }, { timeout: 6000 })
+        const tag = await locator
+          .evaluate((element) => element.tagName.toLowerCase())
+          .catch(() => '')
+        if (tag === 'select') {
+          try {
+            await locator.selectOption(value, { timeout: 6000 })
+          } catch {
+            await locator.selectOption({ label: value }, { timeout: 6000 })
+          }
+          return
         }
+        // 自定义下拉：点击触发器 → 等待 listbox/menu → 按可见文本点选项
+        await selectCustom(await requireBrowser(ctx).runnerPage(), locator, value)
       }),
   },
   {

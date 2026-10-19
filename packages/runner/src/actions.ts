@@ -119,8 +119,10 @@ async function selectDiagnostics(page: Page, trigger: Locator): Promise<string> 
  * 自定义下拉：点击触发器 → 等待可见弹层 → 按 option/menuitem/文本找选项 →
  * 校验选中结果。失败时给出弹层、选项与触发器状态。
  */
-async function selectCustom(page: Page, trigger: Locator, value: string): Promise<void> {
-  await trigger.click()
+export async function selectCustom(page: Page, trigger: Locator, value: string): Promise<void> {
+  // 有些组件库点击已展开的 combobox 会把它收起
+  const expanded = await trigger.getAttribute('aria-expanded').catch(() => null)
+  if (expanded !== 'true') await trigger.click()
 
   const popupSelector =
     '[role="listbox"]:visible, [role="menu"]:visible, .el-select-dropdown:visible, .el-dropdown-menu:visible, .ant-select-dropdown:visible, .ant-dropdown:visible'
@@ -172,7 +174,14 @@ async function selectCustom(page: Page, trigger: Locator, value: string): Promis
         return text.includes(value)
       }, value)
       .catch(() => false)
-    if (!triggerSelected) {
+    // 有些组件库不在 option 上写 aria-selected：弹层收起通常也代表选择完成
+    const popupClosed = await page
+      .locator(popupSelector)
+      .last()
+      .isVisible()
+      .then((visible) => !visible)
+      .catch(() => true)
+    if (!triggerSelected && !popupClosed) {
       throw new Error(
         `已点击选项「${value}」，但未观察到选中结果。${await selectDiagnostics(page, trigger)}`,
       )

@@ -174,7 +174,26 @@ event:ai-case-proposal                      → AiCaseProposal
 - 无头浏览器实测：舞台打开 `liveSubscribers=1`；切到后台或打开模型设置弹层后变为 0；恢复可见 / 关闭弹层后回到 1，且不再出现重复连接。
 - E2E 新增「实时画面暂停/恢复」断言，全量通过。
 
-## 12. 已知边界
+## 12. 自定义下拉选择（2026-10-19 补充）
+
+录制 Element Plus、Ant Design 等组件库的下拉时，采集到的是 `role="combobox"` 的 `<input>`，而不是原生 `<select>`。回放与 Copilot 的 `browser_select` 直接调用 `selectOption` 会报 `Element is not a <select> element`。
+
+修复：
+
+1. `browser_select` 先读取目标标签：`select` 走原生 `selectOption`（允许按 value 或可见文本匹配）；其余走新增的 `selectCustom`。
+2. `selectCustom` 的流程：必要时点击触发器展开 → 等待可见弹层（`listbox` / `menu` / `.el-select-dropdown` / `.ant-select-dropdown` 等）→ 按 option / menuitem / 精确可见文本匹配并点击。
+3. 点击前检查 `aria-expanded`，已展开时不再点击，避免把弹层收起。
+4. 选中校验：option 的 `aria-selected`、触发器文本/值包含选项，或弹层已收起（部分组件库不写 aria 状态）。
+5. 失败时输出诊断：可见弹层数、触发器文本/值/展开状态、可见选项列表，便于定位是文案不一致还是弹层结构不同。
+6. 录制得到的 `select` 步骤在 `mode=custom` 时同样走这套逻辑。
+
+验证：
+
+- 新增 `select-custom.integration.test.ts`，用 Element Plus 结构夹具覆盖「展开选择」「已展开不重复点击」「选项不存在报错」，Runner 18 个测试通过。
+- 真实模型在用户实际应用上执行 `browser_select`，612ms 选中「电影」，7 次工具调用全部成功。
+- 全量 E2E 通过。
+
+## 13. 已知边界
 
 - 撤销会恢复到应用前的快照。如果应用之后又手动改过用例，点撤销会覆盖这些改动；当前没有二次确认。
 - diff 卡只展示步骤与用例元信息，元素定位器的候选变化没有专门的对比视图。
