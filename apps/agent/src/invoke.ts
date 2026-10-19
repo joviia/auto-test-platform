@@ -176,6 +176,11 @@ export function createInvokeRouter(agent: Agent, dataDir: string) {
     agent.startPlanDraft(input.proposalId, input.caseFile),
   )
   route(IpcChannel.aiPlanStop, async () => agent.stopPlanDraft())
+  route(IpcChannel.debugStart, async (input) => agent.startDebug(input.caseId, input.breakpoints))
+  route(IpcChannel.debugCommand, async (input) =>
+    agent.debugCommand(input.action, input.breakpoints),
+  )
+  route(IpcChannel.debugState, async () => agent.debugState())
   route(IpcChannel.skillList, async () => SKILL_MANIFESTS)
 
   return async (channel: string, payload: unknown): Promise<unknown> => {

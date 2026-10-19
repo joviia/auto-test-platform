@@ -385,6 +385,33 @@ try {
   }
   console.log('[agent] AI 计划卡 ✓ 生成 / 执行 / 保存')
 
+  // 单步调试：暂停在第一步 → 下一步 → 断点继续 → 完成；不写执行记录
+  await page.getByText('Agent E2E 用例', { exact: true }).first().click()
+  await page.waitForTimeout(300)
+  await page.locator('[role=tab]').filter({ hasText: '步骤' }).first().click()
+  const runsBeforeDebug = await invoke(origin, 'run:list', { caseId: cases[0].id })
+  await page.getByRole('button', { name: '调试', exact: true }).click()
+  await page.getByText('第 1/4 步', { exact: false }).waitFor({ timeout: 20_000 })
+  await page.getByText('已暂停', { exact: true }).waitFor({ timeout: 20_000 })
+  await page.getByText('变量与当前参数').click()
+  await page.getByText('"value"', { exact: false }).first().waitFor({ timeout: 10_000 })
+
+  await page.getByRole('button', { name: '下一步', exact: true }).click()
+  await page.getByText('第 2/4 步', { exact: false }).waitFor({ timeout: 20_000 })
+
+  await page.getByRole('button', { name: '在第 3 步设置断点' }).click()
+  await page.getByRole('button', { name: '继续', exact: true }).click()
+  await page.getByText('第 3/4 步', { exact: false }).waitFor({ timeout: 20_000 })
+  await page.getByRole('button', { name: '继续', exact: true }).click()
+  await page.getByText('已通过', { exact: true }).first().waitFor({ timeout: 20_000 })
+
+  const runsAfterDebug = await invoke(origin, 'run:list', { caseId: cases[0].id })
+  if (runsAfterDebug.length !== runsBeforeDebug.length) {
+    throw new Error('调试不应写入执行记录')
+  }
+  await page.getByRole('button', { name: '关闭', exact: true }).last().click()
+  console.log('[agent] 单步调试 ✓ 暂停 / 下一步 / 断点 / 完成')
+
   // 运行态恢复：吞掉 ai-done，模拟 SSE 断线丢事件；5s 心跳应自动解除执行态
   const resumePage = await browser.newPage()
   resumePage.on('pageerror', (err) => errors.push(err.message))

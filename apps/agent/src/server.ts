@@ -85,7 +85,7 @@ function evidenceContent(file: string): string {
  */
 function shimSource(): string {
   return `(() => {
-  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error', 'ai-recording-draft', 'ai-case-proposal', 'ai-state', 'ai-plan-proposal', 'ai-plan-progress', 'ai-plan-result'];
+  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error', 'ai-recording-draft', 'ai-case-proposal', 'ai-state', 'ai-plan-proposal', 'ai-plan-progress', 'ai-plan-result', 'debug-state'];
   const listeners = new Map(names.map((name) => [name, new Set()]));
   const last = new Map();
   const reportClientError = (message) => {
@@ -240,6 +240,9 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
       await send('cases', { type: 'cases', cases: state.cases })
       // 建连 / 重连时校准 Copilot 运行状态，修复断线期间错过的 ai-start / ai-done
       await send('ai-state', agent.aiState())
+      // 调试暂停可能发生在断线期间；重连时补一份当前状态
+      const debugState = agent.debugState()
+      if (debugState) await send('debug-state', debugState)
 
       const unsubscribe = agent.onEvent((event: AgentEvent) => {
         if (closed) return
@@ -268,6 +271,10 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
         if (event.type === 'ai-plan-proposal') {
           // 与 ai-case-proposal 一致：附带 type 字段，界面忽略多余字段
           void send('ai-plan-proposal', event)
+          return
+        }
+        if (event.type === 'debug-state') {
+          void send('debug-state', event.state)
           return
         }
         void send(event.type, event)

@@ -1,6 +1,12 @@
 export { performAction, selectCustom } from './actions.js'
 export { AssertionError, performAssertion } from './assertions.js'
-export { type ReplayOptions, type RunCaseOptions, replayCaseFile, runCaseOnPage } from './engine.js'
+export {
+  type ReplayOptions,
+  type RunCaseOptions,
+  replayCaseFile,
+  runCaseOnPage,
+  type StepHookContext,
+} from './engine.js'
 export { EvidenceCollector } from './evidence.js'
 export { toPlaywrightSpec } from './export-ts.js'
 export { resolveElement, toPlaywrightLocator } from './resolve-locator.js'

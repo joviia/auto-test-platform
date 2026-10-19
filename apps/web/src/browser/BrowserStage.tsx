@@ -1,6 +1,8 @@
+import type { DebugState, Step } from '@atp/model'
 import { Button, Tooltip, toast } from '@heroui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
+  Bug,
   Circle,
   Globe,
   House,
@@ -8,14 +10,17 @@ import {
   Loader2,
   MonitorPlay,
   MonitorSmartphone,
+  Pause,
   Play,
   Plus,
   RotateCcw,
   RotateCw,
   Square,
+  StepForward,
   Video,
+  X,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import { EmptyHint } from '../components/EmptyHint'
 import { useElapsed } from '../hooks/use-elapsed'
 import { Launchpad } from '../launch/Launchpad'
@@ -27,6 +32,7 @@ import {
   type ReplayMode,
   useUiStore,
 } from '../state/ui-store'
+import { actionMeta } from '../steps/step-meta'
 import { DEVICE_PRESETS, deviceSize, getDevicePreset } from './devices'
 import { LiveMirror } from './LiveMirror'
 
@@ -48,6 +54,138 @@ interface FrameRect {
 
 const selectClass =
   'h-7 rounded-md border border-border bg-field px-1.5 text-[11px] text-foreground outline-none focus:border-accent/60 disabled:opacity-50'
+
+function debugStepText(step: Step | undefined): string {
+  if (!step) return ''
+  const verb = step.display?.verb ?? actionMeta(step.action).label
+  const field = step.display?.field
+  const value =
+    step.display?.value ??
+    (step.action === 'fill' || step.action === 'select'
+      ? typeof step.params?.value === 'string'
+        ? step.params.value
+        : ''
+      : step.action === 'press' && typeof step.params?.key === 'string'
+        ? step.params.key
+        : '')
+  return `${verb}${field ? `「${field}」` : ''}${value ? ` · ${value}` : ''}`
+}
+
+const DEBUG_STATUS: Record<DebugState['status'], { label: string; className: string }> = {
+  paused: { label: '已暂停', className: 'text-amber-600 dark:text-amber-400' },
+  running: { label: '执行中', className: 'text-accent' },
+  passed: { label: '已通过', className: 'text-emerald-600 dark:text-emerald-400' },
+  failed: { label: '未通过', className: 'text-red-600 dark:text-red-400' },
+  stopped: { label: '已停止', className: 'text-muted' },
+}
+
+/** 单步调试控制条：下一步 / 继续 / 暂停 / 停止，以及变量与当前参数 */
+function DebugBar({
+  state,
+  onCommand,
+  onClose,
+}: {
+  state: DebugState
+  onCommand: (action: 'next' | 'continue' | 'pause' | 'stop') => void
+  onClose: () => void
+}) {
+  const active = state.status === 'paused' || state.status === 'running'
+  const status = DEBUG_STATUS[state.status]
+  const current = Math.min(state.index + 1, state.total)
+  const label = state.status === 'paused' ? debugStepText(state.step) : ''
+  const variables = Object.entries(state.variables ?? {})
+  const params =
+    state.step?.params || state.step?.assertion
+      ? JSON.stringify({ params: state.step?.params, assertion: state.step?.assertion }, null, 2)
+      : ''
+
+  return (
+    <div className="shrink-0 border-b border-border bg-amber-500/[0.04] px-3 py-1.5 text-[11px]">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Bug size={12} className="shrink-0 text-amber-600 dark:text-amber-400" />
+        <span className="font-medium">调试</span>
+        <span className={status.className}>{status.label}</span>
+        <span className="shrink-0 text-muted">
+          第 {current}/{state.total} 步
+        </span>
+        {label && (
+          <span className="min-w-0 max-w-[300px] truncate text-foreground/90" title={label}>
+            {label}
+          </span>
+        )}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {state.status === 'paused' && (
+            <>
+              <Button size="sm" variant="primary" onPress={() => onCommand('next')}>
+                <StepForward size={11} />
+                下一步
+              </Button>
+              <Button size="sm" variant="secondary" onPress={() => onCommand('continue')}>
+                <Play size={11} />
+                继续
+              </Button>
+            </>
+          )}
+          {state.status === 'running' && (
+            <Button size="sm" variant="secondary" onPress={() => onCommand('pause')}>
+              <Pause size={11} />
+              暂停
+            </Button>
+          )}
+          {active ? (
+            <Button size="sm" variant="danger" onPress={() => onCommand('stop')}>
+              <Square size={10} fill="currentColor" />
+              停止
+            </Button>
+          ) : (
+            <Button size="sm" variant="secondary" onPress={onClose}>
+              <X size={11} />
+              关闭
+            </Button>
+          )}
+        </div>
+      </div>
+      {state.error && (
+        <p className="mt-1 break-words rounded bg-red-500/[0.06] px-1.5 py-1 text-[10.5px] leading-4 text-red-700 dark:text-red-400">
+          {state.error}
+        </p>
+      )}
+      {(variables.length > 0 || params) && (
+        <details className="mt-1">
+          <summary className="cursor-pointer list-none text-[10px] text-muted hover:text-foreground">
+            变量与当前参数
+          </summary>
+          <div className="mt-1 grid gap-2 sm:grid-cols-2">
+            <div className="min-w-0 rounded border border-border bg-surface px-2 py-1">
+              <p className="mb-0.5 text-[9.5px] font-medium uppercase tracking-wide text-muted">
+                变量
+              </p>
+              {variables.length === 0 ? (
+                <p className="text-[10px] text-muted">（无）</p>
+              ) : (
+                <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[10px]">
+                  {variables.map(([key, value]) => (
+                    <Fragment key={key}>
+                      <dt className="font-mono text-muted">{key}</dt>
+                      <dd className="truncate font-mono" title={value}>
+                        {value}
+                      </dd>
+                    </Fragment>
+                  ))}
+                </dl>
+              )}
+            </div>
+            {params && (
+              <pre className="max-h-28 min-w-0 overflow-auto whitespace-pre-wrap break-all rounded border border-border bg-surface px-2 py-1 font-mono text-[10px] leading-4 text-muted">
+                {params}
+              </pre>
+            )}
+          </div>
+        </details>
+      )}
+    </div>
+  )
+}
 
 export function BrowserStage() {
   const stageRef = useRef<HTMLDivElement>(null)
@@ -83,6 +221,8 @@ export function BrowserStage() {
   const aiStartedAt = useUiStore((s) => s.aiStartedAt)
   const aiActiveTool = useUiStore((s) => s.aiActiveTool)
   const aiTarget = useUiStore((s) => s.aiTarget)
+  const debugState = useUiStore((s) => s.debugState)
+  const setDebugState = useUiStore((s) => s.setDebugState)
   const setAiOpen = useUiStore((s) => s.setAiOpen)
   const setRightTab = useUiStore((s) => s.setRightTab)
   const qc = useQueryClient()
@@ -92,7 +232,8 @@ export function BrowserStage() {
   const preset = getDevicePreset(devicePresetId)
   const size = deviceSize(preset, deviceOrientation)
   const planRunning = Boolean(planProgress && planProgress.phase !== 'run-end')
-  const busy = recording || replaying || planRunning
+  const debugActive = debugState?.status === 'paused' || debugState?.status === 'running'
+  const busy = recording || replaying || planRunning || debugActive
 
   // 外部（回放/计划执行）设置 url 时同步地址栏
   useEffect(() => {
@@ -300,6 +441,32 @@ export function BrowserStage() {
     }
   }
 
+  const startDebug = async (): Promise<void> => {
+    if (selected?.kind !== 'case') return
+    try {
+      const file = await window.atp.invoke('case:get', { id: selected.id })
+      setInput(file.case.startUrl)
+      setUrl(file.case.startUrl)
+      const layout = computeLayout(true)
+      if (layout) {
+        setFrame(layout.frame)
+        await window.atp.invoke('view:bounds-set', layout.bounds)
+      }
+      const breakpoints = useUiStore.getState().debugBreakpoints[selected.id] ?? []
+      await window.atp.invoke('debug:start', { caseId: selected.id, breakpoints })
+    } catch (err) {
+      toast.danger(err instanceof Error ? err.message : '启动调试失败')
+    }
+  }
+
+  const debugCommand = async (action: 'next' | 'continue' | 'pause' | 'stop'): Promise<void> => {
+    try {
+      await window.atp.invoke('debug:command', { action })
+    } catch (err) {
+      toast.danger(err instanceof Error ? err.message : '调试命令失败')
+    }
+  }
+
   const stopAi = async (): Promise<void> => {
     try {
       await window.atp.invoke('ai:cancel', {})
@@ -424,7 +591,21 @@ export function BrowserStage() {
           {replaying ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />}
           {replaying ? '回放中…' : '回放用例'}
         </Button>
+
+        <Button
+          size="sm"
+          variant="secondary"
+          isDisabled={selected?.kind !== 'case' || busy}
+          onPress={() => void startDebug()}
+        >
+          {debugActive ? <Loader2 size={13} className="animate-spin" /> : <Bug size={13} />}
+          {debugActive ? '调试中…' : '调试'}
+        </Button>
       </div>
+
+      {debugState && (
+        <DebugBar state={debugState} onCommand={debugCommand} onClose={() => setDebugState(null)} />
+      )}
 
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border bg-surface px-3 text-[11px]">
         <MonitorSmartphone size={13} className="shrink-0 text-muted" />

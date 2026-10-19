@@ -4,6 +4,7 @@ import { Button, Dropdown, Input, Modal, Tooltip, toast } from '@heroui/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Braces,
+  Check,
   ChevronDown,
   ChevronUp,
   Copy,
@@ -401,8 +402,27 @@ function ConditionEditor({
 
 export function StepPanel() {
   const selected = useUiStore((s) => s.selected)
+  const debugState = useUiStore((s) => s.debugState)
+  const debugBreakpoints = useUiStore((s) => s.debugBreakpoints)
+  const toggleDebugBreakpoint = useUiStore((s) => s.toggleDebugBreakpoint)
   const qc = useQueryClient()
   const caseId = selected?.kind === 'case' ? selected.id : null
+
+  const debugBreakpointsOfCase = caseId ? (debugBreakpoints[caseId] ?? []) : []
+  const debugActive = debugState?.status === 'paused' || debugState?.status === 'running'
+
+  const toggleBreakpoint = (stepId: string): void => {
+    if (!caseId) return
+    toggleDebugBreakpoint(caseId, stepId)
+    if (debugActive && debugState?.caseId === caseId) {
+      const next = useUiStore.getState().debugBreakpoints[caseId] ?? []
+      void window.atp
+        .invoke('debug:command', { action: 'set-breakpoints', breakpoints: next })
+        .catch((err: unknown) => {
+          toast.danger(err instanceof Error ? err.message : '更新断点失败')
+        })
+    }
+  }
 
   const { data: file } = useQuery({
     queryKey: caseId ? qk.caseFile(caseId) : ['case', 'none'],
@@ -747,6 +767,13 @@ export function StepPanel() {
               const preview = stepPreview(step)
               const isDropTarget = overIndex === idx && dragIndex !== null && dragIndex !== idx
               const display = step.display
+              const hasBreakpoint = debugBreakpointsOfCase.includes(step.id)
+              const debugResult =
+                debugState?.caseId === caseId ? debugState.results[step.id] : undefined
+              const isCurrent =
+                debugState?.caseId === caseId &&
+                debugState.stepId === step.id &&
+                (debugState.status === 'paused' || debugState.status === 'running')
               const intentView = viewMode === 'intent' && Boolean(display)
               const group = step.groupId ? groupById.get(step.groupId) : undefined
               const showGroupHeader = Boolean(group && group.id !== lastGroupId)
@@ -825,16 +852,51 @@ export function StepPanel() {
                           : expanded
                             ? 'border-accent/40'
                             : 'border-border hover:border-muted/40'
-                      } ${dragIndex === idx ? 'opacity-50' : ''}`}
+                      } ${dragIndex === idx ? 'opacity-50' : ''} ${
+                        debugResult?.status === 'failed'
+                          ? 'border-red-500/50'
+                          : debugResult?.status === 'passed'
+                            ? 'border-emerald-500/40'
+                            : ''
+                      } ${isCurrent ? 'border-amber-500 ring-2 ring-amber-500/20' : ''}`}
                     >
                       <div className="flex items-center gap-1.5 px-2 py-1.5 text-[13px]">
                         <GripVertical
                           size={13}
                           className="shrink-0 cursor-grab text-muted opacity-0 group-hover:opacity-100"
                         />
+                        <button
+                          type="button"
+                          onClick={() => toggleBreakpoint(step.id)}
+                          className="grid size-4 shrink-0 place-items-center rounded hover:bg-default"
+                          aria-label={
+                            hasBreakpoint
+                              ? `取消第 ${idx + 1} 步断点`
+                              : `在第 ${idx + 1} 步设置断点`
+                          }
+                          title={hasBreakpoint ? '取消断点' : '设置断点'}
+                        >
+                          <span
+                            className={`size-2 rounded-full ${
+                              hasBreakpoint ? 'bg-red-500' : 'border border-muted/40'
+                            }`}
+                          />
+                        </button>
                         <span className="w-4 shrink-0 text-right font-mono text-[10px] text-muted">
                           {idx + 1}
                         </span>
+                        {debugResult && (
+                          <span
+                            className="shrink-0"
+                            title={debugResult.status === 'passed' ? '通过' : '失败'}
+                          >
+                            {debugResult.status === 'passed' ? (
+                              <Check size={11} className="text-emerald-600 dark:text-emerald-400" />
+                            ) : (
+                              <X size={11} className="text-red-600 dark:text-red-400" />
+                            )}
+                          </span>
+                        )}
                         <span
                           className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${meta.className}`}
                         >

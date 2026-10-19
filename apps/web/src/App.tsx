@@ -132,6 +132,10 @@ export function App() {
     const offAiPlanResult = window.atp.on('event:ai-plan-result', (p) =>
       useUiStore.getState().applyAiPlanResult(p),
     )
+    // 单步调试：暂停 / 运行 / 结束状态
+    const offDebug = window.atp.on('event:debug-state', (p) =>
+      useUiStore.getState().setDebugState(p),
+    )
     // SSE 建连 / 重连时的运行快照：清掉错过的 ai-done 留下的转圈状态
     const offAiState = window.atp.on('event:ai-state', (p) => {
       // 只处理「服务端已结束」：running=true 不重建消息，避免停止过程中的竞态
@@ -157,6 +161,7 @@ export function App() {
       offAiPlan()
       offAiPlanProgress()
       offAiPlanResult()
+      offDebug()
       offAiState()
     }
   }, [

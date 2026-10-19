@@ -188,6 +188,31 @@ const aiSessionRowSchema = z.object({
   messageCount: z.number().int().nonnegative(),
 })
 
+/** 单步调试：暂停时下发的当前步骤、变量与已完成结果 */
+const debugResultSchema = z.object({
+  status: stepStatusSchema,
+  durationMs: z.number().nonnegative(),
+  error: z.string().optional(),
+  skipped: z.boolean().optional(),
+  screenshotUrl: z.string().optional(),
+})
+
+export const debugStateSchema = z.object({
+  caseId: z.string(),
+  runId: z.string(),
+  status: z.enum(['paused', 'running', 'passed', 'failed', 'stopped']),
+  /** 当前/下一步的 0-based 下标；结束时等于 total */
+  index: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  stepId: z.string().optional(),
+  /** 已做变量替换的当前步骤，用于展示实际参数 */
+  step: stepSchema.optional(),
+  variables: z.record(z.string(), z.string()).optional(),
+  breakpoints: z.array(z.string()).optional(),
+  results: z.record(z.string(), debugResultSchema),
+  error: z.string().optional(),
+})
+
 /** 录制草稿：recording:stop 与 AI 停止录制事件共用 */
 const recordedDraftSchema = z.object({
   steps: z.array(stepSchema),
@@ -545,6 +570,25 @@ export const ipcContract = {
   },
   [IpcChannel.aiSessionDelete]: { input: idInput, output: okSchema },
 
+  [IpcChannel.debugStart]: {
+    input: z.object({
+      caseId: z.string().min(1),
+      breakpoints: z.array(z.string().min(1)).optional(),
+    }),
+    output: z.object({ runId: z.string() }),
+  },
+  [IpcChannel.debugCommand]: {
+    input: z.object({
+      action: z.enum(['next', 'continue', 'pause', 'stop', 'set-breakpoints']),
+      breakpoints: z.array(z.string().min(1)).optional(),
+    }),
+    output: okSchema,
+  },
+  [IpcChannel.debugState]: {
+    input: z.void(),
+    output: debugStateSchema.nullable(),
+  },
+
   [IpcChannel.skillList]: {
     input: z.void(),
     output: z.array(skillManifestSchema),
@@ -657,6 +701,8 @@ export const ipcEventContract = {
     error: z.string().optional(),
     steps: z.array(aiPlanStepResultSchema),
   }),
+  /** 单步调试状态变化 */
+  [IpcEvent.debugState]: debugStateSchema,
 }
 
 /** Copilot 事件与上下文类型（agent / web 共用） */
@@ -686,6 +732,7 @@ export type AiPlanResult = z.output<(typeof ipcEventContract)[typeof IpcEvent.ai
 export type AiSessionRow = z.output<typeof aiSessionRowSchema>
 export type AiSessionMessage = z.output<typeof aiSessionMessageSchema>
 export type AiStoredTool = z.output<typeof aiStoredToolSchema>
+export type DebugState = z.output<typeof debugStateSchema>
 
 export type IpcEventPayload<K extends keyof typeof ipcEventContract> = z.output<
   (typeof ipcEventContract)[K]

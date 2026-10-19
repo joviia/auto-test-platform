@@ -9,6 +9,7 @@ import type {
   AiToolStartPayload,
   CaseFile,
   CaseGroup,
+  DebugState,
   Element,
   IpcEventPayload,
   LiveStep,
@@ -83,6 +84,7 @@ const THEME_KEY = 'atp.theme'
 const DEVICE_KEY = 'atp.device'
 const REPLAY_MODE_KEY = 'atp.replayMode'
 const RIGHT_WIDTH_KEY = 'atp.rightWidth'
+const DEBUG_BREAKPOINTS_KEY = 'atp.debugBreakpoints'
 const RIGHT_MIN = 360
 const RIGHT_MAX = 560
 
@@ -150,6 +152,32 @@ function readStoredDevice(): StoredDevice {
 function storeDevice(device: StoredDevice): void {
   try {
     localStorage.setItem(DEVICE_KEY, JSON.stringify(device))
+  } catch {
+    // 忽略
+  }
+}
+
+function readDebugBreakpoints(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(DEBUG_BREAKPOINTS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return {}
+    const result: Record<string, string[]> = {}
+    for (const [caseId, ids] of Object.entries(parsed as Record<string, unknown>)) {
+      if (Array.isArray(ids)) {
+        result[caseId] = ids.filter((id): id is string => typeof id === 'string')
+      }
+    }
+    return result
+  } catch {
+    return {}
+  }
+}
+
+function storeDebugBreakpoints(value: Record<string, string[]>): void {
+  try {
+    localStorage.setItem(DEBUG_BREAKPOINTS_KEY, JSON.stringify(value))
   } catch {
     // 忽略
   }
@@ -253,6 +281,14 @@ interface UiState {
   aiSeed: AiSeed | null
   aiProposals: AiCaseProposal[]
   aiPlans: AiPlanProposal[]
+
+  /** 单步调试状态；结束后保留到用户关闭 */
+  debugState: DebugState | null
+  /** 按用例保存的断点（本机 localStorage） */
+  debugBreakpoints: Record<string, string[]>
+  setDebugState: (state: DebugState | null) => void
+  toggleDebugBreakpoint: (caseId: string, stepId: string) => void
+  setDebugBreakpoints: (caseId: string, stepIds: string[]) => void
 
   addAiUserMessage: (text: string) => void
   startAiMessage: (sessionId: string, messageId: string) => void
@@ -404,6 +440,9 @@ export const useUiStore = create<UiState>((set, get) => ({
   aiSeed: null,
   aiProposals: [],
   aiPlans: [],
+
+  debugState: null,
+  debugBreakpoints: readDebugBreakpoints(),
 
   addAiUserMessage: (text) =>
     set((s) => ({
@@ -670,6 +709,34 @@ export const useUiStore = create<UiState>((set, get) => ({
     set((s) => ({
       aiPlans: s.aiPlans.filter((item) => item.proposalId !== proposalId),
     })),
+
+  setDebugState: (debugState) =>
+    set((s) => {
+      if (debugState?.breakpoints) {
+        const next = { ...s.debugBreakpoints, [debugState.caseId]: debugState.breakpoints }
+        storeDebugBreakpoints(next)
+        return { debugState, debugBreakpoints: next }
+      }
+      return { debugState }
+    }),
+
+  toggleDebugBreakpoint: (caseId, stepId) =>
+    set((s) => {
+      const current = s.debugBreakpoints[caseId] ?? []
+      const nextIds = current.includes(stepId)
+        ? current.filter((id) => id !== stepId)
+        : [...current, stepId]
+      const next = { ...s.debugBreakpoints, [caseId]: nextIds }
+      storeDebugBreakpoints(next)
+      return { debugBreakpoints: next }
+    }),
+
+  setDebugBreakpoints: (caseId, stepIds) =>
+    set((s) => {
+      const next = { ...s.debugBreakpoints, [caseId]: stepIds }
+      storeDebugBreakpoints(next)
+      return { debugBreakpoints: next }
+    }),
 
   patchAiProposal: (proposalId, patch) =>
     set((s) => ({

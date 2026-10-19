@@ -14,6 +14,7 @@ import type {
   AiTestResult,
   CaseFile,
   CaseRow,
+  DebugState,
   IpcChannel,
   IpcEventPayload,
   IpcOutput,
@@ -27,6 +28,7 @@ import {
   type RecordedDraft,
 } from './browser.js'
 import { type CopilotEvent, CopilotService } from './copilot/service.js'
+import { type DebugAction, DebugController } from './debug-runner.js'
 import { isPlanRunning, startPlanRun, stopPlanRun } from './plan-runner.js'
 
 export interface AgentOptions {
@@ -68,6 +70,7 @@ export type AgentEvent =
   | ({ type: 'ai-plan-proposal' } & AiPlanProposal)
   | { type: 'ai-plan-progress'; progress: AiPlanProgress }
   | { type: 'ai-plan-result'; result: AiPlanResult }
+  | { type: 'debug-state'; state: DebugState }
   | {
       type: 'replay-progress'
       runId: string
@@ -87,6 +90,9 @@ export class Agent {
   private lastDraft: RecordedDraft | null = null
   private replayAbort: AbortController | null = null
   private planDraftAbort: AbortController | null = null
+  private readonly debugRunner = new DebugController((state) =>
+    this.emit({ type: 'debug-state', state }),
+  )
   private listeners = new Set<(event: AgentEvent) => void>()
   private started = false
   private copilot: CopilotService | null = null
@@ -176,6 +182,8 @@ export class Agent {
   async navigate(input: string): Promise<string> {
     if (this.browser?.isRecording) throw new Error('录制中不能导航，请先停止录制')
     if (this.replayAbort) throw new Error('回放中不能导航')
+    if (this.planDraftAbort) throw new Error('AI 计划执行中不能导航')
+    if (this.debugRunner.active) throw new Error('调试中不能导航，请先停止调试')
     if (isPlanRunning()) throw new Error('计划执行中不能导航')
     const browser = this.requireBrowser()
     const url = await browser.navigate(input)
@@ -205,6 +213,7 @@ export class Agent {
   startRecording(): void {
     if (this.replayAbort) throw new Error('回放中不能开始录制')
     if (this.planDraftAbort) throw new Error('AI 计划执行中不能开始录制')
+    if (this.debugRunner.active) throw new Error('调试中不能开始录制')
     if (isPlanRunning()) throw new Error('计划执行中不能开始录制')
     const browser = this.requireBrowser()
     this.lastDraft = null
@@ -261,6 +270,7 @@ export class Agent {
     if (this.browser?.isRecording) throw new Error('录制中不能回放')
     if (this.replayAbort) throw new Error('已有回放正在执行')
     if (this.planDraftAbort) throw new Error('AI 计划正在执行')
+    if (this.debugRunner.active) throw new Error('调试中不能回放')
     if (isPlanRunning()) throw new Error('计划执行中不能回放')
     const uow = getDb().uow()
     const file = await uow.cases.get(id)
@@ -318,6 +328,7 @@ export class Agent {
     if (this.browser?.isRecording) throw new Error('录制进行中，无法执行计划')
     if (this.replayAbort) throw new Error('单用例回放进行中，无法执行计划')
     if (this.planDraftAbort) throw new Error('AI 计划正在执行，无法启动测试计划')
+    if (this.debugRunner.active) throw new Error('调试中无法启动测试计划')
     const page = await this.requireBrowser().runnerPage()
     const result = await startPlanRun(
       page,
@@ -343,6 +354,7 @@ export class Agent {
     if (this.browser?.isRecording) throw new Error('录制进行中，无法执行计划')
     if (this.replayAbort) throw new Error('回放进行中，无法执行计划')
     if (this.planDraftAbort) throw new Error('已有 AI 计划正在执行')
+    if (this.debugRunner.active) throw new Error('调试中无法执行 AI 计划')
     if (isPlanRunning()) throw new Error('测试计划执行中，无法执行 AI 计划')
 
     const browser = this.requireBrowser()
@@ -414,10 +426,36 @@ export class Agent {
     return { ok: true }
   }
 
+  /** 从一条已保存用例开始单步调试：先导航，再停在第一步之前 */
+  async startDebug(caseId: string, breakpoints: string[] = []): Promise<{ runId: string }> {
+    if (this.browser?.isRecording) throw new Error('录制中不能调试')
+    if (this.replayAbort) throw new Error('回放中不能调试')
+    if (this.planDraftAbort) throw new Error('AI 计划执行中不能调试')
+    if (this.copilot?.state().running) throw new Error('Copilot 正在执行，请先停止')
+    if (isPlanRunning()) throw new Error('测试计划执行中不能调试')
+    if (this.debugRunner.active) throw new Error('已有调试会话正在执行')
+    const file = await getDb().uow().cases.get(caseId)
+    if (!file) throw new Error(`用例不存在：${caseId}`)
+    const page = await this.requireBrowser().runnerPage()
+    const result = this.debugRunner.start(page, file, breakpoints)
+    this.emitStatus()
+    return result
+  }
+
+  debugCommand(action: DebugAction, breakpoints?: string[]): { ok: true } {
+    this.debugRunner.command(action, breakpoints)
+    return { ok: true }
+  }
+
+  debugState(): DebugState | null {
+    return this.debugRunner.state
+  }
+
   async runDemo(): Promise<void> {
     // 演示操作本身就应该在录制中执行；只拦截回放
     if (this.replayAbort) throw new Error('回放中不能执行演示操作')
     if (this.planDraftAbort) throw new Error('AI 计划执行中不能执行演示操作')
+    if (this.debugRunner.active) throw new Error('调试中不能执行演示操作')
     await this.requireBrowser().runDemo(this.options.demoUrl)
     this.emitStatus()
   }
@@ -425,6 +463,7 @@ export class Agent {
   async aiSend(input: AiSendInput): Promise<{ sessionId: string; messageId: string }> {
     if (!this.copilot) throw new Error('Copilot 尚未初始化')
     if (this.planDraftAbort) throw new Error('AI 计划正在执行，请先停止')
+    if (this.debugRunner.active) throw new Error('调试中不能操作页面，请先停止调试')
     return this.copilot.send(input)
   }
 
@@ -488,6 +527,7 @@ export class Agent {
     this.stopReplay()
     this.stopPlan()
     this.stopPlanDraft()
+    if (this.debugRunner.active) this.debugRunner.command('stop')
     await this.browser?.close()
     this.browser = null
     this.copilot = null

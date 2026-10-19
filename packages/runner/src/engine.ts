@@ -9,11 +9,27 @@ import { EvidenceCollector } from './evidence.js'
 import { resolveElement, resolveElementForAssertion } from './resolve-locator.js'
 import { evaluateCondition, substituteStep } from './variables.js'
 
+export interface StepHookContext {
+  /** 已做变量替换的步骤；执行器下一步就会执行它 */
+  step: Step
+  /** 0-based 步骤下标 */
+  index: number
+  total: number
+  variables: Record<string, string>
+  /** 执行记录目录，便于调试器按需归档证据 */
+  evidenceDir: string
+}
+
 export interface RunCaseOptions {
   evidenceDir: string
   runId?: string
   /** 每步完成回调（嵌入回放用于实时进度） */
   onStep?: (result: StepResult, index: number, total: number) => void
+  /**
+   * 每步执行前的钩子（单步调试用）。
+   * 返回的 Promise 未 resolve 前，执行器会停在该步骤之前。
+   */
+  beforeStep?: (context: StepHookContext) => Promise<void>
   /** 取消信号：在步骤之间检查 */
   signal?: AbortSignal
 }
@@ -60,6 +76,20 @@ export async function runCaseOnPage(
         steps.push(skipped)
         opts.onStep?.(skipped, index, caseFile.case.steps.length)
         continue
+      }
+
+      // 单步调试：条件跳过的步骤不打断，真正要执行的步骤才经过门闩
+      await opts.beforeStep?.({
+        step,
+        index,
+        total: caseFile.case.steps.length,
+        variables: { ...variables },
+        evidenceDir: opts.evidenceDir,
+      })
+      if (opts.signal?.aborted) {
+        status = 'failed'
+        runError = '调试已停止'
+        break
       }
 
       const result = await runStep(page, caseFile.elements, step, index, evidence)

@@ -269,4 +269,4 @@ ai:session-delete { id }                   → ok
 
 ## 12. 后续
 
-单步调试（下一步 / 继续 / 断点 / 暂停时查看变量）已单独排期，Runner 会在 `runCaseOnPage` 中增加 `beforeStep` 钩子；计划卡的执行控制器可以直接复用。
+单步调试（下一步 / 继续 / 断点 / 暂停时查看变量）已交付，见 <Stage2.4-单步调试.md>。Runner 的 `beforeStep` 钩子与 Agent 的调试控制器可直接复用于计划卡的单步执行。

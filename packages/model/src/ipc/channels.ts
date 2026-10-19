@@ -61,6 +61,10 @@ export const IpcChannel = {
   aiSessionList: 'ai:session-list',
   aiSessionGet: 'ai:session-get',
   aiSessionDelete: 'ai:session-delete',
+  // 单步调试
+  debugStart: 'debug:start',
+  debugCommand: 'debug:command',
+  debugState: 'debug:state',
   // 操作库
   skillList: 'skill:list',
 } as const
@@ -84,6 +88,8 @@ export const IpcEvent = {
   aiPlanProposal: 'event:ai-plan-proposal',
   aiPlanProgress: 'event:ai-plan-progress',
   aiPlanResult: 'event:ai-plan-result',
+  /** 单步调试状态（暂停 / 运行 / 结束） */
+  debugState: 'event:debug-state',
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]
