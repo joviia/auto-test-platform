@@ -281,7 +281,7 @@ CopilotService（会话、上下文、取消、持久化）
       },
       "deepseek": {
         "kind": "deepseek",
-        "model": "deepseek-chat",
+        "model": "deepseek-flash",
         "apiKeyEnv": "DEEPSEEK_API_KEY"
       },
       "gateway": {
@@ -303,7 +303,34 @@ CopilotService（会话、上下文、取消、持久化）
 - 环境变量可覆盖：`ATP_AI_PROFILE`、`ATP_AI_MODEL`、`ATP_AI_BASE_URL`、`ATP_AI_API_KEY`。
 - 面板头部显示实际 provider / model，可切换 profile；切换只影响新会话。
 - 不做登录页；没有 key 或配置错误时显示配置卡（列出读取的变量名与示例），其余功能不受影响。
-- `deepseek-flash` 的具体 model id 以网关为准；找不到时回退到 profile 的 `fallbackModel`（默认 `deepseek-chat`），并在面板头部标明。
+
+#### 6.2.1 当前模型目录（2026-10-19 核对）
+
+DeepSeek 已进入 V4 系列，旧模型名 `deepseek-chat` / `deepseek-reasoner` 于 **2026-07-24 15:59 UTC 停用**，不能再作为默认值；`deepseek-v4-flash` 与 `deepseek-v4-flash-vision-exp` 仍被接受但会路由到 V4.1-Flash。
+
+| 模型 ID | 版本 | 上下文 | 最大输出 | 输入 | 思考 |
+| --- | --- | --- | --- | --- | --- |
+| `deepseek-flash` | DeepSeek-V4.1-Flash-1017 | 1M | 384K | 文本 + 图片 | 默认开启，`low` / `high` / `max`，默认 `high` |
+| `deepseek-v4-pro` | DeepSeek-V4-Pro-0813 | 1M | 384K | 文本 | 默认开启，`low` / `high` / `max` |
+
+- Base URL 仍为 `https://api.deepseek.com`，鉴权方式不变。
+- 思考模式通过 OpenAI 格式的 `thinking.type` + `reasoning_effort` 控制；AI SDK 对应 `providerOptions.deepseek.thinking` 与 `reasoningEffort`。
+- 思考模式下带 `tools` 时，历史里的 `reasoning_content` 必须回传，否则可能 400。AI SDK 的 `responseMessages` 会保留 reasoning 片段；首次接真实 key 时必须验证多步工具循环，不能只在单轮聊天里验证。
+- Anthropic 当前模型：`claude-opus-5-5`（通用推荐）、`claude-sonnet-5-5`、`claude-haiku-5-5`、`claude-fable-5-1`。
+
+#### 6.2.2 模型设置弹窗（已实现，2026-10-19）
+
+原型：<prototypes/ai-settings.html>（本地文件，含未配置 / 已保存 / 测试中 / 失败 / 环境变量五种状态）。
+
+- **入口**：顶栏右侧齿轮（全局）；Copilot 头部的模型徽标（点击打开）；无 key 提示卡上的「打开模型设置」。
+- **布局**：单列紧凑弹窗（约 700px），保持与保存用例弹窗一致。自上而下：服务商三选一（DeepSeek / Anthropic / OpenAI 兼容）、密钥、模型、思考强度、接口地址、测试结果；底部固定「取消 / 测试连接 / 保存」。窄屏自动单列滚动。原型里的双栏与「当前生效」卡片不再采用，避免信息重复和视觉噪音。
+- **密钥**：只写不读。保存后只显示 `…9f3a` 与来源标签（环境变量 / 本机保存）；输入新值走「替换」；清除需要二次确认，保存后生效。写入 `~/.atp-agent/config.json`（合并已有 profile、原子写入、0600），IPC 与日志不回传明文，错误信息里的密钥会被替换为 `***`。
+- **模型**：DeepSeek 默认 `deepseek-flash`，可选 `deepseek-v4-pro`；Anthropic 默认 `claude-opus-5-5`。模型名可手填，也可从服务商 `/models` 刷新后作为候选；下方显示上下文 / 输出 / 图片能力。
+- **思考强度**：DeepSeek 暴露「关闭 / 低 / 高 / 最高」，默认高；Anthropic 由模型自行管理；网关不暴露。通过 `providerOptions.deepseek.thinking` + `reasoningEffort` 传入。
+- **测试连接**：用当前未保存的值做一次真实调用（`generateText` + `ping` 工具），验证鉴权与工具调用，展示耗时；401 / 403 / 404 / 429 / 超时 / 缺 Base URL 给中文可行动错误，不写入配置。
+- **环境变量优先**：环境变量 > 本机配置 > 默认探测。检测到同名环境变量时显示黄色提示条，说明本机保存的密钥不会生效。
+- **热生效**：保存后 `CopilotService.reload()` 重建 provider，不重启 Agent；正在执行的任务持有旧 provider 不被打断，新消息生效。
+- **实现面**：`ai:config` 增加 kind / baseURL / hasKey / keyHint / keySource / keyEnv / thinking；新增 `ai:saveConfig`、`ai:test`、`ai:models`；`copilot/config.ts` 负责解析与 0600 持久化；`AiSettingsDialog.tsx` 负责界面。实际模型 ID 以服务商返回为准，不做硬编码回退。
 - 模型不支持 tool calling 时自动降级为只读问答，并明确提示原因，不静默失败。
 - 截图按需上传：模型调用 `browser.screenshot` 才把画面作为工具结果发回；默认只发可访问性快照。
 
@@ -397,6 +424,16 @@ URL: http://…/demo
 - 工具卡片（折叠/展开/失败态）、思考摘要、结论脚注、顶部 AI 状态条。
 - **验收**：选中失败运行 → 点「让 AI 分析」→ 自动带上下文 → AI 先快照/截图再输出归因与建议；全程中栏镜像可见。
 
+#### 2.1 补充：模型设置（真实模型前置）
+
+> **状态（2026-10-19）**：已交付。保存 / 掩码回显 / 0600 权限 / 清除密钥 / 回到演示模式已由 `scripts/e2e-agent.mjs` 自动验证；真实 DeepSeek key 的「测试通过 → 真实工具调用」需在本机粘贴后验收。
+
+- 顶栏齿轮 + Copilot 模型徽标 + 无 key 提示卡三处入口。
+- 支持 DeepSeek 官方 / Anthropic 官方 / OpenAI 兼容网关；密钥、模型、思考强度、Base URL。
+- 真实「测试连接」：鉴权 + 一次工具调用；错误可行动；环境变量优先级可见。
+- 保存后热生效，写入本机 0600 配置文件，界面不回读明文。
+- **验收**：粘贴真实 DeepSeek key → 测试通过 → Copilot 头部从「演示模式」变为 `deepseek-flash` → 发一条消息能完成真实工具调用。
+
 ### Stage 2.2：Browser Use 操作 + 中栏可视化（关键切片）
 
 - 语义 ref 快照、`browser.navigate/click/fill/select/check/press/scroll/wait/assert`。
@@ -433,11 +470,11 @@ Stage 2.2 是 Agent 能力的验收门槛：如果只能按固定脚本演示，
 5. 三种访问方式都支持：DeepSeek 官方、OpenAI 兼容网关、Anthropic 兼容网关。
 6. Copilot 必须是真正的 Browser Use Agent，操作在中栏可视化。
 
-待补充（联调前需要，不阻塞 2.1 的 Stub 开发）：
+待补充：
 
-1. `deepseek-flash` 的 endpoint / model id 与 key 的环境变量名（若走公司网关，需要 base URL）。
-2. 是否同时接 Claude profile（默认仍 DeepSeek）。
-3. AI 会话是否需要跨重启保留（默认保留在 SQLite）。
+1. ~~`deepseek-flash` 的 endpoint / model id 与 key 的环境变量名~~ 已确认（2026-10-19）：`https://api.deepseek.com`，`deepseek-flash` / `deepseek-v4-pro`，`DEEPSEEK_API_KEY`；旧名已停用。
+2. 是否同时接 Claude profile（默认仍 DeepSeek）——设置弹窗已提供 Anthropic 连接，默认仍 DeepSeek。
+3. AI 会话是否需要跨重启保留（默认保留在 SQLite，随 2.3 交付）。
 
 ## 11. 参考
 

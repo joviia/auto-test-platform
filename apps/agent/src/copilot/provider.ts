@@ -3,7 +3,7 @@ import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import type { AiConfig } from '@atp/model'
 import { type LanguageModel, type ModelMessage, stepCountIs, streamText, type ToolSet } from 'ai'
-import type { ResolvedAiProfile } from './config.js'
+import type { AiThinking, ResolvedAiProfile } from './config.js'
 
 export interface ProviderContext {
   url?: string
@@ -76,22 +76,31 @@ class StubProvider implements CopilotProvider {
 
     await pause()
     input.onText(
-      '已验证：快照与记录读取链路正常。\n假设：真实模型接入后会在此基础上自主操作与验证。\n未完成：配置 ATP_AI_API_KEY（或 DEEPSEEK_API_KEY / ANTHROPIC_API_KEY）后即可使用真实 Agent。',
+      '已验证：快照与记录读取链路正常。\n假设：真实模型接入后会在此基础上自主操作与验证。\n未完成：在「模型设置」中配置 API Key 后即可使用真实 Agent。',
     )
     return []
   }
 }
 
+/** DeepSeek 思考模式参数；off 时显式关闭，其他值开启并指定强度 */
+export function deepseekProviderOptions(thinking?: AiThinking) {
+  if (!thinking) return undefined
+  if (thinking === 'off') return { deepseek: { thinking: { type: 'disabled' } } }
+  return { deepseek: { thinking: { type: 'enabled' }, reasoningEffort: thinking } }
+}
+
 class AiSdkProvider implements CopilotProvider {
+  readonly stub = false
+
   constructor(
     readonly provider: string,
     readonly model: string,
     private readonly languageModel: LanguageModel,
+    private readonly thinking?: AiThinking,
   ) {}
 
-  readonly stub = false
-
   async run(input: ProviderRunInput): Promise<ModelMessage[]> {
+    const options = deepseekProviderOptions(this.thinking)
     const result = streamText({
       model: this.languageModel,
       instructions: input.system,
@@ -99,6 +108,7 @@ class AiSdkProvider implements CopilotProvider {
       tools: input.tools,
       stopWhen: stepCountIs(20),
       abortSignal: input.signal,
+      ...(options ? { providerOptions: options } : {}),
       onError: ({ error }) => {
         input.onError(error instanceof Error ? error.message : String(error))
       },
@@ -120,55 +130,74 @@ export interface ProviderBundle {
   config: AiConfig
 }
 
-/** 按 profile 构建 provider；配置不可用时退回 Stub，保证界面可用 */
-export function createCopilotProvider(resolved: ResolvedAiProfile): ProviderBundle {
-  const { profile } = resolved
-  if (!resolved.ready || profile.kind === 'stub') {
-    return {
-      provider: new StubProvider(resolved.reason),
-      config: {
-        ready: false,
-        provider: 'stub',
-        model: 'stub',
-        stub: true,
-        ...(resolved.reason ? { reason: resolved.reason } : {}),
-        env: resolved.env,
-      },
-    }
-  }
-
-  const apiKey = resolved.apiKey ?? ''
-  let model: LanguageModel
+/** 按 profile 构建实际的 LanguageModel；测试连接与模型列表也复用它 */
+export function createLanguageModel(profile: ResolvedAiProfile['profile'], apiKey: string) {
   if (profile.kind === 'deepseek') {
     const provider = createDeepSeek({
       apiKey,
       ...(profile.baseURL ? { baseURL: profile.baseURL } : {}),
     })
-    model = provider(profile.model)
-  } else if (profile.kind === 'anthropic') {
+    return provider(profile.model)
+  }
+  if (profile.kind === 'anthropic') {
     const provider = createAnthropic({
       apiKey,
       ...(profile.baseURL ? { baseURL: profile.baseURL } : {}),
     })
-    model = provider(profile.model)
-  } else {
+    return provider(profile.model)
+  }
+  if (profile.kind === 'openai-compatible') {
     if (!profile.baseURL) throw new Error('OpenAI 兼容 profile 缺少 baseURL')
     const provider = createOpenAICompatible({
       name: 'atp',
       baseURL: profile.baseURL,
       apiKey,
     })
-    model = provider.chatModel(profile.model)
+    return provider.chatModel(profile.model)
+  }
+  throw new Error('Stub profile 没有可用的模型')
+}
+
+function configOf(
+  resolved: ResolvedAiProfile,
+  overrides: { ready: boolean; stub: boolean },
+): AiConfig {
+  const { profile } = resolved
+  return {
+    ready: overrides.ready,
+    provider: resolved.name === 'stub' ? 'stub' : resolved.name,
+    model: profile.model,
+    stub: overrides.stub,
+    kind: profile.kind,
+    ...(profile.baseURL ? { baseURL: profile.baseURL } : {}),
+    hasKey: Boolean(resolved.apiKey),
+    keySource: resolved.keySource,
+    ...(resolved.keyHint ? { keyHint: resolved.keyHint } : {}),
+    ...(resolved.keyEnv ? { keyEnv: resolved.keyEnv } : {}),
+    ...(profile.thinking ? { thinking: profile.thinking } : {}),
+    ...(resolved.reason ? { reason: resolved.reason } : {}),
+    env: resolved.env,
+  }
+}
+
+/** 按 profile 构建 provider；配置不可用时退回 Stub，保证界面可用 */
+export function createCopilotProvider(resolved: ResolvedAiProfile): ProviderBundle {
+  const { profile } = resolved
+  if (!resolved.ready || profile.kind === 'stub' || !resolved.apiKey) {
+    return {
+      provider: new StubProvider(resolved.reason),
+      config: configOf(resolved, { ready: false, stub: true }),
+    }
   }
 
+  const model = createLanguageModel(profile, resolved.apiKey)
   return {
-    provider: new AiSdkProvider(resolved.name, profile.model, model),
-    config: {
-      ready: true,
-      provider: resolved.name,
-      model: profile.model,
-      stub: false,
-      env: resolved.env,
-    },
+    provider: new AiSdkProvider(
+      resolved.name,
+      profile.model,
+      model,
+      profile.kind === 'deepseek' ? profile.thinking : undefined,
+    ),
+    config: configOf(resolved, { ready: true, stub: false }),
   }
 }

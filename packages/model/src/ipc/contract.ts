@@ -27,6 +27,38 @@ export interface IpcEndpoint<I = unknown, O = unknown> {
 
 const okSchema = z.object({ ok: z.literal(true) })
 const idInput = z.object({ id: z.string().min(1) })
+const aiProviderSchema = z.enum(['deepseek', 'anthropic', 'gateway'])
+const aiThinkingSchema = z.enum(['off', 'low', 'high', 'max'])
+const aiConnectionInputSchema = z.object({
+  provider: aiProviderSchema,
+  model: z.string().min(1),
+  baseURL: z.string().min(1).optional(),
+  apiKey: z.string().min(1).optional(),
+  thinking: aiThinkingSchema.optional(),
+})
+const aiConfigSchema = z.object({
+  ready: z.boolean(),
+  provider: z.string(),
+  model: z.string(),
+  stub: z.boolean(),
+  reason: z.string().optional(),
+  /** 读取的环境变量名，配置卡里展示 */
+  env: z.array(z.string()),
+  kind: z.enum(['deepseek', 'anthropic', 'openai-compatible', 'stub']),
+  baseURL: z.string().optional(),
+  hasKey: z.boolean(),
+  keyHint: z.string().optional(),
+  keySource: z.enum(['env', 'file', 'none']),
+  keyEnv: z.string().optional(),
+  thinking: aiThinkingSchema.optional(),
+})
+const aiModelSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  contextWindow: z.number().int().positive().optional(),
+  maxOutputTokens: z.number().int().positive().optional(),
+  inputModalities: z.array(z.string()).optional(),
+})
 const planPolicySchema = z.object({
   retries: z.number().int().min(0).max(10),
   timeoutMs: z.number().int().positive(),
@@ -326,14 +358,36 @@ export const ipcContract = {
   },
   [IpcChannel.aiConfig]: {
     input: z.void(),
+    output: aiConfigSchema,
+  },
+  [IpcChannel.aiSaveConfig]: {
+    input: aiConnectionInputSchema.extend({
+      clearKey: z.boolean().optional(),
+    }),
+    output: aiConfigSchema,
+  },
+  [IpcChannel.aiTest]: {
+    input: aiConnectionInputSchema,
     output: z.object({
-      ready: z.boolean(),
-      provider: z.string(),
+      ok: z.boolean(),
+      latencyMs: z.number().nonnegative(),
       model: z.string(),
-      stub: z.boolean(),
-      reason: z.string().optional(),
-      /** 读取的环境变量名，配置卡里展示 */
-      env: z.array(z.string()),
+      /** 模型是否真的发起了一次工具调用 */
+      toolCall: z.boolean(),
+      error: z.string().optional(),
+      detail: z.string().optional(),
+    }),
+  },
+  [IpcChannel.aiModels]: {
+    input: z.object({
+      provider: aiProviderSchema,
+      model: z.string().min(1).optional(),
+      baseURL: z.string().min(1).optional(),
+      apiKey: z.string().min(1).optional(),
+    }),
+    output: z.object({
+      models: z.array(aiModelSchema),
+      error: z.string().optional(),
     }),
   },
 } satisfies Record<string, IpcEndpoint>
@@ -436,6 +490,16 @@ export type AiToolEndPayload = z.output<(typeof ipcEventContract)[typeof IpcEven
 export type AiTarget = NonNullable<AiToolEndPayload['target']>
 export type AiSendInput = z.output<(typeof ipcContract)[typeof IpcChannel.aiSend]['input']>
 export type AiConfig = z.output<(typeof ipcContract)[typeof IpcChannel.aiConfig]['output']>
+export type AiProvider = z.output<typeof aiProviderSchema>
+export type AiThinking = z.output<typeof aiThinkingSchema>
+export type AiSaveConfigInput = z.output<
+  (typeof ipcContract)[typeof IpcChannel.aiSaveConfig]['input']
+>
+export type AiTestInput = z.output<(typeof ipcContract)[typeof IpcChannel.aiTest]['input']>
+export type AiTestResult = z.output<(typeof ipcContract)[typeof IpcChannel.aiTest]['output']>
+export type AiModelInfo = z.output<typeof aiModelSchema>
+export type AiModelsInput = z.output<(typeof ipcContract)[typeof IpcChannel.aiModels]['input']>
+export type AiModelsResult = z.output<(typeof ipcContract)[typeof IpcChannel.aiModels]['output']>
 
 export type IpcEventPayload<K extends keyof typeof ipcEventContract> = z.output<
   (typeof ipcEventContract)[K]

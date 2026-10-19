@@ -51,6 +51,9 @@ export const IpcChannel = {
   aiSend: 'ai:send',
   aiCancel: 'ai:cancel',
   aiConfig: 'ai:config',
+  aiSaveConfig: 'ai:saveConfig',
+  aiTest: 'ai:test',
+  aiModels: 'ai:models',
 } as const
 
 /** 推送类 channel：main → renderer（webContents.send） */

@@ -2,7 +2,12 @@ import { basename } from 'node:path'
 import { getDb, initDb, initEvidence, runDir } from '@atp/core'
 import type {
   AiConfig,
+  AiModelsInput,
+  AiModelsResult,
+  AiSaveConfigInput,
   AiSendInput,
+  AiTestInput,
+  AiTestResult,
   CaseRow,
   IpcEventPayload,
   LiveStep,
@@ -306,10 +311,28 @@ export class Agent {
         provider: 'stub',
         model: 'stub',
         stub: true,
+        kind: 'stub',
+        hasKey: false,
+        keySource: 'none',
         reason: 'Copilot 尚未初始化',
         env: [],
       }
     )
+  }
+
+  async aiSaveConfig(input: AiSaveConfigInput): Promise<AiConfig> {
+    if (!this.copilot) throw new Error('Copilot 尚未初始化')
+    return this.copilot.saveConfig(input)
+  }
+
+  async aiTest(input: AiTestInput): Promise<AiTestResult> {
+    if (!this.copilot) throw new Error('Copilot 尚未初始化')
+    return this.copilot.test(input)
+  }
+
+  async aiModels(input: AiModelsInput): Promise<AiModelsResult> {
+    if (!this.copilot) throw new Error('Copilot 尚未初始化')
+    return this.copilot.models(input)
   }
 
   async close(): Promise<void> {

@@ -203,6 +203,8 @@ interface UiState {
   /** Copilot 是否占用右侧面板（启动台整幅模式下也能打开） */
   aiOpen: boolean
   setAiOpen: (open: boolean) => void
+  aiSettingsOpen: boolean
+  setAiSettingsOpen: (open: boolean) => void
   aiConfig: AiConfig | null
   setAiConfig: (config: AiConfig | null) => void
 
@@ -321,6 +323,8 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   aiOpen: false,
   setAiOpen: (aiOpen) => set({ aiOpen }),
+  aiSettingsOpen: false,
+  setAiSettingsOpen: (aiSettingsOpen) => set({ aiSettingsOpen }),
   aiConfig: null,
   setAiConfig: (aiConfig) => set({ aiConfig }),
 

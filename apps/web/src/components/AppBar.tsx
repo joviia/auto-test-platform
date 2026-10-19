@@ -1,5 +1,14 @@
 import { Dropdown, Tooltip } from '@heroui/react'
-import { ChevronDown, FlaskConical, FolderKanban, Monitor, Moon, Sparkles, Sun } from 'lucide-react'
+import {
+  ChevronDown,
+  FlaskConical,
+  FolderKanban,
+  Monitor,
+  Moon,
+  Settings,
+  Sparkles,
+  Sun,
+} from 'lucide-react'
 import { useCases, usePlans, useProjects } from '../api/client'
 import { useUiStore } from '../state/ui-store'
 
@@ -17,6 +26,7 @@ export function AppBar() {
   const navTab = useUiStore((s) => s.navTab)
   const setAiOpen = useUiStore((s) => s.setAiOpen)
   const setRightTab = useUiStore((s) => s.setRightTab)
+  const setAiSettingsOpen = useUiStore((s) => s.setAiSettingsOpen)
 
   const { data: cases = [] } = useCases(currentProjectId)
   const { data: plans = [] } = usePlans(currentProjectId)
@@ -99,6 +109,19 @@ export function AppBar() {
             </button>
           </Tooltip.Trigger>
           <Tooltip.Content>问 Copilot，或让 Agent 操作页面（⌘K）</Tooltip.Content>
+        </Tooltip.Root>
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <button
+              type="button"
+              onClick={() => setAiSettingsOpen(true)}
+              className="grid size-8 place-items-center rounded-md text-muted outline-none hover:bg-default hover:text-foreground"
+              aria-label="模型设置"
+            >
+              <Settings size={15} />
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>模型设置（API Key / 模型）</Tooltip.Content>
         </Tooltip.Root>
         <Tooltip.Root>
           <Tooltip.Trigger>

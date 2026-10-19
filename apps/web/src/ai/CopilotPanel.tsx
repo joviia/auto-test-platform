@@ -53,6 +53,7 @@ export function CopilotPanel() {
   const seed = useUiStore((s) => s.aiSeed)
   const consumeAiSeed = useUiStore((s) => s.consumeAiSeed)
   const setAiOpen = useUiStore((s) => s.setAiOpen)
+  const setAiSettingsOpen = useUiStore((s) => s.setAiSettingsOpen)
   const resetAi = useUiStore((s) => s.resetAi)
   const url = useUiStore((s) => s.url)
   const selected = useUiStore((s) => s.selected)
@@ -164,16 +165,18 @@ export function CopilotPanel() {
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
         <Sparkles size={13} className="shrink-0 text-accent" />
         <span className="text-[12px] font-semibold">Copilot</span>
-        <span
-          className={`truncate rounded px-1.5 py-px text-[9.5px] font-medium ${
+        <button
+          type="button"
+          onClick={() => setAiSettingsOpen(true)}
+          className={`max-w-[150px] truncate rounded px-1.5 py-px text-[9.5px] font-medium outline-none hover:ring-1 hover:ring-accent/30 ${
             aiConfig?.stub
               ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
               : 'bg-surface-secondary text-muted'
           }`}
-          title={aiConfig?.reason ?? aiConfig?.provider}
+          title={`${aiConfig?.reason ?? aiConfig?.provider ?? ''} · 点击配置模型`}
         >
           {modelLabel}
-        </span>
+        </button>
         {aiConfig?.stub && aiConfig.reason && (
           <span className="min-w-0 flex-1 truncate text-[10px] text-muted" title={aiConfig.reason}>
             · 未配置密钥
@@ -263,9 +266,15 @@ export function CopilotPanel() {
                 <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/[0.06] px-2.5 py-2 text-[10.5px] leading-4 text-muted">
                   <Info size={11} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
                   <span>
-                    {aiConfig.reason ?? '未配置模型密钥'}。当前用内置演示流程展示交互；配置{' '}
-                    <code className="font-mono text-[10px]">DEEPSEEK_API_KEY</code> 后自动切换为真实
-                    Agent。
+                    {aiConfig.reason ?? '未配置模型密钥'}。当前用内置演示流程展示交互；
+                    <button
+                      type="button"
+                      onClick={() => setAiSettingsOpen(true)}
+                      className="font-medium text-accent outline-none hover:underline"
+                    >
+                      打开模型设置
+                    </button>
+                    填入 API Key 后自动切换为真实 Agent。
                   </span>
                 </div>
               )}

@@ -1,5 +1,6 @@
 import { Toast, toast } from '@heroui/react'
 import { type PointerEvent as ReactPointerEvent, useEffect } from 'react'
+import { AiSettingsDialog } from './ai/AiSettingsDialog'
 import { CommandPalette } from './ai/CommandPalette'
 import { useProjects } from './api/client'
 import { BrowserStage } from './browser/BrowserStage'
@@ -169,6 +170,7 @@ export function App() {
         <StatusBar />
       </div>
       <SaveCaseDialog />
+      <AiSettingsDialog />
       <CommandPalette />
       <Toast.Provider placement="bottom end" />
     </>

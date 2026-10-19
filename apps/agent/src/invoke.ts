@@ -165,6 +165,9 @@ export function createInvokeRouter(agent: Agent, dataDir: string) {
   route(IpcChannel.aiSend, async (input) => agent.aiSend(input))
   route(IpcChannel.aiCancel, async (input) => agent.aiCancel(input.sessionId))
   route(IpcChannel.aiConfig, async () => agent.aiConfig())
+  route(IpcChannel.aiSaveConfig, async (input) => agent.aiSaveConfig(input))
+  route(IpcChannel.aiTest, async (input) => agent.aiTest(input))
+  route(IpcChannel.aiModels, async (input) => agent.aiModels(input))
 
   return async (channel: string, payload: unknown): Promise<unknown> => {
     const handler = routes.get(channel)

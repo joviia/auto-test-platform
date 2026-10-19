@@ -1,0 +1,1778 @@
+<title>Copilot 模型设置</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  :root {
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --surface-2: #f6f7f9;
+    --surface-3: #eef1f6;
+    --field: #ffffff;
+    --border: #e1e5ec;
+    --border-strong: #cdd4df;
+    --fg: #1b2331;
+    --muted: #667085;
+    --muted-2: #98a2b3;
+    --accent: #3563e9;
+    --accent-hover: #2b54cc;
+    --accent-fg: #ffffff;
+    --accent-soft: rgba(53, 99, 233, 0.08);
+    --accent-softer: rgba(53, 99, 233, 0.04);
+    --success: #15803d;
+    --success-soft: rgba(21, 128, 61, 0.08);
+    --warning: #a16207;
+    --warning-soft: rgba(161, 98, 7, 0.08);
+    --danger: #c0392b;
+    --danger-soft: rgba(192, 57, 43, 0.07);
+    --shadow: 0 24px 70px rgba(17, 24, 39, 0.28), 0 2px 8px rgba(17, 24, 39, 0.08);
+    --shadow-soft: 0 1px 2px rgba(16, 24, 40, 0.05);
+    --radius: 8px;
+    --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1016;
+      --surface: #161a22;
+      --surface-2: #1b202a;
+      --surface-3: #212734;
+      --field: #11151d;
+      --border: #2a303c;
+      --border-strong: #3a4252;
+      --fg: #e7ebf3;
+      --muted: #98a2b3;
+      --muted-2: #6b7484;
+      --accent: #6f92ff;
+      --accent-hover: #87a4ff;
+      --accent-fg: #0b1020;
+      --accent-soft: rgba(111, 146, 255, 0.12);
+      --accent-softer: rgba(111, 146, 255, 0.06);
+      --success: #4ade80;
+      --success-soft: rgba(74, 222, 128, 0.1);
+      --warning: #e0a94a;
+      --warning-soft: rgba(224, 169, 74, 0.1);
+      --danger: #f07777;
+      --danger-soft: rgba(240, 119, 119, 0.1);
+      --shadow: 0 30px 90px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(0, 0, 0, 0.3);
+      --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.25);
+      color-scheme: dark;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg: #0d1016;
+    --surface: #161a22;
+    --surface-2: #1b202a;
+    --surface-3: #212734;
+    --field: #11151d;
+    --border: #2a303c;
+    --border-strong: #3a4252;
+    --fg: #e7ebf3;
+    --muted: #98a2b3;
+    --muted-2: #6b7484;
+    --accent: #6f92ff;
+    --accent-hover: #87a4ff;
+    --accent-fg: #0b1020;
+    --accent-soft: rgba(111, 146, 255, 0.12);
+    --accent-softer: rgba(111, 146, 255, 0.06);
+    --success: #4ade80;
+    --success-soft: rgba(74, 222, 128, 0.1);
+    --warning: #e0a94a;
+    --warning-soft: rgba(224, 169, 74, 0.1);
+    --danger: #f07777;
+    --danger-soft: rgba(240, 119, 119, 0.1);
+    --shadow: 0 30px 90px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(0, 0, 0, 0.3);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.25);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    font-size: 13px;
+  }
+
+  body { overflow-x: hidden; }
+
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  code, .mono { font-family: var(--mono); }
+  .icon { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .icon.sm { width: 13px; height: 13px; }
+  .icon.xs { width: 11px; height: 11px; }
+  .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+  .proto {
+    min-height: 100dvh;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* ---------------- prototype toolbar ---------------- */
+  .proto-bar {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 8px 2px 0;
+  }
+  .proto-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .proto-mark {
+    width: 24px; height: 24px; border-radius: 6px;
+    background: var(--accent); color: var(--accent-fg);
+    display: grid; place-items: center;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.04em;
+  }
+  .proto-name { font-size: 13px; font-weight: 650; white-space: nowrap; }
+  .proto-tag {
+    font-size: 10px; color: var(--muted); border: 1px solid var(--border);
+    background: var(--surface); padding: 1px 6px; border-radius: 999px; white-space: nowrap;
+  }
+  .proto-note { font-size: 10px; color: var(--muted-2); white-space: nowrap; }
+  .proto-controls {
+    margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    justify-content: flex-end; min-width: 0;
+  }
+  .proto-legend { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+  .seg {
+    display: inline-flex; align-items: center; gap: 1px; padding: 2px;
+    border: 1px solid var(--border); background: var(--surface); border-radius: 7px;
+  }
+  .seg button {
+    border: 0; background: transparent; color: var(--muted);
+    height: 24px; padding: 0 9px; border-radius: 5px; font-size: 11.5px; white-space: nowrap;
+  }
+  .seg button:hover { color: var(--fg); background: var(--surface-2); }
+  .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .seg.small { padding: 2px; }
+  .seg.small button { height: 26px; padding: 0 10px; font-size: 11.5px; }
+
+  .switch {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 11px;
+    color: var(--muted); cursor: pointer; white-space: nowrap; user-select: none;
+  }
+  .switch input { position: absolute; opacity: 0; pointer-events: none; }
+  .switch span {
+    width: 26px; height: 15px; border-radius: 999px; background: var(--border-strong);
+    position: relative; transition: background 120ms ease;
+  }
+  .switch span::after {
+    content: ""; position: absolute; width: 11px; height: 11px; border-radius: 50%;
+    background: #fff; top: 2px; left: 2px; transition: transform 120ms ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,.2);
+  }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(11px); }
+
+  .icon-btn {
+    width: 28px; height: 28px; display: inline-grid; place-items: center;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface);
+    color: var(--muted); padding: 0;
+  }
+  .icon-btn:hover { color: var(--fg); border-color: var(--border-strong); }
+  .icon-btn:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent-soft); outline-offset: 1px;
+    border-color: var(--accent);
+  }
+
+  /* ---------------- app frame ---------------- */
+  .app {
+    position: relative;
+    height: calc(100dvh - 74px);
+    min-height: 560px;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  }
+  .appbar {
+    height: 50px; flex: none; display: flex; align-items: center; gap: 10px;
+    padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--surface);
+  }
+  .app-logo {
+    width: 29px; height: 29px; border-radius: 7px; background: var(--accent);
+    color: var(--accent-fg); display: grid; place-items: center;
+    box-shadow: var(--shadow-soft);
+  }
+  .app-name { font-size: 13px; font-weight: 700; letter-spacing: -0.01em; }
+  .vline { width: 1px; height: 19px; background: var(--border); }
+  .crumb { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12.5px; }
+  .crumb .muted { color: var(--muted); }
+  .crumb .sep { color: var(--border-strong); }
+  .project-chip {
+    display: flex; align-items: center; gap: 5px; color: var(--fg); font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;
+  }
+  .appbar-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .top-btn {
+    height: 29px; border: 0; border-radius: 6px; background: transparent;
+    color: var(--muted); display: inline-flex; align-items: center; gap: 6px; padding: 0 8px;
+    font-size: 12px; position: relative;
+  }
+  .top-btn:hover { background: var(--surface-2); color: var(--fg); }
+  .top-btn.accent { color: var(--accent); }
+  .top-btn.accent:hover { background: var(--accent-soft); }
+  .kbd {
+    font-family: var(--mono); font-size: 9px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: 4px; padding: 0 4px;
+    background: var(--surface-2); line-height: 15px;
+  }
+  .gear-active {
+    background: var(--accent-soft) !important; color: var(--accent) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+
+  .appbody { min-height: 0; flex: 1; display: flex; position: relative; }
+
+  /* tree */
+  .tree {
+    width: 232px; flex: none; border-right: 1px solid var(--border);
+    background: var(--surface); display: flex; flex-direction: column; min-height: 0;
+  }
+  .tree-tabs { display: flex; gap: 2px; padding: 9px 8px 0; }
+  .tree-tab {
+    flex: 1; height: 29px; border: 1px solid transparent; border-radius: 6px;
+    background: transparent; color: var(--muted); font-size: 12px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .tree-tab.on { background: var(--surface-2); border-color: var(--border); color: var(--fg); font-weight: 600; }
+  .tree-head {
+    display: flex; align-items: center; padding: 11px 12px 6px; gap: 6px;
+    font-size: 11px; color: var(--muted); font-weight: 600;
+  }
+  .tree-head .plus { margin-left: auto; display: flex; gap: 3px; }
+  .tree-head .plus span {
+    width: 18px; height: 18px; display: grid; place-items: center; border-radius: 4px; color: var(--muted);
+  }
+  .tree-head .plus span:hover { background: var(--surface-2); color: var(--fg); }
+  .search {
+    margin: 0 10px 8px; height: 29px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--field); display: flex; align-items: center; gap: 6px; padding: 0 8px;
+    color: var(--muted-2); font-size: 11.5px;
+  }
+  .tree-row {
+    height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 12px 0 14px;
+    font-size: 12px; color: var(--fg);
+  }
+  .tree-row.root { background: var(--surface-2); font-weight: 600; }
+  .tree-row.child { padding-left: 30px; color: var(--muted); }
+  .tree-row.child:hover, .tree-row.root:hover { background: var(--surface-3); }
+  .tree-row .badge { margin-left: auto; font-size: 9.5px; color: var(--muted-2); }
+  .tree-foot {
+    margin-top: auto; border-top: 1px solid var(--border); padding: 7px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 10px; color: var(--muted);
+  }
+
+  /* stage */
+  .stage { min-width: 0; flex: 1; display: flex; flex-direction: column; background: var(--bg); }
+  .stage-toolbar {
+    height: 42px; flex: none; display: flex; align-items: center; gap: 7px;
+    border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 10px;
+  }
+  .address {
+    height: 28px; flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--surface-2); display: flex; align-items: center; gap: 6px; padding: 0 8px;
+    color: var(--muted); font-size: 11.5px;
+  }
+  .address .url { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn {
+    height: 31px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--fg); padding: 0 12px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 12px; font-weight: 550; white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+  .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn.secondary { background: var(--surface); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { background: var(--surface-2); color: var(--fg); }
+  .btn.danger { color: var(--danger); }
+  .btn:disabled { opacity: 0.45; pointer-events: none; }
+  .btn.sm { height: 28px; padding: 0 10px; font-size: 11.5px; }
+  .record-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #e5484d;
+    box-shadow: 0 0 0 3px rgba(229,72,77,.12);
+  }
+  .stage-meta {
+    height: 30px; flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--surface);
+    font-size: 10.5px; color: var(--muted);
+  }
+  .mini-select {
+    height: 21px; border: 1px solid var(--border); border-radius: 4px; background: var(--field);
+    display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 10.5px; color: var(--fg);
+  }
+  .stage-canvas {
+    position: relative; flex: 1; min-height: 0; overflow: hidden;
+    background-color: var(--surface-2);
+    background-image: radial-gradient(var(--border) 1px, transparent 1px);
+    background-size: 15px 15px;
+    display: grid; place-items: center; padding: 20px;
+  }
+  .mirror-badge {
+    position: absolute; left: 14px; top: 14px; z-index: 2;
+    background: rgba(15, 23, 42, 0.68); color: #fff; font-size: 9.5px; font-weight: 600;
+    border-radius: 4px; padding: 4px 7px; backdrop-filter: blur(4px);
+  }
+  .fake-page {
+    width: min(620px, 100%); background: #fff; color: #1d2433;
+    border: 1px solid #e3e6ec; border-radius: 7px; overflow: hidden;
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
+  }
+  .fake-head {
+    height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 13px;
+    border-bottom: 1px solid #edf0f4; font-size: 10.5px; font-weight: 650;
+  }
+  .fake-mark {
+    width: 16px; height: 16px; border-radius: 4px; background: #3563e9; color: #fff;
+    display: grid; place-items: center; font-size: 7px; font-weight: 800;
+  }
+  .fake-body { padding: 14px 18px 16px; }
+  .fake-title { font-size: 13px; font-weight: 700; }
+  .fake-sub { font-size: 9.5px; color: #7a8294; margin-top: 2px; }
+  .fake-form {
+    margin-top: 10px; border: 1px solid #e3e6ec; border-radius: 6px; padding: 11px;
+  }
+  .fake-grid { display: flex; gap: 9px; }
+  .fake-field { flex: 1; min-width: 0; }
+  .fake-label { font-size: 8.5px; color: #687083; margin-bottom: 3px; }
+  .fake-input {
+    height: 24px; border: 1px solid #d8dce5; border-radius: 4px; background: #fff;
+    display: flex; align-items: center; padding: 0 6px; font-size: 9.5px; color: #9aa1b0;
+  }
+  .fake-check {
+    margin-top: 8px; display: flex; align-items: center; gap: 5px;
+    font-size: 9px; color: #4a5265;
+  }
+  .fake-checkbox { width: 10px; height: 10px; border-radius: 2px; background: #3563e9; color: #fff; display: grid; place-items: center; font-size: 7px; }
+  .fake-actions { display: flex; gap: 6px; margin-top: 10px; }
+  .fake-btn { height: 23px; border-radius: 4px; padding: 0 10px; font-size: 9px; display: inline-flex; align-items: center; }
+  .fake-btn.p { background: #3563e9; color: #fff; }
+  .fake-btn.s { background: #eef1f6; color: #39425a; }
+  .fake-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .fake-table th {
+    text-align: left; font-size: 8.5px; color: #7a8294; font-weight: 600;
+    padding: 6px 8px; background: #fafbfc; border-bottom: 1px solid #eef0f4;
+  }
+  .fake-table td { font-size: 9px; padding: 7px 8px; border-bottom: 1px solid #f0f2f6; }
+
+  /* copilot behind */
+  .copilot {
+    width: 330px; flex: none; border-left: 1px solid var(--border); background: var(--surface);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .copilot-head {
+    height: 43px; flex: none; display: flex; align-items: center; gap: 7px; padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .copilot-name { font-size: 12px; font-weight: 650; }
+  .model-badge {
+    display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 6px;
+    border: 1px solid var(--border); border-radius: 4px; background: var(--surface-2);
+    font-size: 9.5px; color: var(--muted); max-width: 150px;
+  }
+  .model-badge b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .model-badge.demo { background: var(--warning-soft); border-color: transparent; color: var(--warning); }
+  .model-badge.clickable { cursor: pointer; }
+  .copilot-head .right { margin-left: auto; display: flex; gap: 2px; }
+  .ctx-chip {
+    margin: 8px 10px 0; height: 22px; align-self: flex-start; display: inline-flex; align-items: center;
+    gap: 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-2);
+    padding: 0 6px; font-size: 9.5px; color: var(--muted); max-width: calc(100% - 20px);
+  }
+  .convo { flex: 1; min-height: 0; padding: 12px 12px 0; overflow: hidden; }
+  .bubble {
+    margin-left: auto; width: fit-content; max-width: 88%; background: var(--accent);
+    color: var(--accent-fg); border-radius: 7px 7px 2px 7px; padding: 6px 8px;
+    font-size: 11px; line-height: 1.55;
+  }
+  .msg-head { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 9.5px; margin: 12px 0 4px; }
+  .msg-text { font-size: 11px; line-height: 1.65; color: var(--fg); }
+  .tool-card {
+    margin-top: 8px; border: 1px solid var(--border); border-radius: 5px;
+    background: var(--surface-2); padding: 6px 7px; display: flex; align-items: center; gap: 6px;
+    font-size: 10px; color: var(--muted);
+  }
+  .tool-card .ok { color: var(--success); }
+  .tool-card .ms { margin-left: auto; font-family: var(--mono); font-size: 9px; }
+  .composer {
+    margin: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--field);
+    padding: 7px; color: var(--muted-2); font-size: 10.5px; min-height: 54px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .composer .send {
+    align-self: flex-end; width: 24px; height: 24px; border-radius: 5px;
+    background: var(--surface-3); display: grid; place-items: center; color: var(--muted);
+  }
+  .statusbar {
+    height: 24px; flex: none; display: flex; align-items: center; gap: 10px;
+    border-top: 1px solid var(--border); background: var(--surface); padding: 0 10px;
+    font-size: 9.5px; color: var(--muted);
+  }
+  .statusbar .right { margin-left: auto; display: flex; gap: 12px; }
+
+  /* ---------------- overlay + dialog ---------------- */
+  .overlay {
+    position: absolute; inset: 0; z-index: 20;
+    background: rgba(15, 23, 42, 0.22);
+    backdrop-filter: blur(1.5px);
+    display: grid; place-items: center; padding: 22px;
+    animation: fade-in 160ms ease-out;
+  }
+  .overlay.hidden { display: none; }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop-in { from { opacity: 0; transform: translateY(7px) scale(0.992); } to { opacity: 1; transform: none; } }
+  .dialog {
+    width: min(768px, 100%);
+    max-height: min(660px, calc(100dvh - 118px));
+    display: flex; flex-direction: column;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--surface); box-shadow: var(--shadow);
+    overflow: hidden;
+    animation: pop-in 190ms cubic-bezier(.2,.8,.2,1);
+  }
+  .dlg-head {
+    flex: none; display: flex; align-items: flex-start; gap: 12px;
+    padding: 15px 18px 13px; border-bottom: 1px solid var(--border);
+  }
+  .dlg-head h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .dlg-head p { margin: 3px 0 0; font-size: 11px; color: var(--muted); }
+  .dlg-head .icon-btn { margin-left: auto; border-color: transparent; background: transparent; }
+  .dlg-head .icon-btn:hover { background: var(--surface-2); }
+
+  .dlg-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 186px minmax(0, 1fr); }
+  .rail {
+    background: var(--surface-2); border-right: 1px solid var(--border);
+    padding: 12px 9px; display: flex; flex-direction: column; gap: 3px; min-height: 0;
+  }
+  .rail-label {
+    font-size: 9.5px; font-weight: 700; color: var(--muted-2);
+    text-transform: uppercase; letter-spacing: 0.08em; padding: 0 7px 7px;
+  }
+  .rail-item {
+    width: 100%; border: 1px solid transparent; background: transparent; border-radius: 6px;
+    display: flex; align-items: center; gap: 8px; padding: 7px; text-align: left; min-height: 42px;
+  }
+  .rail-item:hover { background: var(--surface); }
+  .rail-item.on {
+    background: var(--surface); border-color: var(--border);
+    box-shadow: var(--shadow-soft);
+  }
+  .provider-mark {
+    width: 25px; height: 25px; border-radius: 6px; flex: none;
+    display: grid; place-items: center; font-size: 11px; font-weight: 800;
+    border: 1px solid var(--border); background: var(--surface-3); color: var(--muted);
+  }
+  .rail-item.on .provider-mark { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+  .provider-mark.ds { font-size: 10px; }
+  .rail-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .rail-text b { font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .rail-text small { font-size: 9.5px; color: var(--muted); white-space: nowrap; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--muted-2); }
+  .dot.ok { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+  .dot.warn { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-soft); }
+  .dot.err { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+  .rail-item .dot { margin-left: auto; }
+  .rail-spacer { flex: 1; min-height: 12px; }
+  .effective {
+    border: 1px solid var(--border); background: var(--surface); border-radius: 7px;
+    padding: 9px; margin-top: 4px;
+  }
+  .effective-label {
+    font-size: 9px; color: var(--muted-2); text-transform: uppercase;
+    letter-spacing: 0.07em; font-weight: 700;
+  }
+  .effective-model {
+    margin-top: 4px; font-size: 11px; font-weight: 600; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  .effective-meta {
+    display: flex; align-items: center; gap: 5px; margin-top: 5px;
+    font-size: 9.5px; color: var(--muted);
+  }
+  .rail-note {
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    margin: 9px 0 0; font-size: 9px; color: var(--muted-2);
+  }
+
+  .pane { min-height: 0; overflow-y: auto; padding: 15px 20px 20px; }
+  .pane-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+  .pane-head h2 { margin: 0; font-size: 13.5px; font-weight: 700; }
+  .pane-head p { margin: 2px 0 0; font-size: 10.5px; color: var(--muted); }
+  .pane-head .pill { margin-left: auto; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px;
+    border-radius: 999px; font-size: 9.5px; font-weight: 600; white-space: nowrap;
+    background: var(--surface-3); color: var(--muted);
+  }
+  .pill.ok { background: var(--success-soft); color: var(--success); }
+  .pill.warn { background: var(--warning-soft); color: var(--warning); }
+  .pill.err { background: var(--danger-soft); color: var(--danger); }
+  .pill.accent { background: var(--accent-soft); color: var(--accent); }
+
+  .banner {
+    display: flex; align-items: flex-start; gap: 7px;
+    border: 1px solid color-mix(in srgb, var(--warning) 26%, var(--border));
+    background: var(--warning-soft); color: var(--warning);
+    border-radius: 6px; padding: 8px 9px; margin-bottom: 12px;
+    font-size: 10.5px; line-height: 1.55;
+  }
+  .banner b { font-weight: 650; }
+  .banner code { font-size: 9.5px; background: color-mix(in srgb, var(--warning) 10%, transparent); padding: 0 3px; border-radius: 3px; }
+  .banner .link { color: var(--warning); margin-left: auto; flex: none; }
+  .banner + .banner { margin-top: -6px; }
+
+  .field { position: relative; margin-bottom: 13px; }
+  .field.grow { flex: 1; min-width: 0; }
+  .label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+  .field label, .label-row label {
+    font-size: 10.5px; font-weight: 650; color: var(--fg); display: inline-flex;
+    align-items: center; gap: 4px;
+  }
+  .req { color: var(--danger); font-size: 9px; font-weight: 600; }
+  .link {
+    border: 0; background: transparent; color: var(--accent); padding: 0; font-size: 10px;
+    font-weight: 550; display: inline-flex; align-items: center; gap: 3px;
+  }
+  .link:hover { text-decoration: underline; }
+  .link.danger { color: var(--danger); }
+  .link.muted { color: var(--muted); }
+  .hint { margin: 5px 0 0; font-size: 9.5px; color: var(--muted); line-height: 1.5; }
+  .hint code { font-size: 9px; color: var(--muted); background: var(--surface-3); padding: 0 3px; border-radius: 3px; }
+  .field-foot { display: flex; align-items: flex-start; gap: 10px; margin-top: 5px; }
+  .field-foot .hint { margin: 0; flex: 1; display: flex; align-items: flex-start; gap: 4px; }
+  .field-foot .link { flex: none; margin-top: 1px; }
+
+  .input-group {
+    height: 34px; display: flex; align-items: center; gap: 7px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--field);
+    padding: 0 8px; transition: border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .input-group:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .input-group.invalid { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+  .input-group > .icon { color: var(--muted-2); }
+  .input-group input {
+    flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
+    font-size: 12px; height: 100%;
+  }
+  .input-group input::placeholder { color: var(--muted-2); }
+  .saved-key {
+    flex: 1; min-width: 0; font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap;
+  }
+  .saved-key .mask { letter-spacing: 0.06em; }
+  .saved-key .tag {
+    font-size: 9px; font-family: inherit; color: var(--success);
+    background: var(--success-soft); border-radius: 3px; padding: 1px 4px;
+  }
+  .input-group .icon-btn {
+    width: 24px; height: 24px; border: 0; background: transparent;
+    color: var(--muted); flex: none;
+  }
+  .input-group .icon-btn:hover { background: var(--surface-2); color: var(--fg); }
+  .key-input-mode .saved-key { display: none; }
+  .key-input-mode .key-replace { display: none; }
+  .saved-key-mode .key-replace { display: inline-flex; }
+  .saved-key-mode input { display: none; }
+  .saved-key-mode .key-eye { display: none; }
+  .key-replace {
+    height: 22px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface);
+    color: var(--fg); font-size: 9.5px; padding: 0 7px; display: none; align-items: center; flex: none;
+  }
+  .key-replace:hover { border-color: var(--border-strong); background: var(--surface-2); }
+
+  .text-input {
+    width: 100%; height: 34px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--field); padding: 0 9px; font-size: 12px; outline: 0;
+  }
+  .text-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .text-input::placeholder { color: var(--muted-2); }
+  .input-suffix { position: relative; }
+  .input-suffix .text-input { padding-right: 34px; }
+  .input-suffix span {
+    position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+    font-size: 10px; color: var(--muted);
+  }
+
+  .row { display: flex; gap: 12px; align-items: flex-start; }
+  .row > .field { flex: 1; min-width: 0; }
+  .row > .field.thinking { flex: 0 0 196px; }
+
+  .select {
+    width: 100%; height: 34px; border: 1px solid var(--border); border-radius: 6px;
+    background: var(--field); padding: 0 8px; display: flex; align-items: center; gap: 7px;
+    text-align: left; font-size: 12px;
+  }
+  .select:hover { border-color: var(--border-strong); }
+  .select .id { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .select .icon { color: var(--muted); }
+  .select[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+  .gateway-model { display: none; }
+  .pane[data-provider="gateway"] .gateway-model { display: block; }
+  .pane[data-provider="gateway"] #model-btn { display: none; }
+  .pane[data-provider="gateway"] #refresh-models { display: none; }
+  .pane[data-provider="gateway"] .model-pop { display: none !important; }
+  .pane[data-provider="gateway"] .adv-base { display: none; }
+
+  .popover {
+    position: absolute; left: 0; right: 0; top: calc(100% + 5px); z-index: 40;
+    max-height: min(270px, 42vh); overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.08);
+    padding: 5px; animation: fade-in 120ms ease-out;
+  }
+  .pop-head {
+    display: flex; align-items: center; gap: 7px; padding: 4px 5px 7px;
+    border-bottom: 1px solid var(--border); margin-bottom: 4px;
+  }
+  .pop-head b { font-size: 10px; font-weight: 650; }
+  .pop-head .link { margin-left: auto; font-size: 9.5px; }
+  .model-opt {
+    width: 100%; display: flex; align-items: flex-start; gap: 8px; padding: 7px 6px;
+    border: 0; border-radius: 5px; background: transparent; text-align: left;
+  }
+  .model-opt:hover { background: var(--surface-2); }
+  .model-opt.on { background: var(--accent-softer); }
+  .radio {
+    width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--border-strong);
+    flex: none; margin-top: 2px; display: grid; place-items: center;
+  }
+  .model-opt.on .radio { border-color: var(--accent); }
+  .model-opt.on .radio::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .model-info { min-width: 0; flex: 1; }
+  .model-line { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .model-line b { font-size: 11px; font-weight: 650; }
+  .model-line code { font-size: 9px; color: var(--muted); }
+  .model-desc { font-size: 9.5px; color: var(--muted); margin-top: 1px; }
+  .chips { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 4px; }
+  .chip {
+    font-size: 8.5px; color: var(--muted); border: 1px solid var(--border);
+    background: var(--surface-2); border-radius: 3px; padding: 0 4px; line-height: 15px;
+  }
+  .chip.vision { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 25%, var(--border)); background: var(--accent-softer); }
+
+  .advanced { margin: 2px 0 13px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .advanced summary {
+    font-size: 10.5px; color: var(--muted); cursor: pointer; list-style: none;
+    display: inline-flex; align-items: center; gap: 5px; font-weight: 550;
+  }
+  .advanced summary::before { content: "▸"; font-size: 9px; transition: transform 120ms ease; }
+  .advanced[open] summary::before { transform: rotate(90deg); }
+  .advanced summary::-webkit-details-marker { display: none; }
+  .adv-grid { display: flex; gap: 12px; margin-top: 9px; }
+  .adv-grid .field { margin: 0; }
+
+  .thinking-note {
+    display: flex; align-items: flex-start; gap: 6px; padding: 8px 9px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2);
+    font-size: 10px; line-height: 1.5; color: var(--muted); min-height: 34px;
+  }
+  .thinking-note b { color: var(--fg); font-weight: 600; }
+
+  .test-card {
+    border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2);
+    padding: 9px 10px; min-height: 46px;
+  }
+  .test-card[data-state="success"] {
+    border-color: color-mix(in srgb, var(--success) 25%, var(--border));
+    background: var(--success-soft);
+  }
+  .test-card[data-state="error"] {
+    border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+    background: var(--danger-soft);
+  }
+  .test-card .test-idle,
+  .test-card .test-running,
+  .test-card .test-success,
+  .test-card .test-error { display: none; }
+  .test-card[data-state="idle"] .test-idle { display: flex; }
+  .test-card[data-state="running"] .test-running { display: flex; }
+  .test-card[data-state="success"] .test-success { display: flex; }
+  .test-card[data-state="error"] .test-error { display: block; }
+  .test-idle { display: flex; align-items: flex-start; gap: 7px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+  .test-idle .icon { margin-top: 1px; }
+  .test-running { display: flex; align-items: center; gap: 8px; color: var(--accent); font-size: 10.5px; }
+  .spinner {
+    width: 13px; height: 13px; border-radius: 50%; flex: none;
+    border: 2px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-top-color: var(--accent);
+    animation: spin 700ms linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .test-running .elapsed { margin-left: auto; font-family: var(--mono); font-size: 9.5px; color: var(--muted); }
+  .test-success { display: flex; align-items: flex-start; gap: 8px; }
+  .test-success .main { min-width: 0; flex: 1; }
+  .test-title { display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 650; color: var(--success); }
+  .test-lines { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 9.5px; color: var(--muted); }
+  .test-lines span { display: inline-flex; align-items: center; gap: 3px; }
+  .test-lines .ok { color: var(--success); }
+  .test-error .title { display: flex; align-items: center; gap: 5px; color: var(--danger); font-size: 10.5px; font-weight: 650; }
+  .test-error p { margin: 3px 0 0; font-size: 9.5px; color: var(--muted); line-height: 1.5; }
+  .test-error details { margin-top: 5px; }
+  .test-error summary { font-size: 9.5px; color: var(--danger); cursor: pointer; }
+  .test-error pre {
+    margin: 5px 0 0; padding: 6px 7px; border-radius: 4px; background: var(--surface);
+    border: 1px solid color-mix(in srgb, var(--danger) 20%, var(--border));
+    font-family: var(--mono); font-size: 9px; color: var(--muted); white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .dlg-foot {
+    flex: none; display: flex; align-items: center; gap: 10px;
+    border-top: 1px solid var(--border); padding: 11px 18px; background: var(--surface);
+  }
+  .foot-left {
+    display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: var(--muted);
+    min-width: 0;
+  }
+  .dirty-mark {
+    display: none; align-items: center; gap: 4px; color: var(--warning); font-weight: 600;
+  }
+  .dirty-mark::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--warning); }
+  .dialog.is-dirty .dirty-mark { display: inline-flex; }
+  .foot-actions { margin-left: auto; display: flex; align-items: center; gap: 7px; }
+
+  .clear-confirm {
+    display: none; align-items: center; gap: 6px; margin-top: 6px; padding: 6px 8px;
+    border: 1px solid color-mix(in srgb, var(--danger) 22%, var(--border));
+    border-radius: 5px; background: var(--danger-soft); font-size: 10px; color: var(--danger);
+  }
+  .clear-confirm.show { display: flex; }
+  .clear-confirm span { flex: 1; }
+  .clear-confirm button {
+    height: 22px; padding: 0 7px; border-radius: 4px; border: 1px solid transparent;
+    font-size: 9.5px; background: transparent; color: var(--muted);
+  }
+  .clear-confirm button.yes { background: var(--danger); color: #fff; }
+
+  /* visibility by view / provider */
+  .only-env { display: none; }
+  .dialog[data-view="env"] .only-env { display: flex; }
+  .only-unconfigured { display: none; }
+  .dialog[data-view="unconfigured"] .only-unconfigured { display: flex; }
+  .only-saved { display: none; }
+  .dialog[data-view="saved"] .only-saved { display: inline-flex; }
+  .only-gateway { display: none; }
+  .pane[data-provider="gateway"] .only-gateway { display: block; }
+  .only-deepseek { display: none; }
+  .pane[data-provider="deepseek"] .only-deepseek { display: inline-flex; }
+  .only-anthropic { display: none; }
+  .pane[data-provider="anthropic"] .only-anthropic { display: block; }
+  .pane[data-provider="gateway"] .thinking-field,
+  .pane[data-provider="gateway"] .only-deepseek-thinking { display: none; }
+  .pane[data-provider="anthropic"] .only-deepseek-thinking { display: none; }
+
+  .toast {
+    position: fixed; right: 22px; bottom: 22px; z-index: 90;
+    background: var(--fg); color: var(--surface);
+    border-radius: 7px; padding: 8px 12px; font-size: 11px; font-weight: 550;
+    box-shadow: 0 10px 30px rgba(15,23,42,.25);
+    opacity: 0; transform: translateY(6px); pointer-events: none;
+    transition: opacity 140ms ease, transform 140ms ease;
+    max-width: min(360px, calc(100vw - 44px));
+  }
+  .toast.show { opacity: 1; transform: none; }
+  .toast.warn { background: var(--warning); color: #1a1204; }
+
+  /* entry annotation */
+  .anno { display: none; }
+  .annotate .anno { display: inline-flex; }
+  .gear-wrap { position: relative; }
+  .gear-wrap .anno {
+    position: absolute; right: -9px; top: -7px; width: 16px; height: 16px;
+    border-radius: 50%; background: var(--accent); color: var(--accent-fg);
+    font-size: 9px; font-weight: 700; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 3px var(--accent-soft); pointer-events: none;
+  }
+  .gear-wrap.annotate:hover::after {
+    content: "全局入口：模型设置"; position: absolute; right: -12px; top: 25px;
+    background: var(--fg); color: var(--surface); font-size: 9px; font-weight: 600;
+    padding: 3px 6px; border-radius: 4px; white-space: nowrap; z-index: 3;
+    box-shadow: 0 4px 14px rgba(15,23,42,.2);
+  }
+
+  .reopen {
+    position: absolute; right: 14px; top: 8px; z-index: 5;
+    display: none; align-items: center; gap: 5px;
+    height: 30px; padding: 0 10px; border-radius: 6px;
+    background: var(--accent); color: var(--accent-fg); border: 0;
+    font-size: 11px; font-weight: 600; box-shadow: var(--shadow-soft);
+  }
+  .reopen.show { display: inline-flex; }
+
+  /* responsive */
+  @media (max-width: 1120px) {
+    .copilot { width: 300px; }
+    .tree { width: 210px; }
+  }
+  @media (max-width: 920px) {
+    .proto-note { display: none; }
+    .copilot { display: none; }
+    .app { height: calc(100dvh - 70px); }
+    .proto-legend { display: none; }
+  }
+  @media (max-width: 760px) {
+    .tree { display: none; }
+    .dlg-body { grid-template-columns: 1fr; }
+    .rail {
+      flex-direction: row; align-items: center; overflow-x: auto; border-right: 0;
+      border-bottom: 1px solid var(--border); padding: 7px 9px; gap: 4px;
+    }
+    .rail-label, .effective, .rail-note, .rail-spacer { display: none; }
+    .rail-item { width: auto; flex: 0 0 auto; min-height: 34px; padding: 4px 7px; }
+    .rail-text small { display: none; }
+    .rail-item .dot { display: none; }
+    .provider-mark { width: 21px; height: 21px; font-size: 9px; }
+    .pane { padding: 13px 14px 16px; }
+    .row { flex-direction: column; gap: 0; }
+    .row > .field.thinking { flex: 1 1 auto; width: 100%; }
+  }
+  @media (max-width: 640px) {
+    .toast {
+      left: 12px; right: 12px; bottom: max(74px, calc(env(safe-area-inset-bottom, 0px) + 74px));
+      max-width: none; text-align: center;
+    }
+    .proto-bar { gap: 8px; }
+    .proto-controls { width: 100%; justify-content: flex-start; overflow-x: auto; padding-bottom: 2px; }
+    .app { height: auto; min-height: calc(100dvh - 100px); }
+    .overlay { position: fixed; inset: 0; padding: 0; z-index: 60; }
+    .dialog {
+      width: 100%; height: 100dvh; max-height: none; border-radius: 0; border: 0;
+    }
+    .dlg-head { padding-top: max(15px, env(safe-area-inset-top, 0px)); }
+    .dlg-foot { padding-bottom: max(11px, env(safe-area-inset-bottom, 0px)); }
+    .foot-left { display: none; }
+    .foot-actions { width: 100%; justify-content: flex-end; }
+    .btn { height: 33px; }
+    .stage-canvas { padding: 12px; }
+    .fake-page { display: none; }
+    .mirror-badge { left: 10px; top: 10px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+</style>
+
+<svg class="sprite" aria-hidden="true">
+  <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 6.2A10.7 10.7 0 0 1 12 6c6.5 0 10 6 10 6a17 17 0 0 1-3 3.7"/><path d="M6.6 6.6C3.6 8.5 2 12 2 12s3.5 7 10 7c1.3 0 2.5-.2 3.6-.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-alert-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 8.8-8.8M16 6l3 3M18 4l2 2"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/></symbol>
+  <symbol id="i-house" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 21v-7h6v7"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="m6 4 14 8-14 8z"/></symbol>
+  <symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M3 7h12M19 7h2M3 17h2M9 17h12"/><circle cx="17" cy="7" r="2"/><circle cx="7" cy="17" r="2"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8.3-8 9-4.6-.7-8-4-8-9V6l8-3z"/><path d="m9 12 2 2 4-4"/></symbol>
+</svg>
+
+<div class="proto">
+  <header class="proto-bar">
+    <div class="proto-brand">
+      <span class="proto-mark">ATP</span>
+      <span class="proto-name">模型设置</span>
+      <span class="proto-tag">交互原型</span>
+      <span class="proto-note">模拟数据 · 不会发起真实请求</span>
+    </div>
+    <div class="proto-controls">
+      <span class="proto-legend">入口：① 顶栏齿轮 · ② Copilot 模型徽标 · ③ 未配置提示</span>
+      <div class="seg" id="state-seg" role="group" aria-label="原型状态">
+        <button type="button" data-view="unconfigured">未配置</button>
+        <button type="button" data-view="saved" class="on">已保存</button>
+        <button type="button" data-view="testing">测试中</button>
+        <button type="button" data-view="error">失败</button>
+        <button type="button" data-view="env">环境变量</button>
+      </div>
+      <label class="switch"><input type="checkbox" id="fail-toggle"><span></span>模拟失败</label>
+      <label class="switch"><input type="checkbox" id="annot-toggle" checked><span></span>标注</label>
+      <button class="icon-btn" id="theme-btn" type="button" aria-label="切换主题" title="切换明暗">
+        <svg class="icon sm"><use href="#i-moon"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="app" id="app">
+    <div class="appbar">
+      <div class="app-logo"><svg class="icon sm"><use href="#i-layers"/></svg></div>
+      <div class="app-name">ATP</div>
+      <div class="vline"></div>
+      <div class="crumb">
+        <span class="project-chip"><svg class="icon sm"><use href="#i-folder"/></svg>默认项目</span>
+        <span class="sep">/</span>
+        <span class="muted">用例</span>
+        <span class="sep">/</span>
+        <span class="muted">未选择用例</span>
+      </div>
+      <div class="appbar-right">
+        <button class="top-btn accent" type="button">
+          <svg class="icon sm"><use href="#i-sparkles"/></svg>
+          Copilot
+          <span class="kbd">⌘K</span>
+        </button>
+        <div class="gear-wrap annotate" id="gear-wrap">
+          <button class="top-btn gear-active" id="gear-btn" type="button" aria-label="模型设置">
+            <svg class="icon"><use href="#i-gear"/></svg>
+          </button>
+          <span class="anno">1</span>
+        </div>
+        <button class="top-btn" type="button" aria-label="切换主题">
+          <svg class="icon"><use href="#i-sun"/></svg>
+        </button>
+        <button class="top-btn" type="button" aria-label="右侧面板">
+          <svg class="icon"><use href="#i-panel"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="appbody">
+      <aside class="tree">
+        <div class="tree-tabs">
+          <button class="tree-tab on" type="button"><svg class="icon sm"><use href="#i-layers"/></svg>用例</button>
+          <button class="tree-tab" type="button"><svg class="icon sm"><use href="#i-layers"/></svg>测试计划</button>
+        </div>
+        <div class="tree-head">
+          用例库 <span class="badge" style="font-weight:500;color:var(--muted-2)">2</span>
+          <span class="plus"><span>＋</span><span>⚙</span></span>
+        </div>
+        <div class="search"><svg class="icon sm"><use href="#i-search"/></svg>搜索用例 / 模块</div>
+        <div class="tree-row root"><svg class="icon sm"><use href="#i-folder"/></svg>默认项目</div>
+        <div class="tree-row child"><svg class="icon sm"><use href="#i-layers"/></svg>登录</div>
+        <div class="tree-row child"><svg class="icon sm"><use href="#i-layers"/></svg>录制 13:21:55</div>
+        <div class="tree-foot"><span>0 个模块 · 2 条用例</span><span class="mono">/ 搜索</span></div>
+      </aside>
+
+      <main class="stage">
+        <div class="stage-toolbar">
+          <button class="btn ghost sm" type="button" aria-label="返回启动台"><svg class="icon sm"><use href="#i-house"/></svg></button>
+          <div class="address"><svg class="icon sm"><use href="#i-globe"/></svg><span class="url">http://localhost:8765/</span></div>
+          <button class="btn sm secondary" type="button">打开</button>
+          <button class="btn sm primary" type="button"><svg class="icon xs"><use href="#i-circle"/></svg>开始录制</button>
+          <button class="btn sm secondary" type="button" disabled><svg class="icon xs"><use href="#i-play"/></svg>回放用例</button>
+        </div>
+        <div class="stage-meta">
+          <span class="mini-select">自适应 ▾</span>
+          <span class="mini-select">跟随舞台 ▾</span>
+          <span>1280 × 800 · 100%</span>
+          <span style="margin-left:auto">回放方式</span>
+          <span class="mini-select">当前 Chrome 窗口 ▾</span>
+        </div>
+        <div class="stage-canvas">
+          <span class="mirror-badge">实时镜像 · 只读</span>
+          <div class="fake-page">
+            <div class="fake-head"><span class="fake-mark">内</span>内容管理中心<span style="margin-left:auto;color:#7a8294;font-weight:500">演示环境</span></div>
+            <div class="fake-body">
+              <div class="fake-title">新建内容</div>
+              <div class="fake-sub">填写内容信息并保存，保存后可在内容列表查看。</div>
+              <div class="fake-form">
+                <div class="fake-grid">
+                  <div class="fake-field"><div class="fake-label">内容名称</div><div class="fake-input">例如：夏日旅行</div></div>
+                  <div class="fake-field"><div class="fake-label">内容类型</div><div class="fake-input">电影 ▾</div></div>
+                </div>
+                <div class="fake-check"><span class="fake-checkbox">✓</span>在首页显示标题</div>
+                <div class="fake-actions"><span class="fake-btn p">保存内容</span><span class="fake-btn s">取消</span></div>
+              </div>
+              <table class="fake-table">
+                <thead><tr><th>名称</th><th>类型</th><th>状态</th></tr></thead>
+                <tbody><tr><td>城市夜景</td><td>电影</td><td>已发布</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <aside class="copilot">
+        <div class="copilot-head">
+          <svg class="icon sm" style="color:var(--accent)"><use href="#i-sparkles"/></svg>
+          <span class="copilot-name">Copilot</span>
+          <span class="model-badge demo clickable" id="copilot-badge" title="点击配置模型">
+            <b>演示模式</b><svg class="icon xs"><use href="#i-chevron"/></svg>
+          </span>
+          <span class="right">
+            <button class="icon-btn" type="button" aria-label="新会话" style="width:24px;height:24px;border:0;background:transparent"><svg class="icon xs"><use href="#i-refresh"/></svg></button>
+            <button class="icon-btn" type="button" aria-label="收起" style="width:24px;height:24px;border:0;background:transparent"><svg class="icon xs"><use href="#i-panel"/></svg></button>
+          </span>
+        </div>
+        <div class="ctx-chip"><svg class="icon xs"><use href="#i-globe"/></svg>localhost:8765</div>
+        <div class="convo">
+          <div class="bubble">观察当前页面，告诉我这个页面能测什么</div>
+          <div class="msg-head"><svg class="icon xs" style="color:var(--accent)"><use href="#i-sparkles"/></svg>Copilot</div>
+          <div class="msg-text" id="copilot-text">当前是演示模式：没有配置真实模型，我会展示 Agent 的观察与工具卡片。</div>
+          <div class="tool-card"><svg class="icon xs ok"><use href="#i-check"/></svg>观察页面 · 5 个可交互元素<span class="ms">12ms</span></div>
+        </div>
+        <div class="composer"><span>描述要测什么，或让 Copilot 操作页面…</span><span class="send"><svg class="icon xs"><use href="#i-arrow-right"/></svg></span></div>
+      </aside>
+
+      <div class="overlay" id="overlay">
+        <div class="dialog" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-title" data-view="saved">
+          <div class="dlg-head">
+            <div>
+              <h1 id="dlg-title">模型设置</h1>
+              <p>Copilot 使用这个连接读取页面并执行操作</p>
+            </div>
+            <button class="icon-btn" id="close-btn" type="button" aria-label="关闭">
+              <svg class="icon"><use href="#i-x"/></svg>
+            </button>
+          </div>
+
+          <div class="dlg-body">
+            <nav class="rail" aria-label="连接">
+              <div class="rail-label">连接</div>
+              <button class="rail-item on" type="button" data-provider="deepseek">
+                <span class="provider-mark ds">D</span>
+                <span class="rail-text"><b>DeepSeek</b><small>官方 API</small></span>
+                <span class="dot ok"></span>
+              </button>
+              <button class="rail-item" type="button" data-provider="anthropic">
+                <span class="provider-mark">A</span>
+                <span class="rail-text"><b>Anthropic</b><small>Claude</small></span>
+                <span class="dot"></span>
+              </button>
+              <button class="rail-item" type="button" data-provider="gateway">
+                <span class="provider-mark"><svg class="icon xs"><use href="#i-globe"/></svg></span>
+                <span class="rail-text"><b>OpenAI 兼容</b><small>公司 / 自建网关</small></span>
+                <span class="dot"></span>
+              </button>
+
+              <div class="rail-spacer"></div>
+              <div class="effective">
+                <div class="effective-label">当前生效</div>
+                <div class="effective-model mono" id="eff-model">deepseek-flash</div>
+                <div class="effective-meta" id="eff-meta"><span class="dot ok"></span><span>本机配置 · 已连接</span></div>
+              </div>
+              <p class="rail-note"><svg class="icon xs"><use href="#i-lock"/></svg>只在本机保存</p>
+            </nav>
+
+            <section class="pane" id="pane" data-provider="deepseek">
+              <div class="pane-head">
+                <div>
+                  <h2 id="prov-title">DeepSeek 官方</h2>
+                  <p id="prov-sub">读取页面、调用工具并完成多步操作</p>
+                </div>
+                <span class="pill ok" id="prov-status">已连接</span>
+              </div>
+
+              <div class="banner only-env">
+                <svg class="icon sm" style="margin-top:1px"><use href="#i-alert"/></svg>
+                <span><b>环境变量已接管。</b> 检测到 <code>DEEPSEEK_API_KEY</code>，它优先于这里保存的密钥。当前实际生效的是环境变量。</span>
+                <button class="link" id="env-help" type="button">优先级</button>
+              </div>
+
+              <div class="field">
+                <div class="label-row">
+                  <label for="key-input">API Key</label>
+                  <button class="link only-deepseek" id="get-key" type="button">如何获取？</button>
+                </div>
+                <div class="input-group saved-key-mode" id="key-group">
+                  <svg class="icon sm"><use href="#i-key"/></svg>
+                  <span class="saved-key" id="saved-key"><span class="mask" id="key-mask">sk-…9f3a</span><span class="tag" id="key-source-tag">本机</span></span>
+                  <input id="key-input" type="password" placeholder="粘贴 API Key，留空表示不修改" autocomplete="off" spellcheck="false">
+                  <button class="key-replace" id="replace-btn" type="button">替换</button>
+                  <button class="icon-btn key-eye" id="eye-btn" type="button" aria-label="显示密钥">
+                    <svg class="icon sm" id="eye-icon"><use href="#i-eye"/></svg>
+                  </button>
+                </div>
+                <div class="field-foot">
+                  <span class="hint"><svg class="icon xs"><use href="#i-lock"/></svg><span>仅保存到本机 <code>~/.atp-agent/config.json</code>（权限 0600），不会写入日志。</span></span>
+                  <button class="link danger" id="clear-key" type="button">清除密钥</button>
+                </div>
+                <div class="clear-confirm" id="clear-confirm">
+                  <span>清除后 Copilot 会回到演示模式，确定吗？</span>
+                  <button type="button" id="clear-cancel">取消</button>
+                  <button type="button" class="yes" id="clear-yes">清除</button>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="field grow">
+                  <div class="label-row">
+                    <label>模型</label>
+                    <button class="link" id="refresh-models" type="button"><svg class="icon xs"><use href="#i-refresh"/></svg>从 API 刷新</button>
+                  </div>
+                  <button class="select" id="model-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="id mono" id="model-id">deepseek-flash</span>
+                    <svg class="icon sm"><use href="#i-chevron"/></svg>
+                  </button>
+                  <input id="model-input" class="text-input mono gateway-model" value="deepseek-flash" placeholder="网关提供的模型名" aria-label="模型名">
+                  <p class="hint" id="model-meta">1M 上下文 · 384K 输出 · 支持图片输入</p>
+                  <div class="popover" id="model-pop" role="listbox" aria-label="可用模型" hidden>
+                    <div class="pop-head">
+                      <svg class="icon xs" style="color:var(--muted)"><use href="#i-layers"/></svg>
+                      <b>可用模型</b>
+                      <button class="link" id="pop-refresh" type="button"><svg class="icon xs"><use href="#i-refresh"/></svg>刷新</button>
+                    </div>
+                    <div id="model-list"></div>
+                  </div>
+                </div>
+
+                <div class="field thinking only-deepseek-thinking">
+                  <label>思考强度</label>
+                  <div class="seg small" id="think-seg" role="group" aria-label="思考强度">
+                    <button type="button" data-think="off">关闭</button>
+                    <button type="button" data-think="low">低</button>
+                    <button type="button" data-think="high" class="on">高</button>
+                    <button type="button" data-think="max">最高</button>
+                  </div>
+                  <p class="hint">默认高；越高越慢，多步操作更稳。</p>
+                </div>
+
+                <div class="field thinking only-anthropic">
+                  <label>思考强度</label>
+                  <div class="thinking-note"><svg class="icon xs" style="margin-top:1px"><use href="#i-layers"/></svg><span><b>由模型决定。</b> Claude 5.5 默认开启思考；Opus / Sonnet 的强度由服务端管理。</span></div>
+                </div>
+              </div>
+
+              <div class="field only-gateway">
+                <label for="base-input">Base URL <span class="req">必填</span></label>
+                <input id="base-input" class="text-input mono" placeholder="https://gateway.example.com/v1" value="https://gateway.example.com/v1">
+                <p class="hint">兼容 OpenAI Chat Completions 与工具调用；模型名以网关实际提供的为准。也可以填 Anthropic 兼容网关，改用 Anthropic 连接。</p>
+              </div>
+
+              <details class="advanced" id="advanced">
+                <summary>高级设置</summary>
+                <div class="adv-grid">
+                  <div class="field grow adv-base">
+                    <label for="base-adv">Base URL</label>
+                    <input id="base-adv" class="text-input mono" placeholder="默认使用官方地址">
+                  </div>
+                  <div class="field" style="flex:0 0 110px">
+                    <label for="timeout">请求超时</label>
+                    <div class="input-suffix"><input id="timeout" class="text-input" value="20"><span>秒</span></div>
+                  </div>
+                </div>
+              </details>
+
+              <div class="test-card" id="test-card" data-state="success">
+                <div class="test-idle">
+                  <svg class="icon sm"><use href="#i-shield"/></svg>
+                  <span>还没有测试这次配置。保存前建议先验证密钥、模型与工具调用。</span>
+                </div>
+                <div class="test-running">
+                  <span class="spinner"></span>
+                  <span>正在验证密钥与工具调用…</span>
+                  <span class="elapsed" id="test-elapsed">0.0s</span>
+                </div>
+                <div class="test-success">
+                  <svg class="icon" style="color:var(--success)"><use href="#i-check-circle"/></svg>
+                  <div class="main">
+                    <div class="test-title">连接正常，可以使用</div>
+                    <div class="test-lines">
+                      <span><svg class="icon xs ok"><use href="#i-check"/></svg>鉴权 <b id="t-auth">812ms</b></span>
+                      <span><svg class="icon xs ok"><use href="#i-check"/></svg>工具调用 <b id="t-tool">1.4s</b></span>
+                      <span class="mono" id="t-model">deepseek-flash</span>
+                      <span id="t-think">思考 high</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="test-error">
+                  <div class="title"><svg class="icon sm"><use href="#i-alert-circle"/></svg><span id="err-title">401 · 认证失败</span></div>
+                  <p id="err-desc">API Key 无效或已过期。请检查是否复制完整，或确认该 Key 属于当前连接。</p>
+                  <details>
+                    <summary>查看服务端返回</summary>
+                    <pre id="err-pre">{ "error": { "message": "Authentication failed: invalid api key", "type": "invalid_request_error", "code": "invalid_api_key" } }</pre>
+                  </details>
+                </div>
+              </div>
+
+              <p class="hint" style="margin-top:10px">
+                保存后对下一条消息生效；正在执行的任务不会被中断。模型与思考强度会写入本机配置。
+              </p>
+            </section>
+          </div>
+
+          <div class="dlg-foot">
+            <div class="foot-left">
+              <span class="dot ok"></span>
+              <span>只对本机生效 · 不经过云端</span>
+              <span class="dirty-mark">有未保存的更改</span>
+            </div>
+            <div class="foot-actions">
+              <button class="btn ghost" id="cancel-btn" type="button">取消</button>
+              <button class="btn secondary" id="test-btn" type="button">
+                <svg class="icon sm"><use href="#i-shield"/></svg>测试连接
+              </button>
+              <button class="btn primary" id="save-btn" type="button">保存并使用</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="reopen" id="reopen-btn" type="button">
+        <svg class="icon sm"><use href="#i-gear"/></svg>打开设置
+      </button>
+    </div>
+
+    <div class="statusbar">
+      <span>本地存储</span>
+      <span>默认项目 · 2 条用例</span>
+      <span class="right"><span>就绪</span><span>v0.1.0</span></span>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  const $ = (sel, root = document) => root.querySelector(sel)
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel))
+
+  const MODELS = {
+    deepseek: [
+      {
+        id: 'deepseek-flash',
+        name: 'DeepSeek-V4.1-Flash',
+        desc: '默认选择 · 原生视觉理解，速度与能力均衡',
+        chips: ['1M 上下文', '384K 输出', '图片输入'],
+        meta: '1M 上下文 · 384K 输出 · 支持图片输入',
+        vision: true,
+      },
+      {
+        id: 'deepseek-v4-pro',
+        name: 'DeepSeek-V4-Pro',
+        desc: '更强的复杂推理，适合长链路任务',
+        chips: ['1M 上下文', '384K 输出', '纯文本'],
+        meta: '1M 上下文 · 384K 输出 · 纯文本',
+        vision: false,
+      },
+    ],
+    anthropic: [
+      {
+        id: 'claude-opus-5-5',
+        name: 'Claude Opus 5.5',
+        desc: '推荐的通用起点，复杂任务更稳',
+        chips: ['1M 上下文', '128K 输出'],
+        meta: '1M 上下文 · 128K 输出 · 思考由模型管理',
+        vision: false,
+      },
+      {
+        id: 'claude-sonnet-5-5',
+        name: 'Claude Sonnet 5.5',
+        desc: '速度与成本均衡，日常开发默认',
+        chips: ['1M 上下文', '128K 输出'],
+        meta: '1M 上下文 · 128K 输出 · 思考由模型管理',
+        vision: false,
+      },
+      {
+        id: 'claude-haiku-5-5',
+        name: 'Claude Haiku 5.5',
+        desc: '最快、最省，适合简单页面操作',
+        chips: ['1M 上下文'],
+        meta: '1M 上下文 · 轻量任务',
+        vision: false,
+      },
+      {
+        id: 'claude-fable-5-1',
+        name: 'Claude Fable 5.1',
+        desc: '最高推理档，速度较慢',
+        chips: ['1M 上下文', '始终思考'],
+        meta: '1M 上下文 · 最高推理档',
+        vision: false,
+      },
+    ],
+    gateway: [],
+  }
+
+  const PROVIDERS = {
+    deepseek: {
+      title: 'DeepSeek 官方',
+      sub: '读取页面、调用工具并完成多步操作',
+      badge: '官方 API',
+      defaultModel: 'deepseek-flash',
+    },
+    anthropic: {
+      title: 'Anthropic 官方',
+      sub: '使用 Claude 的推理与工具调用',
+      badge: 'Claude',
+      defaultModel: 'claude-opus-5-5',
+    },
+    gateway: {
+      title: 'OpenAI 兼容网关',
+      sub: '连接公司网关或自建模型服务',
+      badge: '公司 / 自建',
+      defaultModel: 'deepseek-flash',
+    },
+  }
+
+  const KEYS = {
+    deepseek: 'sk-…9f3a',
+    anthropic: 'sk-ant-…7c21',
+    gateway: 'sk-gw-…4d18',
+  }
+
+  const configured = { deepseek: true, anthropic: false, gateway: false }
+
+  const state = {
+    view: 'saved',
+    provider: 'deepseek',
+    model: 'deepseek-flash',
+    think: 'high',
+    replacing: false,
+    showKey: false,
+    modelOpen: false,
+    fail: false,
+    dirty: false,
+    annotations: true,
+    testing: false,
+  }
+
+  const dialog = $('#dialog')
+  const pane = $('#pane')
+  const overlay = $('#overlay')
+  const modelBtn = $('#model-btn')
+  const modelPop = $('#model-pop')
+  const keyGroup = $('#key-group')
+  const keyInput = $('#key-input')
+  const savedKey = $('#saved-key')
+  const keyMask = $('#key-mask')
+  const keySourceTag = $('#key-source-tag')
+  const eyeIcon = $('#eye-icon')
+  const toastEl = $('#toast')
+  let toastTimer = 0
+  let testTimer = 0
+  let testClock = 0
+
+  function toast(message, warn = false) {
+    toastEl.textContent = message
+    toastEl.classList.toggle('warn', warn)
+    toastEl.classList.add('show')
+    clearTimeout(toastTimer)
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2800)
+  }
+
+  function markDirty(value = true) {
+    state.dirty = value
+    dialog.classList.toggle('is-dirty', value)
+  }
+
+  function modelInfo() {
+    return (MODELS[state.provider] || []).find((m) => m.id === state.model)
+  }
+
+  function isGateway() {
+    return state.provider === 'gateway'
+  }
+
+  function setView(view) {
+    state.view = view
+    if (view === 'unconfigured') {
+      state.replacing = true
+      state.showKey = false
+    }
+    if (view === 'error') {
+      state.replacing = false
+    }
+    if (view === 'saved' || view === 'env' || view === 'testing') {
+      state.replacing = false
+    }
+    apply()
+  }
+
+  function statusForView() {
+    if (state.view === 'unconfigured') return { text: '未配置', cls: 'warn' }
+    if (state.view === 'testing') return { text: '测试中', cls: 'accent' }
+    if (state.view === 'error') return { text: '连接失败', cls: 'err' }
+    if (state.view === 'env') return { text: '环境变量', cls: 'ok' }
+    return { text: '已连接', cls: 'ok' }
+  }
+
+  function apply() {
+    dialog.dataset.view = state.view
+    pane.dataset.provider = state.provider
+    dialog.classList.toggle('is-dirty', state.dirty)
+
+    $$('#state-seg button').forEach((b) => b.classList.toggle('on', b.dataset.view === state.view))
+    $$('.rail-item').forEach((b) => b.classList.toggle('on', b.dataset.provider === state.provider))
+
+    const provider = PROVIDERS[state.provider]
+    $('#prov-title').textContent = provider.title
+    $('#prov-sub').textContent = provider.sub
+
+    const status = statusForView()
+    const statusEl = $('#prov-status')
+    statusEl.textContent = status.text
+    statusEl.className = 'pill ' + status.cls
+
+    // key area
+    const hasSavedKey = state.view !== 'unconfigured'
+    keyGroup.classList.toggle('saved-key-mode', hasSavedKey && !state.replacing)
+    keyGroup.classList.toggle('key-input-mode', !hasSavedKey || state.replacing)
+    keyGroup.classList.toggle('invalid', state.view === 'error')
+    if (hasSavedKey) {
+      keyMask.textContent = state.view === 'env' ? '环境变量提供' : KEYS[state.provider]
+      keySourceTag.textContent = state.view === 'env' ? 'ENV' : '本机'
+      keySourceTag.style.color = state.view === 'env' ? 'var(--warning)' : ''
+      keySourceTag.style.background = state.view === 'env' ? 'var(--warning-soft)' : ''
+    }
+    keyInput.placeholder = state.view === 'unconfigured'
+      ? '粘贴 API Key'
+      : '输入新的 API Key（留空保留原密钥）'
+    if (state.showKey) {
+      keyInput.type = 'text'
+      eyeIcon.innerHTML = '<use href="#i-eye-off"/>'
+    } else {
+      keyInput.type = 'password'
+      eyeIcon.innerHTML = '<use href="#i-eye"/>'
+    }
+
+    // model
+    const info = modelInfo()
+    $('#model-id').textContent = info ? info.id : state.model
+    $('#model-meta').textContent = info
+      ? info.meta
+      : isGateway()
+        ? '模型名以网关实际提供的为准；需支持工具调用'
+        : ''
+    if (isGateway()) {
+      const modelInput = $('#model-input')
+      if (document.activeElement !== modelInput) modelInput.value = state.model
+    }
+    $$('#think-seg button').forEach((b) => b.classList.toggle('on', b.dataset.think === state.think))
+
+    // effective
+    const source = state.view === 'unconfigured' ? '未配置' : state.view === 'env' ? '环境变量' : '本机配置'
+    $('#eff-model').textContent = state.view === 'unconfigured' ? '演示模式' : state.model
+    const dotClass = state.view === 'unconfigured' ? 'warn' : 'ok'
+    $('#eff-meta').innerHTML =
+      `<span class="dot ${dotClass}"></span><span>${source}${state.view === 'env' ? ' · 优先' : state.view === 'unconfigured' ? '' : ' · 已连接'}</span>`
+
+    // rail dots reflect each provider's saved state
+    $$('.rail-item').forEach((item) => {
+      const dot = item.querySelector('.dot')
+      if (!dot) return
+      const providerKey = item.dataset.provider
+      const isCurrent = providerKey === state.provider
+      if (configured[providerKey] || (isCurrent && state.view === 'env')) dot.className = 'dot ok'
+      else if (isCurrent && state.view === 'error') dot.className = 'dot err'
+      else if (isCurrent && state.view === 'testing') dot.className = 'dot ok'
+      else dot.className = 'dot'
+    })
+
+    // copilot
+    const badge = $('#copilot-badge')
+    const demo = state.view === 'unconfigured'
+    badge.classList.toggle('demo', demo)
+    badge.querySelector('b').textContent = demo ? '演示模式' : state.model
+    $('#copilot-text').textContent = demo
+      ? '当前是演示模式：没有配置真实模型，我会展示 Agent 的观察与工具卡片。'
+      : '页面已读取：内容管理中心，5 个可交互元素。配置完成后可以直接让我走一遍创建流程。'
+
+    // test card
+    const testCard = $('#test-card')
+    testCard.dataset.state = state.view === 'unconfigured' ? 'idle' : state.view === 'testing' ? 'running' : state.view === 'error' ? 'error' : 'success'
+    if (state.view === 'saved' || state.view === 'env') {
+      $('#t-model').textContent = state.model
+      $('#t-think').textContent = state.provider === 'deepseek'
+        ? (state.think === 'off' ? '思考关闭' : `思考 ${state.think}`)
+        : '思考由模型管理'
+    }
+
+    // buttons
+    const testing = state.view === 'testing'
+    $('#test-btn').disabled = testing
+    $('#save-btn').disabled = testing
+    $('#save-btn').textContent = '保存并使用'
+
+    // clear confirm
+    $('#clear-confirm').classList.remove('show')
+    $('#clear-key').style.display = hasSavedKey ? 'inline-flex' : 'none'
+  }
+
+  function setProvider(provider) {
+    if (state.testing) return
+    state.provider = provider
+    state.model = PROVIDERS[provider].defaultModel
+    state.think = provider === 'gateway' ? 'off' : 'high'
+    state.modelOpen = false
+    state.showKey = false
+    state.view = configured[provider] ? 'saved' : 'unconfigured'
+    state.replacing = state.view === 'unconfigured'
+    $('#base-input').value = 'https://gateway.example.com/v1'
+    markDirty(true)
+    apply()
+  }
+
+  function renderModelList() {
+    const list = $('#model-list')
+    const models = MODELS[state.provider] || []
+    list.innerHTML = models
+      .map(
+        (m) => `
+      <button type="button" class="model-opt ${m.id === state.model ? 'on' : ''}" data-model="${m.id}" role="option" aria-selected="${m.id === state.model}">
+        <span class="radio"></span>
+        <span class="model-info">
+          <span class="model-line"><b>${m.name}</b><code>${m.id}</code></span>
+          <span class="model-desc">${m.desc}</span>
+          <span class="chips">${m.chips.map((c) => `<span class="chip ${c.includes('图片') ? 'vision' : ''}">${c}</span>`).join('')}</span>
+        </span>
+      </button>`,
+      )
+      .join('')
+    $$('.model-opt', list).forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.model = btn.dataset.model
+        state.modelOpen = false
+        modelPop.hidden = true
+        modelBtn.setAttribute('aria-expanded', 'false')
+        markDirty(true)
+        apply()
+      })
+    })
+  }
+
+  // prototype state controls
+  $$('#state-seg button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (state.testing) return
+      state.view = btn.dataset.view
+      state.replacing = btn.dataset.view === 'unconfigured'
+      state.showKey = false
+      toastEl.classList.remove('show')
+      apply()
+    })
+  })
+
+  $('#fail-toggle').addEventListener('change', (e) => { state.fail = e.target.checked })
+  $('#annot-toggle').addEventListener('change', (e) => {
+    state.annotations = e.target.checked
+    $('#gear-wrap').classList.toggle('annotate', state.annotations)
+  })
+
+  $('#theme-btn').addEventListener('click', () => {
+    const root = document.documentElement
+    const current = root.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    const next = current === 'dark' ? 'light' : 'dark'
+    root.dataset.theme = next
+    $('#theme-btn').innerHTML = `<svg class="icon sm"><use href="#i-${next === 'dark' ? 'sun' : 'moon'}"/></svg>`
+    toast(next === 'dark' ? '已切换到深色' : '已切换到浅色')
+  })
+
+  // provider switch
+  $$('.rail-item').forEach((btn) => {
+    btn.addEventListener('click', () => setProvider(btn.dataset.provider))
+  })
+
+  // key interactions
+  $('#replace-btn').addEventListener('click', () => {
+    state.replacing = true
+    state.showKey = false
+    apply()
+    keyInput.focus()
+  })
+  $('#eye-btn').addEventListener('click', () => {
+    if (keyGroup.classList.contains('saved-key-mode')) {
+      toast('已保存的密钥不可回读；点击「替换」输入新密钥')
+      return
+    }
+    state.showKey = !state.showKey
+    apply()
+  })
+  keyInput.addEventListener('input', () => markDirty(true))
+  $('#model-input').addEventListener('input', (e) => {
+    state.model = e.target.value
+    markDirty(true)
+    apply()
+  })
+  $('#clear-key').addEventListener('click', () => {
+    $('#clear-confirm').classList.add('show')
+  })
+  $('#clear-cancel').addEventListener('click', () => $('#clear-confirm').classList.remove('show'))
+  $('#clear-yes').addEventListener('click', () => {
+    state.view = 'unconfigured'
+    state.replacing = true
+    state.model = PROVIDERS[state.provider].defaultModel
+    configured[state.provider] = false
+    markDirty(true)
+    apply()
+    toast('已清除本机密钥，Copilot 将回到演示模式')
+  })
+  $('#get-key').addEventListener('click', () => {
+    toast('在 platform.deepseek.com 的 API Keys 页面创建密钥', true)
+  })
+
+  $('#env-help').addEventListener('click', () => {
+    toast('优先级：环境变量 → ~/.atp-agent/config.json → 自动探测', true)
+  })
+
+  // model picker
+  modelBtn.addEventListener('click', (e) => {
+    e.stopPropagation()
+    if (isGateway()) return
+    state.modelOpen = !state.modelOpen
+    if (state.modelOpen) renderModelList()
+    modelPop.hidden = !state.modelOpen
+    modelBtn.setAttribute('aria-expanded', String(state.modelOpen))
+  })
+  document.addEventListener('click', (e) => {
+    if (!state.modelOpen) return
+    if (modelPop.contains(e.target) || modelBtn.contains(e.target)) return
+    state.modelOpen = false
+    modelPop.hidden = true
+    modelBtn.setAttribute('aria-expanded', 'false')
+  })
+  $('#refresh-models').addEventListener('click', (e) => {
+    e.stopPropagation()
+    const btn = e.currentTarget
+    btn.disabled = true
+    btn.innerHTML = '<span class="spinner" style="width:10px;height:10px;border-width:1.5px"></span>获取中…'
+    setTimeout(() => {
+      btn.disabled = false
+      btn.innerHTML = '<svg class="icon xs"><use href="#i-refresh"/></svg>从 API 刷新'
+      renderModelList()
+      toast(`已获取 ${(MODELS[state.provider] || []).length} 个模型（${PROVIDERS[state.provider].title}）`)
+    }, 700)
+  })
+  $('#pop-refresh').addEventListener('click', (e) => {
+    e.stopPropagation()
+    toast('模型列表已更新')
+    renderModelList()
+  })
+
+  // thinking
+  $$('#think-seg button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.think = btn.dataset.think
+      markDirty(true)
+      apply()
+    })
+  })
+
+  // test + save
+  function runTest() {
+    if (state.testing) return
+    if ((state.view === 'unconfigured' || state.replacing) && !keyInput.value.trim()) {
+      keyGroup.classList.add('invalid')
+      toast('请先填写 API Key，或从环境变量读取', true)
+      return
+    }
+    if (state.provider === 'gateway' && !$('#base-input').value.trim()) {
+      state.view = 'error'
+      $('#err-title').textContent = '缺少 Base URL'
+      $('#err-desc').textContent = 'OpenAI 兼容网关必须提供 Base URL，例如 https://gateway.example.com/v1。'
+      apply()
+      return
+    }
+    state.testing = true
+    state.view = 'testing'
+    apply()
+    const started = Date.now()
+    clearInterval(testClock)
+    testClock = setInterval(() => {
+      $('#test-elapsed').textContent = ((Date.now() - started) / 1000).toFixed(1) + 's'
+    }, 100)
+    clearTimeout(testTimer)
+    testTimer = setTimeout(() => {
+      clearInterval(testClock)
+      state.testing = false
+      if (state.fail) {
+        state.view = 'error'
+        $('#err-title').textContent = '401 · 认证失败'
+        $('#err-desc').textContent = 'API Key 无效或已过期。请检查是否复制完整，或确认该 Key 属于当前连接。'
+        $('#err-pre').textContent = '{\n  "error": {\n    "message": "Authentication failed: invalid api key",\n    "type": "invalid_request_error",\n    "code": "invalid_api_key"\n  }\n}'
+        apply()
+        toast('连接测试失败：401 认证失败', true)
+      } else {
+        state.view = 'saved'
+        configured[state.provider] = true
+        $('#t-auth').textContent = '812ms'
+        $('#t-tool').textContent = '1.4s'
+        markDirty(false)
+        apply()
+        toast(`连接正常：${state.model} 可用，工具调用通过`)
+      }
+    }, 1500)
+  }
+
+  $('#test-btn').addEventListener('click', runTest)
+
+  $('#save-btn').addEventListener('click', () => {
+    if (state.testing) return
+    const btn = $('#save-btn')
+    btn.disabled = true
+    btn.textContent = '保存中…'
+    setTimeout(() => {
+      btn.disabled = false
+      if (state.view === 'env') {
+        apply()
+        toast('已保存到本机；环境变量仍然优先，当前连接不变', true)
+        return
+      }
+      state.view = 'saved'
+      state.replacing = false
+      configured[state.provider] = true
+      markDirty(false)
+      apply()
+      toast(`已保存，新消息将使用 ${state.model}`)
+    }, 450)
+  })
+
+  function closeDialog() {
+    overlay.classList.add('hidden')
+    $('#reopen-btn').classList.add('show')
+    $('#gear-btn').classList.remove('gear-active')
+  }
+  function openDialog() {
+    overlay.classList.remove('hidden')
+    $('#reopen-btn').classList.remove('show')
+    $('#gear-btn').classList.add('gear-active')
+  }
+  $('#close-btn').addEventListener('click', closeDialog)
+  $('#cancel-btn').addEventListener('click', closeDialog)
+  $('#gear-btn').addEventListener('click', openDialog)
+  $('#reopen-btn').addEventListener('click', openDialog)
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeDialog() })
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !overlay.classList.contains('hidden')) {
+      if (state.modelOpen) {
+        state.modelOpen = false
+        modelPop.hidden = true
+        modelBtn.setAttribute('aria-expanded', 'false')
+        return
+      }
+      closeDialog()
+    }
+  })
+
+  // click the Copilot model badge also opens settings
+  $('#copilot-badge').addEventListener('click', openDialog)
+
+  // init
+  renderModelList()
+  apply()
+  $('#theme-btn').innerHTML = `<svg class="icon sm"><use href="#i-moon"/></svg>`
+</script>

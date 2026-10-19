@@ -7,7 +7,7 @@
  * 运行：node scripts/e2e-agent.mjs
  */
 import { spawn } from 'node:child_process'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -19,10 +19,23 @@ const cli = resolve(import.meta.dirname, '../apps/agent/dist/cli.js')
 const dataDir = await mkdtemp(join(tmpdir(), 'atp-agent-e2e-'))
 
 function startAgent() {
+  // 清掉开发机上可能存在的真实密钥，保证 Copilot 从演示模式开始
+  const env = { ...process.env }
+  for (const key of [
+    'ATP_AI_PROFILE',
+    'ATP_AI_MODEL',
+    'ATP_AI_BASE_URL',
+    'ATP_AI_API_KEY',
+    'DEEPSEEK_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'ATP_AI_STUB',
+  ]) {
+    delete env[key]
+  }
   const child = spawn(
     process.execPath,
     [cli, '--demo', '--no-open', '--headless', '--port', '0', '--data-dir', dataDir],
-    { stdio: ['ignore', 'pipe', 'pipe'] },
+    { stdio: ['ignore', 'pipe', 'pipe'], env },
   )
   let output = ''
   const ready = new Promise((resolveReady, reject) => {
@@ -206,6 +219,55 @@ try {
   await page.getByText('观察页面', { exact: false }).first().waitFor({ timeout: 20_000 })
   await page.getByText('已验证', { exact: false }).first().waitFor({ timeout: 20_000 })
   console.log('[agent] Copilot ✓ 流式输出与工具卡')
+
+  // 模型设置：保存密钥 → Copilot 切到真实模型 → 掩码与权限位 → 清除后回到演示
+  await page.locator('button[aria-label="模型设置"]').click()
+  await page.getByRole('heading', { name: '模型设置' }).waitFor({ timeout: 10_000 })
+  const keyField = page.locator('#atp-ai-key')
+  await keyField.waitFor({ state: 'visible' })
+  if ((await page.locator('#atp-ai-model').inputValue()) !== 'deepseek-flash') {
+    throw new Error('模型设置未回填默认模型 deepseek-flash')
+  }
+  await keyField.fill('sk-e2e-test-0000abcd')
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await page
+    .getByRole('button', { name: 'deepseek-flash', exact: true })
+    .waitFor({ timeout: 10_000 })
+
+  const savedConfig = await invoke(origin, 'ai:config')
+  if (savedConfig.stub || !savedConfig.ready) throw new Error('保存密钥后 Copilot 仍是演示模式')
+  if (savedConfig.keyHint !== '…abcd') throw new Error(`密钥掩码不正确：${savedConfig.keyHint}`)
+  if (savedConfig.keySource !== 'file') throw new Error('密钥来源不是本机文件')
+  if (JSON.stringify(savedConfig).includes('sk-e2e-test')) {
+    throw new Error('ai:config 泄漏了明文密钥')
+  }
+  const configFile = join(dataDir, 'config.json')
+  const configText = await readFile(configFile, 'utf8')
+  if (!configText.includes('sk-e2e-test-0000abcd')) throw new Error('密钥没有写入本机配置')
+  const mode = (await stat(configFile)).mode & 0o777
+  if (mode !== 0o600) throw new Error(`config.json 权限应为 0600，实际 ${mode.toString(8)}`)
+  console.log('[agent] 模型设置 ✓ 保存 / 掩码 / 0600')
+
+  // 重新打开：显示掩码而不是明文
+  await page.locator('button[aria-label="模型设置"]').click()
+  await page.getByText('…abcd', { exact: false }).waitFor({ timeout: 10_000 })
+  await page.getByText('本机保存', { exact: true }).waitFor({ timeout: 10_000 })
+  if ((await page.locator('#atp-ai-key').count()) > 0) {
+    throw new Error('已有密钥时不应展示明文输入框')
+  }
+  console.log('[agent] 模型设置 ✓ 回显掩码')
+
+  // 清除密钥 → 回到演示模式
+  await page.getByRole('button', { name: '清除', exact: true }).click()
+  await page.getByRole('button', { name: '确认清除', exact: true }).click()
+  await page.getByRole('button', { name: '保存', exact: true }).click()
+  await page.getByRole('button', { name: '演示模式', exact: true }).waitFor({ timeout: 10_000 })
+  const clearedConfig = await invoke(origin, 'ai:config')
+  if (clearedConfig.hasKey || clearedConfig.keySource !== 'none') {
+    throw new Error('清除密钥后仍检测到密钥')
+  }
+  console.log('[agent] 模型设置 ✓ 清除密钥')
+
   if (errors.length > 0) throw new Error(`页面错误：${errors.join(' / ')}`)
   console.log('[agent] 通过 ✅')
 } finally {
