@@ -221,6 +221,12 @@ export function CopilotPanel() {
       await window.atp.invoke('ai:cancel', {})
     } catch (err) {
       toast.danger(err instanceof Error ? err.message : '停止失败')
+    } finally {
+      // 即使服务端已经没有活动任务（例如断线错过了 ai-done），本地也必须解除执行态
+      const state = useUiStore.getState()
+      const pending = state.aiMessages.find((message) => message.pending)
+      if (pending) state.finishAiMessage(pending.id, true)
+      else state.setAiRunning(false)
     }
   }
 

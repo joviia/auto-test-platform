@@ -85,7 +85,7 @@ function evidenceContent(file: string): string {
  */
 function shimSource(): string {
   return `(() => {
-  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error', 'ai-recording-draft', 'ai-case-proposal'];
+  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error', 'ai-recording-draft', 'ai-case-proposal', 'ai-state'];
   const listeners = new Map(names.map((name) => [name, new Set()]));
   const last = new Map();
   const source = new EventSource('/events');
@@ -212,6 +212,8 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
       })
       await send('recording-status', { recording: state.recording, url: state.url })
       await send('cases', { type: 'cases', cases: state.cases })
+      // 建连 / 重连时校准 Copilot 运行状态，修复断线期间错过的 ai-start / ai-done
+      await send('ai-state', agent.aiState())
 
       const unsubscribe = agent.onEvent((event: AgentEvent) => {
         if (closed) return
@@ -232,9 +234,12 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
         void send(event.type, event)
       })
 
+      // 5s 心跳同时校准 AI 运行态：即使 ai-done 丢失，界面也能在数秒内自动解除执行态
       const timer = setInterval(() => {
-        if (!closed) void stream.write(': ping\n\n')
-      }, 15_000)
+        if (closed) return
+        void stream.write(': ping\n\n')
+        void send('ai-state', agent.aiState())
+      }, 5_000)
 
       stream.onAbort(() => {
         clearInterval(timer)

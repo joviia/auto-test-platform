@@ -489,7 +489,11 @@ export const useUiStore = create<UiState>((set, get) => ({
     })),
 
   setAiRunning: (aiRunning) =>
-    set((s) => ({ aiRunning, aiStartedAt: aiRunning ? (s.aiStartedAt ?? Date.now()) : null })),
+    set((s) => ({
+      aiRunning,
+      aiStartedAt: aiRunning ? (s.aiStartedAt ?? Date.now()) : null,
+      ...(aiRunning ? {} : { aiActiveTool: null }),
+    })),
 
   failAiMessage: (messageId, error) =>
     set((s) => ({

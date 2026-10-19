@@ -149,6 +149,13 @@ function scrubSecret(text: string, key?: string): string {
   return key ? text.split(key).join('***') : text
 }
 
+/** 日志兜底脱敏：不把常见的密钥形态写进本地日志 */
+function redactForLog(text: string): string {
+  return text
+    .replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***')
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer ***')
+}
+
 /**
  * Copilot 会话与工具循环。
  * 真实模型走 Vercel AI SDK；没有配置 key 时走 Stub，保证界面与 E2E 可运行。
@@ -356,6 +363,15 @@ export class CopilotService {
     return this.config
   }
 
+  /** 供 SSE 建连时下发，修复客户端错过的 ai-start / ai-done */
+  state(): { running: boolean; sessionId?: string; messageId?: string } {
+    return {
+      running: this.activeAbort !== null,
+      ...(this.activeSessionId ? { sessionId: this.activeSessionId } : {}),
+      ...(this.activeMessageId ? { messageId: this.activeMessageId } : {}),
+    }
+  }
+
   async send(input: AiSendInput): Promise<{ sessionId: string; messageId: string }> {
     if (this.activeAbort) throw new Error('Copilot 正在执行，请先停止')
     await this.init()
@@ -366,6 +382,9 @@ export class CopilotService {
     const messageId = newId('m')
     const abort = new AbortController()
     this.activeAbort = abort
+    this.activeSessionId = session.id
+    this.activeMessageId = messageId
+    console.log(`[ai] start session=${session.id} message=${messageId}`)
     const context: ProviderContext = {
       url: input.context?.url || this.options.getBrowser()?.currentUrl || undefined,
       caseId: input.context?.caseId,
@@ -384,11 +403,17 @@ export class CopilotService {
 
   cancel(sessionId?: string): { ok: true } {
     if (sessionId && this.activeSessionId !== sessionId) return { ok: true }
-    this.activeAbort?.abort()
+    if (!this.activeAbort) {
+      console.log('[ai] cancel ignored: no active run')
+      return { ok: true }
+    }
+    console.log(`[ai] cancel session=${this.activeSessionId ?? ''}`)
+    this.activeAbort.abort()
     return { ok: true }
   }
 
   private activeSessionId: string | null = null
+  private activeMessageId: string | null = null
 
   private async run(
     session: Session,
@@ -397,7 +422,6 @@ export class CopilotService {
     context: ProviderContext,
     abort: AbortController,
   ): Promise<void> {
-    this.activeSessionId = session.id
     const provider = this.bundle?.provider
     if (!provider) {
       this.options.onEvent({
@@ -446,16 +470,22 @@ export class CopilotService {
       if (abort.signal.aborted) {
         cancelled = true
       } else {
+        const text = err instanceof Error ? err.message : String(err)
+        console.log(`[ai] error session=${session.id} message=${messageId}: ${redactForLog(text)}`)
         this.options.onEvent({
           type: 'ai-error',
           sessionId: session.id,
           messageId,
-          error: err instanceof Error ? err.message : String(err),
+          error: text,
         })
       }
     } finally {
       this.activeAbort = null
       this.activeSessionId = null
+      this.activeMessageId = null
+      console.log(
+        `[ai] done session=${session.id} message=${messageId}${cancelled ? ' cancelled' : ''}`,
+      )
       this.options.onEvent({
         type: 'ai-done',
         sessionId: session.id,
@@ -507,6 +537,7 @@ export class CopilotService {
       label: toolLabel(def.name, input),
       input,
     })
+    console.log(`[ai] tool start ${def.name}`)
     const startedAt = Date.now()
     const ctx: CopilotToolContext = {
       sessionId: session.id,
@@ -518,6 +549,8 @@ export class CopilotService {
     }
     try {
       const outcome = await def.run(input, ctx)
+      const toolMs = Date.now() - startedAt
+      console.log(`[ai] tool ok ${def.name} ${toolMs}ms`)
       this.options.onEvent({
         type: 'ai-tool-end',
         sessionId: session.id,
@@ -533,6 +566,9 @@ export class CopilotService {
       return outcome.result
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
+      console.log(
+        `[ai] tool error ${def.name} ${Date.now() - startedAt}ms: ${redactForLog(message)}`,
+      )
       this.options.onEvent({
         type: 'ai-tool-end',
         sessionId: session.id,

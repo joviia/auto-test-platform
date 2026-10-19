@@ -331,6 +331,10 @@ export class Agent {
     return this.copilot?.cancel(sessionId) ?? { ok: true }
   }
 
+  aiState(): IpcEventPayload<'event:ai-state'> {
+    return this.copilot?.state() ?? { running: false }
+  }
+
   aiConfig(): AiConfig {
     return (
       this.copilot?.aiConfig ?? {

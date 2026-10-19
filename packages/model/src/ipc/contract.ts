@@ -557,6 +557,12 @@ export const ipcEventContract = {
   [IpcEvent.aiRecordingDraft]: recordedDraftSchema,
   /** AI 提出用例修改建议；前端展示 diff，由用户确认后写入 */
   [IpcEvent.aiCaseProposal]: aiCaseProposalSchema,
+  /** SSE 建连时下发的 Copilot 运行快照；用于修复错过的 ai-start / ai-done */
+  [IpcEvent.aiState]: z.object({
+    running: z.boolean(),
+    sessionId: z.string().optional(),
+    messageId: z.string().optional(),
+  }),
 }
 
 /** Copilot 事件与上下文类型（agent / web 共用） */

@@ -72,6 +72,7 @@ export const IpcEvent = {
   aiError: 'event:ai-error',
   aiRecordingDraft: 'event:ai-recording-draft',
   aiCaseProposal: 'event:ai-case-proposal',
+  aiState: 'event:ai-state',
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]

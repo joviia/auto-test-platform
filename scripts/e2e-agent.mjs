@@ -326,6 +326,35 @@ try {
   }
   console.log('[agent] 用例修改建议 ✓ diff / 应用 / 撤销')
 
+  // 运行态恢复：吞掉 ai-done，模拟 SSE 断线丢事件；5s 心跳应自动解除执行态
+  const resumePage = await browser.newPage()
+  resumePage.on('pageerror', (err) => errors.push(err.message))
+  await resumePage.addInitScript(() => {
+    const Native = window.EventSource
+    window.EventSource = class extends Native {
+      addEventListener(type, fn, opts) {
+        if (type === 'ai-done') return super.addEventListener(type, () => {}, opts)
+        return super.addEventListener(type, fn, opts)
+      }
+    }
+  })
+  await resumePage.goto(uiUrl, { waitUntil: 'networkidle' })
+  await resumePage.waitForTimeout(800)
+  await resumePage.getByText('Agent E2E 用例', { exact: true }).first().click()
+  await resumePage.locator('[role=tab]').filter({ hasText: 'Copilot' }).first().click()
+  const resumeComposer = resumePage.locator('textarea[placeholder^="描述要测什么"]')
+  await resumeComposer.waitFor({ state: 'visible', timeout: 20_000 })
+  await resumeComposer.fill('帮我观察一下当前页面')
+  await resumeComposer.press('Enter')
+  await resumePage
+    .getByRole('button', { name: '停止' })
+    .waitFor({ state: 'visible', timeout: 20_000 })
+  await resumePage
+    .getByRole('button', { name: '发送' })
+    .waitFor({ state: 'visible', timeout: 15_000 })
+  await resumePage.close()
+  console.log('[agent] 运行态恢复 ✓ ai-done 丢失后心跳自动解除执行态')
+
   if (errors.length > 0) throw new Error(`页面错误：${errors.join(' / ')}`)
   console.log('[agent] 通过 ✅')
 } finally {

@@ -120,6 +120,15 @@ export function App() {
       useUiStore.getState().setAiOpen(true)
       useUiStore.getState().setRightTab('copilot')
     })
+    // SSE 建连 / 重连时的运行快照：清掉错过的 ai-done 留下的转圈状态
+    const offAiState = window.atp.on('event:ai-state', (p) => {
+      // 只处理「服务端已结束」：running=true 不重建消息，避免停止过程中的竞态
+      if (p.running) return
+      const store = useUiStore.getState()
+      const pending = store.aiMessages.find((message) => message.pending)
+      if (pending) store.finishAiMessage(pending.id)
+      else if (store.aiRunning) store.setAiRunning(false)
+    })
     return () => {
       offStatus()
       offStep()
@@ -133,6 +142,7 @@ export function App() {
       offAiError()
       offAiDraft()
       offAiProposal()
+      offAiState()
     }
   }, [
     setRecording,
