@@ -562,18 +562,64 @@ function MessageItem({ message }: { message: AiMessage }) {
         </p>
       )}
 
-      {message.tools.length > 0 && (
-        <div className="mt-2 space-y-1.5">
-          {message.tools.map((tool) => (
-            <ToolCard key={tool.id} tool={tool} />
-          ))}
-        </div>
-      )}
+      <ToolGroup tools={message.tools} pending={streaming} />
 
       {message.error && (
         <div className="mt-2 flex items-start gap-1.5 rounded-md border border-red-500/30 bg-red-500/[0.05] px-2 py-1.5 text-[11px] leading-4 text-red-700 dark:text-red-400">
           <CircleAlert size={11} className="mt-0.5 shrink-0" />
           <span className="min-w-0 break-words">{message.error}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 一次回复里的工具调用收成一组：执行中展开，完成后默认折叠成一行 */
+function ToolGroup({ tools, pending }: { tools: AiToolCall[]; pending: boolean }) {
+  const failed = tools.filter((tool) => tool.status === 'error').length
+  const running = tools.some((tool) => tool.status === 'running')
+  const [open, setOpen] = useState(pending || failed > 0)
+
+  useEffect(() => {
+    if (!pending) setOpen(failed > 0)
+  }, [pending, failed])
+
+  if (tools.length === 0) return null
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className={`flex w-full items-center gap-2 rounded-md border bg-surface-secondary/40 px-2 py-1.5 text-left ${
+          failed > 0 ? 'border-red-500/30' : 'border-border'
+        }`}
+      >
+        {running || pending ? (
+          <Loader2 size={11} className="shrink-0 animate-spin text-accent" />
+        ) : failed > 0 ? (
+          <X size={11} className="shrink-0 text-red-600 dark:text-red-400" />
+        ) : (
+          <Check size={11} className="shrink-0 text-green-600 dark:text-green-400" />
+        )}
+        <span className="min-w-0 flex-1 truncate text-[11.5px] font-medium">
+          {running
+            ? `工具调用 · ${tools.length} 项执行中`
+            : pending
+              ? `工具调用 · ${tools.length} 次`
+              : `工具调用 · ${tools.length} 次${failed > 0 ? ` · ${failed} 次失败` : ' · 全部成功'}`}
+        </span>
+        <ChevronDown
+          size={11}
+          className={`shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && (
+        <div className="mt-1.5 space-y-1.5">
+          {tools.map((tool) => (
+            <ToolCard key={tool.id} tool={tool} />
+          ))}
         </div>
       )}
     </div>

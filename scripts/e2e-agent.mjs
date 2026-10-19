@@ -216,9 +216,14 @@ try {
   await composer.fill('帮我观察一下当前页面')
   await composer.press('Enter')
   await page.getByText('当前是演示模式', { exact: false }).first().waitFor({ timeout: 20_000 })
-  await page.getByText('观察页面', { exact: false }).first().waitFor({ timeout: 20_000 })
   await page.getByText('已验证', { exact: false }).first().waitFor({ timeout: 20_000 })
-  console.log('[agent] Copilot ✓ 流式输出与工具卡')
+  // 工具调用收成一组，完成后默认折叠；展开后能看到具体卡片
+  const toolGroup = page.getByRole('button', { name: /工具调用/ }).first()
+  await toolGroup.waitFor({ timeout: 20_000 })
+  const expanded = await toolGroup.getAttribute('aria-expanded')
+  if (expanded !== 'true') await toolGroup.click()
+  await page.getByText('观察页面', { exact: false }).first().waitFor({ timeout: 20_000 })
+  console.log('[agent] Copilot ✓ 流式输出与工具卡分组')
 
   // 模型设置：保存密钥 → Copilot 切到真实模型 → 掩码与权限位 → 清除后回到演示
   await page.locator('button[aria-label="模型设置"]').click()
