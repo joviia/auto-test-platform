@@ -20,20 +20,15 @@ import { z } from 'zod'
 import type { ChromeController } from '../browser.js'
 import { loadAiProfile, resolveConnectionProfile, saveAiProfile } from './config.js'
 import {
-  createCopilotProvider,
+  createAiProvider,
   createLanguageModel,
   deepseekProviderOptions,
   type ProviderBundle,
   type ProviderContext,
 } from './provider.js'
-import {
-  COPILOT_TOOL_MAP,
-  type CopilotPlatform,
-  type CopilotTool,
-  type CopilotToolContext,
-} from './tools.js'
+import { AI_TOOL_MAP, type AiPlatform, type AiTool, type AiToolContext } from './tools.js'
 
-export type CopilotEvent =
+export type AiEvent =
   | { type: 'ai-start'; sessionId: string; messageId: string }
   | {
       type: 'ai-delta'
@@ -61,14 +56,14 @@ interface RunState {
   tools: AiStoredTool[]
 }
 
-export interface CopilotServiceOptions {
+export interface AiServiceOptions {
   dataDir: string
   getBrowser: () => ChromeController | null
-  platform: CopilotPlatform
-  onEvent: (event: CopilotEvent) => void
+  platform: AiPlatform
+  onEvent: (event: AiEvent) => void
 }
 
-const SYSTEM_PROMPT = `你是 ATP（本地 Web UI 自动化测试平台）的测试 Copilot。
+const SYSTEM_PROMPT = `你是 ATP（本地 Web UI 自动化测试平台）的 AI 测试助手。
 
 平台模型：
 - 项目 > 模块 > 用例。用例由步骤和元素库组成，可以回放并产生执行记录。
@@ -196,16 +191,16 @@ function redactForLog(text: string): string {
 }
 
 /**
- * Copilot 会话与工具循环。
+ * AI 会话与工具循环。
  * 真实模型走 Vercel AI SDK；没有配置 key 时走 Stub，保证界面与 E2E 可运行。
  */
-export class CopilotService {
+export class AiService {
   private sessions = new Map<string, Session>()
   private activeAbort: AbortController | null = null
   private bundle: ProviderBundle | null = null
   private config: AiConfig | null = null
 
-  constructor(private readonly options: CopilotServiceOptions) {}
+  constructor(private readonly options: AiServiceOptions) {}
 
   async init(): Promise<void> {
     if (this.bundle) return
@@ -215,7 +210,7 @@ export class CopilotService {
   /** 重新读取配置并替换 provider；正在执行的任务持有旧 provider，不会被打断 */
   async reload(): Promise<AiConfig> {
     const resolved = await loadAiProfile(this.options.dataDir)
-    this.bundle = createCopilotProvider(resolved)
+    this.bundle = createAiProvider(resolved)
     this.config = this.bundle.config
     return this.config
   }
@@ -395,7 +390,7 @@ export class CopilotService {
         kind: 'stub',
         hasKey: false,
         keySource: 'none',
-        reason: 'Copilot 尚未初始化',
+        reason: 'AI 尚未初始化',
         env: [],
       }
     }
@@ -455,7 +450,7 @@ export class CopilotService {
   }
 
   async send(input: AiSendInput): Promise<{ sessionId: string; messageId: string }> {
-    if (this.activeAbort) throw new Error('Copilot 正在执行，请先停止')
+    if (this.activeAbort) throw new Error('AI 正在执行，请先停止')
     await this.init()
     const session = input.sessionId
       ? await this.loadSession(input.sessionId)
@@ -510,7 +505,7 @@ export class CopilotService {
         type: 'ai-error',
         sessionId: session.id,
         messageId,
-        error: 'Copilot 未初始化',
+        error: 'AI 未初始化',
       })
       this.options.onEvent({ type: 'ai-done', sessionId: session.id, messageId })
       return
@@ -610,7 +605,7 @@ export class CopilotService {
     runState: RunState,
   ): ToolSet {
     const tools: ToolSet = {}
-    for (const def of COPILOT_TOOL_MAP.values()) {
+    for (const def of AI_TOOL_MAP.values()) {
       tools[def.name] = tool({
         description: def.description,
         inputSchema: def.schema,
@@ -629,7 +624,7 @@ export class CopilotService {
     signal: AbortSignal,
     runState: RunState,
   ): Promise<unknown> {
-    const def = COPILOT_TOOL_MAP.get(name)
+    const def = AI_TOOL_MAP.get(name)
     if (!def) throw new Error(`未知工具：${name}`)
     return this.executeTool(session, messageId, def, input, signal, runState)
   }
@@ -637,7 +632,7 @@ export class CopilotService {
   private async executeTool(
     session: Session,
     messageId: string,
-    def: CopilotTool,
+    def: AiTool,
     rawInput: unknown,
     signal: AbortSignal,
     runState: RunState,
@@ -664,7 +659,7 @@ export class CopilotService {
     })
     console.log(`[ai] tool start ${def.name}`)
     const startedAt = Date.now()
-    const ctx: CopilotToolContext = {
+    const ctx: AiToolContext = {
       sessionId: session.id,
       callId,
       dataDir: this.options.dataDir,

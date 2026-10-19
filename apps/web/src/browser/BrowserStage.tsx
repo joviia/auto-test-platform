@@ -471,7 +471,7 @@ export function BrowserStage() {
     try {
       await window.atp.invoke('ai:cancel', {})
     } catch (err) {
-      toast.danger(err instanceof Error ? err.message : '停止 Copilot 失败')
+      toast.danger(err instanceof Error ? err.message : '停止 AI 失败')
     }
   }
 
@@ -482,7 +482,7 @@ export function BrowserStage() {
 
   const showAiPanel = (): void => {
     setAiOpen(true)
-    setRightTab('copilot')
+    setRightTab('ai')
   }
 
   const stopReplay = async (): Promise<void> => {
@@ -716,7 +716,7 @@ export function BrowserStage() {
           className="flex h-9 shrink-0 items-center gap-2 border-b border-accent/30 bg-accent/[0.07] px-3 text-xs"
         >
           <Loader2 size={13} className="animate-spin text-accent" />
-          <span className="shrink-0 font-medium text-accent">Copilot</span>
+          <span className="shrink-0 font-medium text-accent">AI</span>
           <span className="min-w-0 flex-1 truncate text-muted">
             {aiActiveTool ? `正在${aiActiveTool.label}…` : '正在读取页面并规划下一步…'}
           </span>

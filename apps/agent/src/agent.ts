@@ -21,13 +21,13 @@ import type {
   LiveStep,
   StepResult,
 } from '@atp/model'
+import { type AiEvent, AiService } from './ai/service.js'
 import {
   type BrowserEvent,
   ChromeController,
   type DeviceMetrics,
   type RecordedDraft,
 } from './browser.js'
-import { type CopilotEvent, CopilotService } from './copilot/service.js'
 import { type DebugAction, DebugController } from './debug-runner.js'
 import { isPlanRunning, startPlanRun, stopPlanRun } from './plan-runner.js'
 
@@ -82,7 +82,7 @@ export type AgentEvent =
   | { type: 'plan-progress'; progress: IpcEventPayload<'event:plan-progress'> }
   | { type: 'cases'; cases: CaseRow[] }
   | { type: 'error'; message: string }
-  | CopilotEvent
+  | AiEvent
 
 /** 本地 Agent：SQLite 用例仓 + 真实 Chrome + 事件总线 */
 export class Agent {
@@ -95,7 +95,7 @@ export class Agent {
   )
   private listeners = new Set<(event: AgentEvent) => void>()
   private started = false
-  private copilot: CopilotService | null = null
+  private ai: AiService | null = null
 
   constructor(private readonly options: AgentOptions) {}
 
@@ -112,7 +112,7 @@ export class Agent {
       headless: this.options.headless,
       onEvent: (event) => this.onBrowserEvent(event),
     })
-    this.copilot = new CopilotService({
+    this.ai = new AiService({
       dataDir: this.options.dataDir,
       getBrowser: () => this.browser,
       platform: {
@@ -142,7 +142,7 @@ export class Agent {
       },
       onEvent: (event) => this.emit(event),
     })
-    await this.copilot.init()
+    await this.ai.init()
     if (initialUrl) {
       await this.browser.navigate(initialUrl).catch((err: unknown) => {
         this.emit({ type: 'error', message: err instanceof Error ? err.message : String(err) })
@@ -432,7 +432,7 @@ export class Agent {
     if (this.browser?.isRecording) throw new Error('录制中不能调试')
     if (this.replayAbort) throw new Error('回放中不能调试')
     if (this.planDraftAbort) throw new Error('AI 计划执行中不能调试')
-    if (this.copilot?.state().running) throw new Error('Copilot 正在执行，请先停止')
+    if (this.ai?.state().running) throw new Error('AI 正在执行，请先停止')
     if (isPlanRunning()) throw new Error('测试计划执行中不能调试')
     if (this.debugRunner.active) throw new Error('已有调试会话正在执行')
     const file = await getDb().uow().cases.get(caseId)
@@ -462,23 +462,23 @@ export class Agent {
   }
 
   async aiSend(input: AiSendInput): Promise<{ sessionId: string; messageId: string }> {
-    if (!this.copilot) throw new Error('Copilot 尚未初始化')
+    if (!this.ai) throw new Error('AI 尚未初始化')
     if (this.planDraftAbort) throw new Error('AI 计划正在执行，请先停止')
     if (this.debugRunner.active) throw new Error('调试中不能操作页面，请先停止调试')
-    return this.copilot.send(input)
+    return this.ai.send(input)
   }
 
   aiCancel(sessionId?: string): { ok: true } {
-    return this.copilot?.cancel(sessionId) ?? { ok: true }
+    return this.ai?.cancel(sessionId) ?? { ok: true }
   }
 
   aiState(): IpcEventPayload<'event:ai-state'> {
-    return this.copilot?.state() ?? { running: false }
+    return this.ai?.state() ?? { running: false }
   }
 
   aiConfig(): AiConfig {
     return (
-      this.copilot?.aiConfig ?? {
+      this.ai?.aiConfig ?? {
         ready: false,
         provider: 'stub',
         model: 'stub',
@@ -486,40 +486,40 @@ export class Agent {
         kind: 'stub',
         hasKey: false,
         keySource: 'none',
-        reason: 'Copilot 尚未初始化',
+        reason: 'AI 尚未初始化',
         env: [],
       }
     )
   }
 
   async aiSaveConfig(input: AiSaveConfigInput): Promise<AiConfig> {
-    if (!this.copilot) throw new Error('Copilot 尚未初始化')
-    return this.copilot.saveConfig(input)
+    if (!this.ai) throw new Error('AI 尚未初始化')
+    return this.ai.saveConfig(input)
   }
 
   async aiTest(input: AiTestInput): Promise<AiTestResult> {
-    if (!this.copilot) throw new Error('Copilot 尚未初始化')
-    return this.copilot.test(input)
+    if (!this.ai) throw new Error('AI 尚未初始化')
+    return this.ai.test(input)
   }
 
   async aiModels(input: AiModelsInput): Promise<AiModelsResult> {
-    if (!this.copilot) throw new Error('Copilot 尚未初始化')
-    return this.copilot.models(input)
+    if (!this.ai) throw new Error('AI 尚未初始化')
+    return this.ai.models(input)
   }
 
   async aiSessionList(limit?: number): Promise<IpcOutput<typeof IpcChannel.aiSessionList>> {
-    if (!this.copilot) return []
-    return this.copilot.listSessions(limit)
+    if (!this.ai) return []
+    return this.ai.listSessions(limit)
   }
 
   async aiSessionGet(id: string): Promise<IpcOutput<typeof IpcChannel.aiSessionGet>> {
-    if (!this.copilot) throw new Error('Copilot 尚未初始化')
-    return this.copilot.getSession(id)
+    if (!this.ai) throw new Error('AI 尚未初始化')
+    return this.ai.getSession(id)
   }
 
   async aiSessionDelete(id: string): Promise<{ ok: true }> {
-    if (!this.copilot) return { ok: true }
-    await this.copilot.deleteSession(id)
+    if (!this.ai) return { ok: true }
+    await this.ai.deleteSession(id)
     return { ok: true }
   }
 
@@ -531,7 +531,7 @@ export class Agent {
     if (this.debugRunner.active) this.debugRunner.command('stop')
     await this.browser?.close()
     this.browser = null
-    this.copilot = null
+    this.ai = null
     this.listeners.clear()
   }
 

@@ -60,7 +60,7 @@ const aiModelSchema = z.object({
   inputModalities: z.array(z.string()).optional(),
 })
 
-/** Copilot 每次请求携带的工作环境；前端从 ui-store 组装 */
+/** AI 每次请求携带的工作环境；前端从 ui-store 组装 */
 const aiEnvironmentSchema = z.object({
   mode: z.enum(['launch', 'editing', 'recording', 'replaying', 'plan']),
   url: z.string().optional(),
@@ -680,7 +680,7 @@ export const ipcEventContract = {
   [IpcEvent.aiRecordingDraft]: recordedDraftSchema,
   /** AI 提出用例修改建议；前端展示 diff，由用户确认后写入 */
   [IpcEvent.aiCaseProposal]: aiCaseProposalSchema,
-  /** SSE 建连时下发的 Copilot 运行快照；用于修复错过的 ai-start / ai-done */
+  /** SSE 建连时下发的 AI 运行快照；用于修复错过的 ai-start / ai-done */
   [IpcEvent.aiState]: z.object({
     running: z.boolean(),
     sessionId: z.string().optional(),
@@ -707,7 +707,7 @@ export const ipcEventContract = {
   [IpcEvent.debugState]: debugStateSchema,
 }
 
-/** Copilot 事件与上下文类型（agent / web 共用） */
+/** AI 事件与上下文类型（agent / web 共用） */
 export type AiToolStartPayload = z.output<(typeof ipcEventContract)[typeof IpcEvent.aiToolStart]>
 export type AiToolEndPayload = z.output<(typeof ipcEventContract)[typeof IpcEvent.aiToolEnd]>
 export type AiTarget = NonNullable<AiToolEndPayload['target']>

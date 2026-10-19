@@ -1,12 +1,12 @@
-# Stage 2：Copilot 设计方案（待确认）
+# Stage 2：AI 设计方案（待确认）
 
 > 2026-10-19 · 目标：让 AI 成为测试工作台里的操作者与作者，而不是一个挂在右边的聊天抽屉。
 >
-> 结论先行：**不做悬浮抽屉，也不做以聊天为中心的界面**。Copilot 是右侧检查器里的一个常驻页签，配合三处「业务现场入口」和一个 `⌘K` 命令栏；AI 的产物是可编辑的测试计划/用例草稿，而不是一段对话。
+> 结论先行：**不做悬浮抽屉，也不做以聊天为中心的界面**。AI 是右侧检查器里的一个常驻页签，配合三处「业务现场入口」和一个 `⌘K` 命令栏；AI 的产物是可编辑的测试计划/用例草稿，而不是一段对话。
 >
-> **已拍板**：① 右侧常驻页签；② 用例修改走计划卡/diff 卡显式应用；③ 默认模型 `deepseek-flash`（可配置）；④ 接入层用 Vercel AI SDK + 自有 `CopilotProvider` 封装（分析见 §6.3）。
+> **已拍板**：① 右侧常驻页签；② 用例修改走计划卡/diff 卡显式应用；③ 默认模型 `deepseek-flash`（可配置）；④ 接入层用 Vercel AI SDK + 自有 `AiProvider` 封装（分析见 §6.3）。
 >
-> **能力边界（已确认）**：Copilot 必须是真正的 Browser Use Agent——能感知页面、自主规划、操作浏览器、验证结果，而不是只会改用例文本。所有操作在中栏实时可视化：目标高亮、动作说明、步骤进度、证据回看。
+> **能力边界（已确认）**：AI 必须是真正的 Browser Use Agent——能感知页面、自主规划、操作浏览器、验证结果，而不是只会改用例文本。所有操作在中栏实时可视化：目标高亮、动作说明、步骤进度、证据回看。
 
 ## 1. 问题定义
 
@@ -31,7 +31,7 @@ AI 如果以「抽屉」形式盖在中栏上，会出现四个问题：
 
 | 原则 | 具体做法 |
 | --- | --- |
-| 舞台永远可见 | Copilot 不覆盖中栏；AI 操作时中栏保持实时镜像 |
+| 舞台永远可见 | AI 不覆盖中栏；AI 操作时中栏保持实时镜像 |
 | 入口贴着任务 | 失败步骤旁「分析失败」、用例头「补断言/优化」、启动台「一句话建用例」 |
 | 上下文自动带上 | 当前 URL、选中用例、选中运行/失败步骤、页面选中元素自动成为上下文 chip |
 | 过程可见、默认收拢 | 工具调用卡片实时出现；完成后折叠成一行，可展开看参数与结果 |
@@ -42,13 +42,13 @@ AI 如果以「抽屉」形式盖在中栏上，会出现四个问题：
 
 ## 3. 界面结构：三处入口 + 一个常驻页签
 
-### 3.1 常驻 Copilot 页签（不做抽屉）
+### 3.1 常驻 AI 页签（不做抽屉）
 
-右侧检查器从 3 个页签变成 4 个：**步骤 / 元素 / 报告 / Copilot**。
+右侧检查器从 3 个页签变成 4 个：**步骤 / 元素 / 报告 / AI**。
 
 ```
 ┌──────────────┬──────────────────────────────────────┬──────────────────────┐
-│  用例库       │  ◐ AI 操作 · 3/8「保存」 00:06 [停止][接管]│ 步骤 元素 报告 Copilot│
+│  用例库       │  ◐ AI 操作 · 3/8「保存」 00:06 [停止][接管]│ 步骤 元素 报告 AI│
 │              │        ┌────────────────────┐        │ ──────────────────── │
 │  默认项目     │        │  ┌──────────────┐  │        │ 上下文 chips          │
 │   ├ 登录      │        │  │  [保存] ←高亮 │  │        │ [用例 登录] [失败 #3] │
@@ -57,7 +57,7 @@ AI 如果以「抽屉」形式盖在中栏上，会出现四个问题：
 │              │        └────────────────────┘        │  ▸ 点击「保存」 1.2s  │
 │              │        点击「保存」 · 已截图          │  ▸ 断言 列表包含…     │
 │              │                                      │ ┌──────────────────┐ │
-│              │                                      │ │ 问 Copilot…  ⌘K  │ │
+│              │                                      │ │ 问 AI…  ⌘K  │ │
 │              │                                      │ └──────────────────┘ │
 └──────────────┴──────────────────────────────────────┴──────────────────────┘
 ```
@@ -68,8 +68,8 @@ AI 如果以「抽屉」形式盖在中栏上，会出现四个问题：
 - **AI 运行时自动出现状态条**：状态条放在中栏顶部（与录制/回放/计划同一条槽位），36px 高，不覆盖镜像；显示当前工具名、步号、耗时和「停止 / 接管」。
 - **中栏可视化**：AI 操作时在镜像上叠加目标元素高亮框与动作说明（点击 / 输入 / 选择 / 断言）；每步自动截图，底部说明条可展开证据。高亮坐标来自工具返回的 `getBoundingClientRect` 与视口尺寸，按 `object-contain` 映射到镜像显示区域，不修改被测页面 DOM。
 - **接管**：状态条的「接管」= 停止 AI 循环 + 聚焦真实 Chrome；已完成动作与证据保留，不丢上下文。
-- **页签切换不抢焦点**：会话从 Copilot 页签发起时停留在 Copilot；从上下文按钮发起时自动切到 Copilot；AI 持续运行时如果用户切到「步骤」，Copilot 页签显示活动小圆点，不强行拉回。
-- **收起检查器**：保留现有「启动台整幅模式」；Copilot 页签也遵循这一规则，没有打开任何东西时整幅显示启动台。
+- **页签切换不抢焦点**：会话从 AI 页签发起时停留在 AI；从上下文按钮发起时自动切到 AI；AI 持续运行时如果用户切到「步骤」，AI 页签显示活动小圆点，不强行拉回。
+- **收起检查器**：保留现有「启动台整幅模式」；AI 页签也遵循这一规则，没有打开任何东西时整幅显示启动台。
 - **窄窗口降级**：宽度 < 1100px 时，右侧页签改为覆盖中栏的全高面板（带返回按钮）；再窄则用底部全屏面板。桌面为主，降级只保证可用。
 
 ### 3.2 三处业务现场入口
@@ -85,15 +85,15 @@ AI 如果以「抽屉」形式盖在中栏上，会出现四个问题：
    - 自动上下文：当前页面、选中项目；目标是产出一份可编辑的计划。
    - 录制中也可用：「帮我完成当前这一步」。
 
-这些入口都是普通按钮，不打开任何浮层；点击后切到 Copilot 页签并带上上下文。
+这些入口都是普通按钮，不打开任何浮层；点击后切到 AI 页签并带上上下文。
 
 ### 3.3 `⌘K` 命令栏
 
 一个居中的临时命令面板（Spotlight 形态），不是聊天抽屉：
 
-- 输入框第一行永远是「问 Copilot：<输入>」，回车发送到页签。
+- 输入框第一行永远是「问 AI：<输入>」，回车发送到页签。
 - 下方是动作列表：分析当前失败 / 从当前页面生成用例 / 为当前用例补断言 / 运行当前用例 / 打开演示页 / 新建用例 / 最近会话。
-- `Esc` 关闭，焦点回到原处；命令面板不保留历史，历史在 Copilot 页签里。
+- `Esc` 关闭，焦点回到原处；命令面板不保留历史，历史在 AI 页签里。
 - 没有选中任何对象时，动作会自动隐藏或禁用，并说明原因。
 
 ### 3.4 为什么不是其他形态
@@ -206,7 +206,7 @@ AI 对「生成用例」类请求，优先生成计划卡；执行时仍走 Brow
 
 - 中栏实时镜像 + 顶部 AI 状态条（步号 / 工具 / 耗时 / 停止 / 接管）。
 - 镜像上高亮当前目标元素，底部显示动作说明；点击、输入、选择有短促反馈。
-- 每步产生工具卡片与截图证据；右侧 Copilot 同步显示循环进度。
+- 每步产生工具卡片与截图证据；右侧 AI 同步显示循环进度。
 - 结束给出「已验证 / 假设 / 未完成」，并可以把过程保存为用例。
 
 判定规则写进系统提示词：探索性、单步、验证性任务直接操作；要产出可复用用例、或修改已有用例时，先出计划 / diff。默认就是「能操作浏览器」的 Agent，不需要用户额外授权开关。
@@ -241,7 +241,7 @@ AI 对现有用例的修改不静默写入，而是给出 diff 卡：
 Web UI
   │  POST /api/invoke  ai:*          SSE: ai-delta / ai-tool / ai-plan / ai-done
   ▼
-CopilotService（会话、上下文、取消、持久化）
+AiService（会话、上下文、取消、持久化）
   ├─ Provider（Vercel AI SDK：DeepSeek / Anthropic / OpenAI-compatible / Stub）
   └─ ToolRegistry（Zod schema + 执行器 + 展示元数据）
         ├─ browser.*   → ChromeController / LiveView
@@ -322,15 +322,15 @@ DeepSeek 已进入 V4 系列，旧模型名 `deepseek-chat` / `deepseek-reasoner
 
 原型：<prototypes/ai-settings.html>（本地文件，含未配置 / 已保存 / 测试中 / 失败 / 环境变量五种状态）。
 
-- **入口**：顶栏右侧齿轮（全局）；Copilot 头部的模型徽标（点击打开）；无 key 提示卡上的「打开模型设置」。
+- **入口**：顶栏右侧齿轮（全局）；AI 头部的模型徽标（点击打开）；无 key 提示卡上的「打开模型设置」。
 - **布局**：单列紧凑弹窗（约 700px），保持与保存用例弹窗一致。自上而下：服务商三选一（DeepSeek / Anthropic / OpenAI 兼容）、密钥、模型、思考强度、接口地址、测试结果；底部固定「取消 / 测试连接 / 保存」。窄屏自动单列滚动。原型里的双栏与「当前生效」卡片不再采用，避免信息重复和视觉噪音。
 - **密钥**：只写不读。保存后只显示 `…9f3a` 与来源标签（环境变量 / 本机保存）；输入新值走「替换」；清除需要二次确认，保存后生效。写入 `~/.atp-agent/config.json`（合并已有 profile、原子写入、0600），IPC 与日志不回传明文，错误信息里的密钥会被替换为 `***`。
 - **模型**：DeepSeek 默认 `deepseek-flash`，可选 `deepseek-v4-pro`；Anthropic 默认 `claude-opus-5-5`。模型名可手填，也可从服务商 `/models` 刷新后作为候选；下方显示上下文 / 输出 / 图片能力。
 - **思考强度**：DeepSeek 暴露「关闭 / 低 / 高 / 最高」，默认高；Anthropic 由模型自行管理；网关不暴露。通过 `providerOptions.deepseek.thinking` + `reasoningEffort` 传入。
 - **测试连接**：用当前未保存的值做一次真实调用（`generateText` + `ping` 工具），验证鉴权与工具调用，展示耗时；401 / 403 / 404 / 429 / 超时 / 缺 Base URL 给中文可行动错误，不写入配置。
 - **环境变量优先**：环境变量 > 本机配置 > 默认探测。检测到同名环境变量时显示黄色提示条，说明本机保存的密钥不会生效。
-- **热生效**：保存后 `CopilotService.reload()` 重建 provider，不重启 Agent；正在执行的任务持有旧 provider 不被打断，新消息生效。
-- **实现面**：`ai:config` 增加 kind / baseURL / hasKey / keyHint / keySource / keyEnv / thinking；新增 `ai:saveConfig`、`ai:test`、`ai:models`；`copilot/config.ts` 负责解析与 0600 持久化；`AiSettingsDialog.tsx` 负责界面。实际模型 ID 以服务商返回为准，不做硬编码回退。
+- **热生效**：保存后 `AiService.reload()` 重建 provider，不重启 Agent；正在执行的任务持有旧 provider 不被打断，新消息生效。
+- **实现面**：`ai:config` 增加 kind / baseURL / hasKey / keyHint / keySource / keyEnv / thinking；新增 `ai:saveConfig`、`ai:test`、`ai:models`；`ai/config.ts` 负责解析与 0600 持久化；`AiSettingsDialog.tsx` 负责界面。实际模型 ID 以服务商返回为准，不做硬编码回退。
 - 模型不支持 tool calling 时自动降级为只读问答，并明确提示原因，不静默失败。
 - 截图按需上传：模型调用 `browser.screenshot` 才把画面作为工具结果发回；默认只发可访问性快照。
 
@@ -348,14 +348,14 @@ DeepSeek 已进入 V4 系列，旧模型名 `deepseek-chat` / `deepseek-reasoner
 | 版本风险 | 稳定 | 大版本变动较频繁，需要锁版本 |
 | 适配成本 | 双 provider 要两套循环 | 换模型基本是改配置 |
 
-结论：**已确定用 Vercel AI SDK 作为接入层，外面再包一层自己的 `CopilotProvider` 接口。**
+结论：**已确定用 Vercel AI SDK 作为接入层，外面再包一层自己的 `AiProvider` 接口。**
 
 理由：
 
 1. 默认模型是 DeepSeek，未来还可能在 Claude / 其他网关之间切换；统一 provider 接口的价值大于 Claude 专有能力的收益。
 2. 工具循环、流式分块、停止条件都是现成的，正好映射到本方案的 SSE 与工具卡片。
 3. 抽象层开销约 10–20ms 首 token，对本地测试助手可以忽略。
-4. 自有 `CopilotProvider` 边界保证可撤退：如果以后 Claude 专有能力变得关键，可以只替换这一层，不动会话、工具、UI。
+4. 自有 `AiProvider` 边界保证可撤退：如果以后 Claude 专有能力变得关键，可以只替换这一层，不动会话、工具、UI。
 
 具体做法：
 
@@ -414,12 +414,12 @@ URL: http://…/demo
 
 ## 9. 分期与验收
 
-### Stage 2.1：Copilot 骨架 + 页面感知（先交付可感知的一层）
+### Stage 2.1：AI 骨架 + 页面感知（先交付可感知的一层）
 
 > **状态（2026-10-19）**：已交付。会话暂存 Agent 内存（单次运行内保留多轮上下文）；SQLite 会话历史与「最近会话」随 2.3 的会话管理一起交付，避免只写不读的半成品。
 
-- 右侧 Copilot 页签、可拖拽宽度、上下文 chips、命令栏。
-- Vercel AI SDK（默认 DeepSeek profile）+ 自有 `CopilotProvider` 封装 + StubProvider、SSE 事件。
+- 右侧 AI 页签、可拖拽宽度、上下文 chips、命令栏。
+- Vercel AI SDK（默认 DeepSeek profile）+ 自有 `AiProvider` 封装 + StubProvider、SSE 事件。
 - 感知工具：`browser.snapshot`（语义 ref）、`browser.screenshot`、`case.list/get`、`run.list/get`。
 - 工具卡片（折叠/展开/失败态）、思考摘要、结论脚注、顶部 AI 状态条。
 - **验收**：选中失败运行 → 点「让 AI 分析」→ 自动带上下文 → AI 先快照/截图再输出归因与建议；全程中栏镜像可见。
@@ -428,11 +428,11 @@ URL: http://…/demo
 
 > **状态（2026-10-19）**：已交付。保存 / 掩码回显 / 0600 权限 / 清除密钥 / 回到演示模式已由 `scripts/e2e-agent.mjs` 自动验证；真实 DeepSeek key 的「测试通过 → 真实工具调用」需在本机粘贴后验收。
 
-- 顶栏齿轮 + Copilot 模型徽标 + 无 key 提示卡三处入口。
+- 顶栏齿轮 + AI 模型徽标 + 无 key 提示卡三处入口。
 - 支持 DeepSeek 官方 / Anthropic 官方 / OpenAI 兼容网关；密钥、模型、思考强度、Base URL。
 - 真实「测试连接」：鉴权 + 一次工具调用；错误可行动；环境变量优先级可见。
 - 保存后热生效，写入本机 0600 配置文件，界面不回读明文。
-- **验收**：粘贴真实 DeepSeek key → 测试通过 → Copilot 头部从「演示模式」变为 `deepseek-flash` → 发一条消息能完成真实工具调用。
+- **验收**：粘贴真实 DeepSeek key → 测试通过 → AI 头部从「演示模式」变为 `deepseek-flash` → 发一条消息能完成真实工具调用。
 
 ### Stage 2.2：Browser Use 操作 + 中栏可视化（关键切片）
 
@@ -458,7 +458,7 @@ Stage 2.2 是 Agent 能力的验收门槛：如果只能按固定脚本演示，
 ### Stage 2.4：MCP 与增强
 
 - `POST /mcp` 暴露同一份 ToolRegistry；外部 MCP 客户端可驱动浏览器与用例。
-- 焦点模式（折叠左栏、加宽 Copilot）、密度控制、会话摘要。
+- 焦点模式（折叠左栏、加宽 AI）、密度控制、会话摘要。
 - **验收**：Claude Desktop / 其他 MCP 客户端能列出工具并完成一次录制回放。
 
 每期都跑：`lint`、`typecheck`、`unit`、`build`、`e2e`（StubProvider，不需要网络与 key）。
@@ -470,9 +470,9 @@ Stage 2.2 是 Agent 能力的验收门槛：如果只能按固定脚本演示，
 1. 界面形态：右侧常驻页签 + 现场入口 + `⌘K`。
 2. 用例写入：计划卡 / diff 卡显式应用。
 3. 默认模型：`deepseek-flash`（可配置）。
-4. 接入层：Vercel AI SDK + 自有 `CopilotProvider` 封装。
+4. 接入层：Vercel AI SDK + 自有 `AiProvider` 封装。
 5. 三种访问方式都支持：DeepSeek 官方、OpenAI 兼容网关、Anthropic 兼容网关。
-6. Copilot 必须是真正的 Browser Use Agent，操作在中栏可视化。
+6. AI 必须是真正的 Browser Use Agent，操作在中栏可视化。
 
 待补充：
 
@@ -482,13 +482,13 @@ Stage 2.2 是 Agent 能力的验收门槛：如果只能按固定脚本演示，
 
 ## 11. 参考
 
-- AI copilot UI patterns（side dock / tool cards / streaming / anti-patterns）：<https://github.com/truongnat/aix/blob/main/content/skills/design-system-pro/references/ai-copilot-ui-patterns-deep-dive.md>
+- AI UI patterns（side dock / tool cards / streaming / anti-patterns）：<https://github.com/truongnat/aix/blob/main/content/skills/design-system-pro/references/ai-copilot-ui-patterns-deep-dive.md>
 - LukeW，An Alternative Chat UI Layout（两栏 agentic chat）：<https://www.lukew.com/ff/2135/an-alternative-chat-ui-layout>
 - 16 AI agent UI design patterns（plan、tool card、diff、undo、审批分级）：<https://www.setproduct.com/blog/ai-agent-ui-design-patterns>
 - Cursor 3.4 changelog（工具调用密度、全屏页签）：<https://cursor.com/ko/changelog/3-4>
 - Cursor agent UI UX case study：<https://dev.to/designstudiouiux/how-cursor-nails-ai-agent-ui-design-a-ux-case-study-ng8>
 - 右侧 AI 抽屉的产品分析（中文，含留存数据与替代方案）：<http://www.woshipm.com/share/6423032.html>
-- Microsoft 365 Copilot 新版设计（侧栏与全屏的分工）：<https://windowsreport.com/microsoft-details-its-ai-forward-copilot-design-system-plan/>
+- Microsoft 365 AI 助手新版设计（侧栏与全屏的分工）：<https://windowsreport.com/microsoft-details-its-ai-forward-copilot-design-system-plan/>
 - Claude Code transcript 视图模式讨论（工具调用默认收起）：<https://github.com/anthropics/claude-code/issues/73413>
 - Claude Code transcript 卡片实现参考：<https://blog.gitcode.com/3d9bdaa17f8c7d4f4a2c74ede3f24a12.html>
 - Vercel AI SDK 文档（streamText / tools / stopWhen / fullStream）：<https://ai-sdk.dev/docs>
@@ -496,3 +496,5 @@ Stage 2.2 是 Agent 能力的验收门槛：如果只能按固定脚本演示，
 - DeepSeek provider（`@ai-sdk/deepseek`）：<https://ai-sdk.dev/providers/ai-sdk-providers/deepseek>
 - OpenAI 兼容 provider（自建网关 / Ollama）：<https://ai-sdk.dev/providers/openai-compatible-providers>
 - Anthropic SDK vs Vercel AI SDK 对比：<https://dev.to/muhammad_moeed/claude-agent-sdk-vs-vercel-ai-sdk-6-which-to-pick-in-2026-2jj>
+
+- 语音输入与命名统一见 <Stage2.5-AI语音输入与命名统一.md>。

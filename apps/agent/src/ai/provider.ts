@@ -26,7 +26,7 @@ export interface ProviderRunInput {
   callTool: (name: string, input: unknown) => Promise<unknown>
 }
 
-export interface CopilotProvider {
+export interface AiProvider {
   readonly provider: string
   readonly model: string
   readonly stub: boolean
@@ -56,7 +56,7 @@ function asCaseFile(value: unknown): CaseFile | null {
   return value as CaseFile
 }
 
-class StubProvider implements CopilotProvider {
+class StubProvider implements AiProvider {
   readonly provider = 'stub'
   readonly model = 'stub'
   readonly stub = true
@@ -180,7 +180,7 @@ export function deepseekProviderOptions(thinking?: AiThinking) {
   return { deepseek: { thinking: { type: 'enabled' }, reasoningEffort: thinking } }
 }
 
-class AiSdkProvider implements CopilotProvider {
+class AiSdkProvider implements AiProvider {
   readonly stub = false
 
   constructor(
@@ -226,7 +226,7 @@ class AiSdkProvider implements CopilotProvider {
 export const MAX_TOOL_STEPS = 50
 
 export interface ProviderBundle {
-  provider: CopilotProvider
+  provider: AiProvider
   config: AiConfig
 }
 
@@ -281,7 +281,7 @@ function configOf(
 }
 
 /** 按 profile 构建 provider；配置不可用时退回 Stub，保证界面可用 */
-export function createCopilotProvider(resolved: ResolvedAiProfile): ProviderBundle {
+export function createAiProvider(resolved: ResolvedAiProfile): ProviderBundle {
   const { profile } = resolved
   if (!resolved.ready || profile.kind === 'stub' || !resolved.apiKey) {
     return {

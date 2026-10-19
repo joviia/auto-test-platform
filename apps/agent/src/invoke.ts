@@ -5,7 +5,7 @@ import { getDb } from '@atp/core'
 import { IpcChannel, type IpcContract, parseIpcInput } from '@atp/model'
 import { toPlaywrightSpec } from '@atp/runner'
 import type { Agent } from './agent.js'
-import { SKILL_MANIFESTS } from './copilot/skills.js'
+import { SKILL_MANIFESTS } from './ai/skills.js'
 
 type Handler = (input: never) => Promise<unknown>
 

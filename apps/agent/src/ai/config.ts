@@ -137,7 +137,7 @@ export function resolveProfile(
     return {
       ...common,
       ready: false,
-      reason: `未找到 ${profile.apiKeyEnv ?? 'ATP_AI_API_KEY'}，Copilot 将以只读演示模式运行`,
+      reason: `未找到 ${profile.apiKeyEnv ?? 'ATP_AI_API_KEY'}，AI 将以只读演示模式运行`,
     }
   }
   if (profile.kind === 'openai-compatible' && !profile.baseURL) {
@@ -149,7 +149,7 @@ export function resolveProfile(
 /**
  * 解析模型配置。优先级：环境变量 > ~/.atp-agent/config.json > 自动探测。
  * 没有 key 时仍保留选中的 provider/model（ready=false），方便设置弹窗回填；
- * 真正的请求由 CopilotProvider 退回 Stub。
+ * 真正的请求由 AiProvider 退回 Stub。
  */
 export async function loadAiProfile(dataDir: string): Promise<ResolvedAiProfile> {
   const file = await readFileConfig(dataDir)

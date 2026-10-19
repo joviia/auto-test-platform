@@ -19,7 +19,7 @@ const cli = resolve(import.meta.dirname, '../apps/agent/dist/cli.js')
 const dataDir = await mkdtemp(join(tmpdir(), 'atp-agent-e2e-'))
 
 function startAgent() {
-  // 清掉开发机上可能存在的真实密钥，保证 Copilot 从演示模式开始
+  // 清掉开发机上可能存在的真实密钥，保证 AI 从演示模式开始
   const env = { ...process.env }
   for (const key of [
     'ATP_AI_PROFILE',
@@ -219,12 +219,12 @@ try {
   if (errors.length > 0) throw new Error(`页面错误：${errors.join(' / ')}`)
   console.log('[agent] 报告 ✓ 4 张截图可加载')
 
-  // Copilot 演示链路：页签 → 流式输出 → 工具卡 → 落款
-  await page.locator('[role=tab]').filter({ hasText: 'Copilot' }).click()
+  // AI 演示链路：页签 → 流式输出 → 工具卡 → 落款
+  await page.locator('[role=tab]').filter({ hasText: 'AI' }).click()
   const composer = page.locator('textarea[placeholder^="描述要测什么"]')
   await composer.waitFor({ state: 'visible' })
   const panelText = await page.locator('body').innerText()
-  if (!panelText.includes('让 Copilot 操作页面')) throw new Error('Copilot 空状态未渲染')
+  if (!panelText.includes('让 AI 操作页面')) throw new Error('AI 空状态未渲染')
   await composer.fill('帮我观察一下当前页面')
   await composer.press('Enter')
   await page.getByText('当前是演示模式', { exact: false }).first().waitFor({ timeout: 20_000 })
@@ -235,11 +235,65 @@ try {
   const expanded = await toolGroup.getAttribute('aria-expanded')
   if (expanded !== 'true') await toolGroup.click()
   await page.getByText('观察页面', { exact: false }).first().waitFor({ timeout: 20_000 })
-  console.log('[agent] Copilot ✓ 流式输出与工具卡分组')
+  console.log('[agent] AI ✓ 流式输出与工具卡分组')
+
+  // 语音输入：用假的 SpeechRecognition 验证按钮与文本回填，不依赖真实麦克风
+  const voicePage = await browser.newPage()
+  voicePage.on('pageerror', (err) => errors.push(err.message))
+  await voicePage.addInitScript(() => {
+    class FakeSpeechRecognition {
+      constructor() {
+        this.lang = ''
+        this.continuous = false
+        this.interimResults = false
+        this.maxAlternatives = 1
+        this.onresult = null
+        this.onerror = null
+        this.onend = null
+      }
+      start() {
+        setTimeout(() => {
+          if (this.onresult) {
+            const alternative = { transcript: '检查登录页面', confidence: 1 }
+            const result = [alternative]
+            result.isFinal = true
+            this.onresult({ resultIndex: 0, results: [result] })
+          }
+          if (this.onend) this.onend()
+        }, 50)
+      }
+      stop() {
+        if (this.onend) this.onend()
+      }
+      abort() {
+        if (this.onend) this.onend()
+      }
+    }
+    window.SpeechRecognition = FakeSpeechRecognition
+    window.webkitSpeechRecognition = FakeSpeechRecognition
+  })
+  await voicePage.goto(uiUrl, { waitUntil: 'networkidle' })
+  await voicePage.getByLabel('打开 AI', { exact: true }).click()
+  const voiceComposer = voicePage.locator('textarea[placeholder^="描述要测什么"]')
+  await voiceComposer.waitFor({ state: 'visible' })
+  await voicePage.getByRole('button', { name: '语音输入', exact: true }).click()
+  await voicePage.waitForFunction(
+    () => {
+      const el = document.querySelector('textarea[placeholder^="描述要测什么"]')
+      return el instanceof HTMLTextAreaElement && el.value.includes('检查登录页面')
+    },
+    undefined,
+    { timeout: 10_000 },
+  )
+  await voicePage
+    .getByRole('button', { name: '语音输入', exact: true })
+    .waitFor({ timeout: 10_000 })
+  await voicePage.close()
+  console.log('[agent] AI ✓ 语音输入按钮回填识别结果')
 
   // 会话持久化：消息与工具卡落 SQLite，历史入口可恢复
   const sessions = await invoke(origin, 'ai:session-list', { limit: 10 })
-  if (sessions.length === 0) throw new Error('Copilot 会话没有落库')
+  if (sessions.length === 0) throw new Error('AI 会话没有落库')
   const storedSession = await invoke(origin, 'ai:session-get', { id: sessions[0].id })
   if (storedSession.messages.length < 2) {
     throw new Error(`会话消息不足：${storedSession.messages.length}`)
@@ -254,7 +308,7 @@ try {
   await page.getByText('已验证', { exact: false }).first().waitFor({ timeout: 10_000 })
   console.log('[agent] 会话持久化 ✓ 落库 / 历史恢复')
 
-  // 模型设置：保存密钥 → Copilot 切到真实模型 → 掩码与权限位 → 清除后回到演示
+  // 模型设置：保存密钥 → AI 切到真实模型 → 掩码与权限位 → 清除后回到演示
   await page.locator('button[aria-label="模型设置"]').click()
   await page.getByRole('heading', { name: '模型设置' }).waitFor({ timeout: 10_000 })
   const keyField = page.locator('#atp-ai-key')
@@ -269,7 +323,7 @@ try {
     .waitFor({ timeout: 10_000 })
 
   const savedConfig = await invoke(origin, 'ai:config')
-  if (savedConfig.stub || !savedConfig.ready) throw new Error('保存密钥后 Copilot 仍是演示模式')
+  if (savedConfig.stub || !savedConfig.ready) throw new Error('保存密钥后 AI 仍是演示模式')
   if (savedConfig.keyHint !== '…abcd') throw new Error(`密钥掩码不正确：${savedConfig.keyHint}`)
   if (savedConfig.keySource !== 'file') throw new Error('密钥来源不是本机文件')
   if (JSON.stringify(savedConfig).includes('sk-e2e-test')) {
@@ -317,12 +371,9 @@ try {
   await page.getByText('value', { exact: true }).waitFor({ timeout: 10_000 })
   console.log('[agent] 操作库 ✓ 3 个技能与参数详情')
 
-  // 环境面板：切回用例，打开 Copilot，检查模型实际收到的环境
+  // 环境面板：切回用例，打开 AI，检查模型实际收到的环境
   await page.getByRole('button', { name: '用例', exact: true }).click()
-  await page
-    .getByRole('button', { name: /Copilot/ })
-    .first()
-    .click()
+  await page.getByRole('button', { name: /AI/ }).first().click()
   await page.locator('button[aria-label="环境"]').waitFor({ timeout: 10_000 })
   await page.locator('button[aria-label="环境"]').click()
   await page.getByText('这些字段会随每条消息发送给模型', { exact: false }).waitFor({
@@ -454,7 +505,7 @@ try {
   await resumePage.goto(uiUrl, { waitUntil: 'networkidle' })
   await resumePage.waitForTimeout(800)
   await resumePage.getByText('Agent E2E 用例', { exact: true }).first().click()
-  await resumePage.locator('[role=tab]').filter({ hasText: 'Copilot' }).first().click()
+  await resumePage.locator('[role=tab]').filter({ hasText: 'AI' }).first().click()
   const resumeComposer = resumePage.locator('textarea[placeholder^="描述要测什么"]')
   await resumeComposer.waitFor({ state: 'visible', timeout: 20_000 })
   await resumeComposer.fill('帮我观察一下当前页面')

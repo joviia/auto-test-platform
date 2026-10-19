@@ -33,12 +33,12 @@ export function SkillPanel({ skillId }: { skillId: string }) {
     )
     .join(', ')
 
-  const useInCopilot = (): void => {
+  const useInAI = (): void => {
     const prompt = `使用技能「${skill.name}」（${skill.id}）：${
       skill.example ?? skill.description
     }。先 browser_snapshot 找到目标元素，再调用 skill_run。`
     requestAi(prompt)
-    toast.success('已把请求放入 Copilot，确认后发送')
+    toast.success('已把请求放入 AI，确认后发送')
   }
 
   return (
@@ -100,8 +100,8 @@ export function SkillPanel({ skillId }: { skillId: string }) {
           )}
         </section>
 
-        <Button variant="primary" size="sm" className="w-full" onPress={useInCopilot}>
-          <Sparkles size={13} />让 Copilot 使用
+        <Button variant="primary" size="sm" className="w-full" onPress={useInAI}>
+          <Sparkles size={13} />让 AI 使用
         </Button>
       </div>
     </div>

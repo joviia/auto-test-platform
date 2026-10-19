@@ -238,7 +238,7 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
       })
       await send('recording-status', { recording: state.recording, url: state.url })
       await send('cases', { type: 'cases', cases: state.cases })
-      // 建连 / 重连时校准 Copilot 运行状态，修复断线期间错过的 ai-start / ai-done
+      // 建连 / 重连时校准 AI 运行状态，修复断线期间错过的 ai-start / ai-done
       await send('ai-state', agent.aiState())
       // 调试暂停可能发生在断线期间；重连时补一份当前状态
       const debugState = agent.debugState()

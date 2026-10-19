@@ -102,7 +102,7 @@ body {
   animation: atp-fade-in 140ms ease-out;
 }
 
-/* Copilot Markdown：代码块内层 code 不叠加行内背景；流式输出尾部光标 */
+/* AI Markdown：代码块内层 code 不叠加行内背景；流式输出尾部光标 */
 .atp-markdown pre code {
   background: transparent;
   padding: 0;

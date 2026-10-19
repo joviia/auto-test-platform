@@ -1,4 +1,4 @@
-<title>Copilot 模型设置</title>
+<title>AI 模型设置</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
   :root {
@@ -374,16 +374,16 @@
   }
   .fake-table td { font-size: 9px; padding: 7px 8px; border-bottom: 1px solid #f0f2f6; }
 
-  /* copilot behind */
-  .copilot {
+  /* ai behind */
+  .ai {
     width: 330px; flex: none; border-left: 1px solid var(--border); background: var(--surface);
     display: flex; flex-direction: column; min-height: 0;
   }
-  .copilot-head {
+  .ai-head {
     height: 43px; flex: none; display: flex; align-items: center; gap: 7px; padding: 0 12px;
     border-bottom: 1px solid var(--border);
   }
-  .copilot-name { font-size: 12px; font-weight: 650; }
+  .ai-name { font-size: 12px; font-weight: 650; }
   .model-badge {
     display: inline-flex; align-items: center; gap: 3px; height: 20px; padding: 0 6px;
     border: 1px solid var(--border); border-radius: 4px; background: var(--surface-2);
@@ -392,7 +392,7 @@
   .model-badge b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .model-badge.demo { background: var(--warning-soft); border-color: transparent; color: var(--warning); }
   .model-badge.clickable { cursor: pointer; }
-  .copilot-head .right { margin-left: auto; display: flex; gap: 2px; }
+  .ai-head .right { margin-left: auto; display: flex; gap: 2px; }
   .ctx-chip {
     margin: 8px 10px 0; height: 22px; align-self: flex-start; display: inline-flex; align-items: center;
     gap: 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface-2);
@@ -821,12 +821,12 @@
 
   /* responsive */
   @media (max-width: 1120px) {
-    .copilot { width: 300px; }
+    .ai { width: 300px; }
     .tree { width: 210px; }
   }
   @media (max-width: 920px) {
     .proto-note { display: none; }
-    .copilot { display: none; }
+    .ai { display: none; }
     .app { height: calc(100dvh - 70px); }
     .proto-legend { display: none; }
   }
@@ -912,7 +912,7 @@
       <span class="proto-note">模拟数据 · 不会发起真实请求</span>
     </div>
     <div class="proto-controls">
-      <span class="proto-legend">入口：① 顶栏齿轮 · ② Copilot 模型徽标 · ③ 未配置提示</span>
+      <span class="proto-legend">入口：① 顶栏齿轮 · ② AI 模型徽标 · ③ 未配置提示</span>
       <div class="seg" id="state-seg" role="group" aria-label="原型状态">
         <button type="button" data-view="unconfigured">未配置</button>
         <button type="button" data-view="saved" class="on">已保存</button>
@@ -943,7 +943,7 @@
       <div class="appbar-right">
         <button class="top-btn accent" type="button">
           <svg class="icon sm"><use href="#i-sparkles"/></svg>
-          Copilot
+          AI
           <span class="kbd">⌘K</span>
         </button>
         <div class="gear-wrap annotate" id="gear-wrap">
@@ -1017,11 +1017,11 @@
         </div>
       </main>
 
-      <aside class="copilot">
-        <div class="copilot-head">
+      <aside class="ai">
+        <div class="ai-head">
           <svg class="icon sm" style="color:var(--accent)"><use href="#i-sparkles"/></svg>
-          <span class="copilot-name">Copilot</span>
-          <span class="model-badge demo clickable" id="copilot-badge" title="点击配置模型">
+          <span class="ai-name">AI</span>
+          <span class="model-badge demo clickable" id="ai-badge" title="点击配置模型">
             <b>演示模式</b><svg class="icon xs"><use href="#i-chevron"/></svg>
           </span>
           <span class="right">
@@ -1032,11 +1032,11 @@
         <div class="ctx-chip"><svg class="icon xs"><use href="#i-globe"/></svg>localhost:8765</div>
         <div class="convo">
           <div class="bubble">观察当前页面，告诉我这个页面能测什么</div>
-          <div class="msg-head"><svg class="icon xs" style="color:var(--accent)"><use href="#i-sparkles"/></svg>Copilot</div>
-          <div class="msg-text" id="copilot-text">当前是演示模式：没有配置真实模型，我会展示 Agent 的观察与工具卡片。</div>
+          <div class="msg-head"><svg class="icon xs" style="color:var(--accent)"><use href="#i-sparkles"/></svg>AI</div>
+          <div class="msg-text" id="ai-text">当前是演示模式：没有配置真实模型，我会展示 Agent 的观察与工具卡片。</div>
           <div class="tool-card"><svg class="icon xs ok"><use href="#i-check"/></svg>观察页面 · 5 个可交互元素<span class="ms">12ms</span></div>
         </div>
-        <div class="composer"><span>描述要测什么，或让 Copilot 操作页面…</span><span class="send"><svg class="icon xs"><use href="#i-arrow-right"/></svg></span></div>
+        <div class="composer"><span>描述要测什么，或让 AI 操作页面…</span><span class="send"><svg class="icon xs"><use href="#i-arrow-right"/></svg></span></div>
       </aside>
 
       <div class="overlay" id="overlay">
@@ -1044,7 +1044,7 @@
           <div class="dlg-head">
             <div>
               <h1 id="dlg-title">模型设置</h1>
-              <p>Copilot 使用这个连接读取页面并执行操作</p>
+              <p>AI 使用这个连接读取页面并执行操作</p>
             </div>
             <button class="icon-btn" id="close-btn" type="button" aria-label="关闭">
               <svg class="icon"><use href="#i-x"/></svg>
@@ -1113,7 +1113,7 @@
                   <button class="link danger" id="clear-key" type="button">清除密钥</button>
                 </div>
                 <div class="clear-confirm" id="clear-confirm">
-                  <span>清除后 Copilot 会回到演示模式，确定吗？</span>
+                  <span>清除后 AI 会回到演示模式，确定吗？</span>
                   <button type="button" id="clear-cancel">取消</button>
                   <button type="button" class="yes" id="clear-yes">清除</button>
                 </div>
@@ -1483,12 +1483,12 @@
       else dot.className = 'dot'
     })
 
-    // copilot
-    const badge = $('#copilot-badge')
+    // ai
+    const badge = $('#ai-badge')
     const demo = state.view === 'unconfigured'
     badge.classList.toggle('demo', demo)
     badge.querySelector('b').textContent = demo ? '演示模式' : state.model
-    $('#copilot-text').textContent = demo
+    $('#ai-text').textContent = demo
       ? '当前是演示模式：没有配置真实模型，我会展示 Agent 的观察与工具卡片。'
       : '页面已读取：内容管理中心，5 个可交互元素。配置完成后可以直接让我走一遍创建流程。'
 
@@ -1619,7 +1619,7 @@
     configured[state.provider] = false
     markDirty(true)
     apply()
-    toast('已清除本机密钥，Copilot 将回到演示模式')
+    toast('已清除本机密钥，AI 将回到演示模式')
   })
   $('#get-key').addEventListener('click', () => {
     toast('在 platform.deepseek.com 的 API Keys 页面创建密钥', true)
@@ -1768,8 +1768,8 @@
     }
   })
 
-  // click the Copilot model badge also opens settings
-  $('#copilot-badge').addEventListener('click', openDialog)
+  // click the AI model badge also opens settings
+  $('#ai-badge').addEventListener('click', openDialog)
 
   // init
   renderModelList()

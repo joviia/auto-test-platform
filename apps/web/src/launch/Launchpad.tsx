@@ -387,7 +387,7 @@ export function Launchpad() {
           type="button"
           onClick={() => {
             setAiOpen(true)
-            setRightTab('copilot')
+            setRightTab('ai')
           }}
           className="mt-3.5 flex w-full items-center gap-3 rounded-lg border border-accent/30 bg-surface p-3 text-left shadow-surface transition-colors hover:border-accent/50 hover:bg-accent/[0.03]"
         >

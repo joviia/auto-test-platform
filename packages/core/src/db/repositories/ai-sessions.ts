@@ -21,7 +21,7 @@ function toSessionRow(row: AiSessionEntity, messageCount: number): AiSessionRow 
   }
 }
 
-/** Copilot 会话与消息。消息只追加，不改写；会话按 updatedAt 倒序。 */
+/** AI 会话与消息。消息只追加，不改写；会话按 updatedAt 倒序。 */
 export class AiSessionRepository {
   constructor(private readonly em: EntityManager) {}
 

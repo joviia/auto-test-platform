@@ -9,7 +9,7 @@ import type { ChromeController, RecordedDraft, RefDescription } from '../browser
 import { buildCaseProposal, type CaseProposalInput, caseProposalOpsSchema } from './proposals.js'
 import { SKILL_MANIFESTS, SKILL_MAP } from './skills.js'
 
-export interface CopilotCaseRun {
+export interface AiCaseRun {
   runId: string
   status: 'passed' | 'failed'
   durationMs?: number
@@ -24,24 +24,24 @@ export interface CopilotCaseRun {
   }>
 }
 
-export interface CopilotPlatform {
+export interface AiPlatform {
   isRecording: () => boolean
   startRecording: () => void
   stopRecording: () => Promise<RecordedDraft>
   notifyRecordingDraft: (draft: RecordedDraft) => void
-  runCase: (caseId: string) => Promise<CopilotCaseRun>
+  runCase: (caseId: string) => Promise<AiCaseRun>
   /** 把修改建议交给界面展示 diff；真正写入要等用户确认 */
   proposeCase: (proposal: AiCaseProposal) => void
   /** 把新用例计划卡交给界面；执行与保存由用户触发 */
   proposePlan: (proposal: AiPlanProposal) => void
 }
 
-export interface CopilotToolContext {
+export interface AiToolContext {
   sessionId: string
   callId: string
   dataDir: string
   browser: () => ChromeController | null
-  platform: CopilotPlatform
+  platform: AiPlatform
   signal: AbortSignal
 }
 
@@ -54,24 +54,24 @@ export interface ToolOutcome {
   target?: AiTarget
 }
 
-export interface CopilotTool {
+export interface AiTool {
   name: string
   description: string
   schema: z.ZodType
-  run: (input: Record<string, unknown>, ctx: CopilotToolContext) => Promise<ToolOutcome>
+  run: (input: Record<string, unknown>, ctx: AiToolContext) => Promise<ToolOutcome>
 }
 
-function requireBrowser(ctx: CopilotToolContext): ChromeController {
+function requireBrowser(ctx: AiToolContext): ChromeController {
   const browser = ctx.browser()
   if (!browser) throw new Error('浏览器尚未就绪')
   return browser
 }
 
-function checkAbort(ctx: CopilotToolContext): void {
+function checkAbort(ctx: AiToolContext): void {
   if (ctx.signal.aborted) throw new Error('已停止')
 }
 
-async function saveEvidence(ctx: CopilotToolContext): Promise<string | undefined> {
+async function saveEvidence(ctx: AiToolContext): Promise<string | undefined> {
   try {
     const browser = requireBrowser(ctx)
     const jpeg = await browser.screenshotJpeg(55)
@@ -95,7 +95,7 @@ const refInput = z.object({
 })
 
 async function act(
-  ctx: CopilotToolContext,
+  ctx: AiToolContext,
   input: Record<string, unknown>,
   verb: string,
   perform: (
@@ -165,7 +165,7 @@ function needsElement(action: string): boolean {
   return action === 'click' || action === 'fill' || action === 'select'
 }
 
-export const COPILOT_TOOLS: CopilotTool[] = [
+export const AI_TOOLS: AiTool[] = [
   {
     name: 'browser_snapshot',
     description:
@@ -898,4 +898,4 @@ export const COPILOT_TOOLS: CopilotTool[] = [
   },
 ]
 
-export const COPILOT_TOOL_MAP = new Map(COPILOT_TOOLS.map((tool) => [tool.name, tool]))
+export const AI_TOOL_MAP = new Map(AI_TOOLS.map((tool) => [tool.name, tool]))

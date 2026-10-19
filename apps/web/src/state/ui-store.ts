@@ -53,7 +53,7 @@ export interface RecordingDraft {
   }
 }
 
-/** Copilot 的用例修改建议：pending 等用户确认，applied 已写入（可撤销） */
+/** AI 的用例修改建议：pending 等用户确认，applied 已写入（可撤销） */
 export interface AiCaseProposal extends AiCaseProposalPayload {
   status: 'pending' | 'applied'
 }
@@ -264,7 +264,7 @@ interface UiState {
   rightTab: AiRightTab
   setRightTab: (tab: AiRightTab) => void
 
-  /** Copilot 是否占用右侧面板（启动台整幅模式下也能打开） */
+  /** AI 是否占用右侧面板（启动台整幅模式下也能打开） */
   aiOpen: boolean
   setAiOpen: (open: boolean) => void
   aiSettingsOpen: boolean
@@ -458,7 +458,7 @@ export const useUiStore = create<UiState>((set, get) => ({
         },
       ],
       aiOpen: true,
-      rightTab: 'copilot' as const,
+      rightTab: 'ai' as const,
     })),
 
   startAiMessage: (sessionId, messageId) =>
@@ -525,7 +525,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       const message = s.aiMessages.find((item) => item.id === messageId)
       const tool = message?.tools.find((item) => item.id === payload.callId)
       const label = tool?.label ?? payload.callId
-      // Copilot 观察/导航到的页面立即成为舞台内容：
+      // AI 观察/导航到的页面立即成为舞台内容：
       // 启动台上发起的任务也能在中间看到 Agent 的操作
       const observedUrl =
         payload.status === 'ok' && payload.output && typeof payload.output === 'object'
@@ -618,7 +618,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   requestAi: (message, context) =>
     set({
       aiOpen: true,
-      rightTab: 'copilot',
+      rightTab: 'ai',
       aiSeed: { id: newAiId('seed'), message, ...(context ? { context } : {}) },
     }),
 
@@ -639,7 +639,7 @@ export const useUiStore = create<UiState>((set, get) => ({
         ...s.aiPlans.filter((item) => item.proposalId !== proposal.proposalId),
       ].slice(0, 3),
       aiOpen: true,
-      rightTab: 'copilot' as const,
+      rightTab: 'ai' as const,
     })),
 
   patchAiPlan: (proposalId, patch) =>

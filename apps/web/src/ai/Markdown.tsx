@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 /**
- * Copilot 回复的 Markdown 渲染。
+ * AI 回复的 Markdown 渲染。
  * 禁用原始 HTML（react-markdown 默认行为），表格/列表/代码块走 GFM。
  */
 const components: Components = {

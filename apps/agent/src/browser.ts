@@ -406,7 +406,7 @@ export class ChromeController {
   }
 
   /**
-   * 给 Copilot 的页面语义快照：只返回可交互元素与可见文本，不暴露选择器。
+   * 给 AI 的页面语义快照：只返回可交互元素与可见文本，不暴露选择器。
    * 每次快照重新分配 ref，旧 ref 立即失效，避免模型拿旧编号误点新元素。
    */
   async snapshot(): Promise<PageSnapshot> {
@@ -729,7 +729,7 @@ export class ChromeController {
     })
   }
 
-  /** Copilot 证据截图（操作后自动调用） */
+  /** AI 证据截图（操作后自动调用） */
   async screenshotJpeg(quality = 55): Promise<Buffer> {
     const page = await this.ensurePage()
     return page.screenshot({ type: 'jpeg', quality, timeout: 8000 })

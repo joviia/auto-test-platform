@@ -1,7 +1,7 @@
 import { Migration } from '@mikro-orm/migrations'
 
 /**
- * Copilot 会话持久化：会话标题 + 逐条消息（正文、工具卡、取消/错误）。
+ * AI 会话持久化：会话标题 + 逐条消息（正文、工具卡、取消/错误）。
  * 单独迁移，避免影响已经跑过基线迁移的本地库。
  */
 export class Migration20261019120000AiSessions extends Migration {

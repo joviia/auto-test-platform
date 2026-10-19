@@ -5,7 +5,7 @@ import { closeDb, getDb, initDb } from '@atp/core'
 import type { AiPlanProposal } from '@atp/model'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ChromeController, RefDescription } from '../browser.js'
-import { COPILOT_TOOL_MAP, type CopilotPlatform, type CopilotToolContext } from './tools.js'
+import { AI_TOOL_MAP, type AiPlatform, type AiToolContext } from './tools.js'
 
 const described: Record<string, RefDescription> = {
   'r-name': {
@@ -33,12 +33,12 @@ const described: Record<string, RefDescription> = {
   },
 }
 
-function context(proposals: AiPlanProposal[]): CopilotToolContext {
+function context(proposals: AiPlanProposal[]): AiToolContext {
   const browser = {
     currentUrl: 'https://example.test/demo',
     describeRef: async (ref: string) => described[ref] ?? null,
   } as unknown as ChromeController
-  const platform: CopilotPlatform = {
+  const platform: AiPlatform = {
     isRecording: () => false,
     startRecording: () => undefined,
     stopRecording: async () => {
@@ -75,7 +75,7 @@ afterAll(async () => {
 })
 
 describe('case_plan', () => {
-  const tool = COPILOT_TOOL_MAP.get('case_plan')
+  const tool = AI_TOOL_MAP.get('case_plan')
 
   it('把 ref 解析成持久元素，并生成可执行步骤', async () => {
     expect(tool).toBeDefined()

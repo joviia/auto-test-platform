@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { closeDb, initDb } from '@atp/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { CopilotService } from './service.js'
-import type { CopilotPlatform } from './tools.js'
+import { AiService } from './service.js'
+import type { AiPlatform } from './tools.js'
 
-const platform: CopilotPlatform = {
+const platform: AiPlatform = {
   isRecording: () => false,
   startRecording: () => undefined,
   stopRecording: async () => {
@@ -24,7 +24,7 @@ let dir: string
 let previousStub: string | undefined
 
 beforeAll(async () => {
-  dir = mkdtempSync(join(tmpdir(), 'atp-copilot-session-'))
+  dir = mkdtempSync(join(tmpdir(), 'atp-ai-session-'))
   previousStub = process.env.ATP_AI_STUB
   process.env.ATP_AI_STUB = '1'
   await initDb({ dataDir: dir })
@@ -37,9 +37,9 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true })
 })
 
-function createService(): { service: CopilotService; waitDone: () => Promise<void> } {
+function createService(): { service: AiService; waitDone: () => Promise<void> } {
   let resolveDone: (() => void) | null = null
-  const service = new CopilotService({
+  const service = new AiService({
     dataDir: dir,
     getBrowser: () => null,
     platform,
@@ -56,7 +56,7 @@ function createService(): { service: CopilotService; waitDone: () => Promise<voi
   }
 }
 
-describe('CopilotService 会话持久化', () => {
+describe('AiService 会话持久化', () => {
   it('重启后能读取历史并继续同一会话', async () => {
     const first = createService()
     await first.service.init()

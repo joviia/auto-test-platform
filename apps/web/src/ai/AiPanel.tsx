@@ -13,6 +13,7 @@ import {
   History,
   Info,
   Loader2,
+  Mic,
   PanelRightClose,
   RotateCcw,
   Sparkles,
@@ -27,6 +28,7 @@ import { AiPlanList } from './AiPlanCard'
 import { CaseProposalList } from './CaseProposalCard'
 import { Markdown } from './Markdown'
 import type { AiContext, AiMessage, AiToolCall } from './types'
+import { appendDictation, useSpeechInput } from './useSpeechInput'
 
 function clip(text: string, max = 1400): string {
   return text.length > max ? `${text.slice(0, max)}…` : text
@@ -59,7 +61,7 @@ function hostOf(url: string): string {
   }
 }
 
-export function CopilotPanel() {
+export function AiPanel() {
   const aiConfig = useUiStore((s) => s.aiConfig)
   const setAiConfig = useUiStore((s) => s.setAiConfig)
   const messages = useUiStore((s) => s.aiMessages)
@@ -89,6 +91,9 @@ export function CopilotPanel() {
   const listRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
+  const speech = useSpeechInput({
+    onFinal: (chunk) => setText((previous) => appendDictation(previous, chunk)),
+  })
 
   const { data: config } = useQuery({
     queryKey: ['ai', 'config'],
@@ -191,7 +196,7 @@ export function CopilotPanel() {
       if (!trimmed) return
       const store = useUiStore.getState()
       if (store.aiRunning) {
-        toast.info('Copilot 正在执行，先停止当前任务再继续')
+        toast.info('AI 正在执行，先停止当前任务再继续')
         return
       }
       const sessionId = store.aiSessionId
@@ -254,7 +259,7 @@ export function CopilotPanel() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
         <Sparkles size={13} className="shrink-0 text-accent" />
-        <span className="text-[12px] font-semibold">Copilot</span>
+        <span className="text-[12px] font-semibold">AI</span>
         <button
           type="button"
           onClick={() => setAiSettingsOpen(true)}
@@ -299,7 +304,7 @@ export function CopilotPanel() {
             type="button"
             onClick={() => setAiOpen(false)}
             className="grid size-6 place-items-center rounded text-muted hover:bg-default hover:text-foreground"
-            aria-label="收起 Copilot"
+            aria-label="收起 AI"
             title="收起（⌘K 可再次唤起）"
           >
             <PanelRightClose size={12} />
@@ -430,9 +435,9 @@ export function CopilotPanel() {
               <div className="mx-auto grid size-10 place-items-center rounded-xl border border-accent/25 bg-accent/[0.07] text-accent">
                 <Sparkles size={19} />
               </div>
-              <h3 className="mt-3 text-center text-[13px] font-semibold">让 Copilot 操作页面</h3>
+              <h3 className="mt-3 text-center text-[13px] font-semibold">让 AI 操作页面</h3>
               <p className="mx-auto mt-1 max-w-[280px] text-center text-[11.5px] leading-5 text-muted">
-                Copilot 会先读取页面，再一步步点击、输入与验证；每一步都显示在中间舞台，可随时停止。
+                AI 会先读取页面，再一步步点击、输入与验证；每一步都显示在中间舞台，可随时停止。
               </p>
               <div className="mt-4 space-y-1.5">
                 {suggestions.map((suggestion) => (
@@ -487,38 +492,70 @@ export function CopilotPanel() {
               if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault()
                 if (!running && text.trim()) {
+                  speech.cancel()
                   void submit(text)
                   setText('')
                 }
               }
             }}
             rows={2}
-            placeholder="描述要测什么，或让 Copilot 操作页面…"
+            placeholder="描述要测什么，或让 AI 操作页面…"
             className="max-h-32 min-h-[42px] w-full resize-none bg-transparent text-[12.5px] leading-5 text-foreground outline-none placeholder:text-muted"
             spellCheck={false}
           />
           <div className="mt-1 flex items-center gap-2">
-            <span className="text-[9.5px] text-muted">Enter 发送 · Shift+Enter 换行</span>
-            <span className="ml-auto" />
-            {running ? (
-              <Button size="sm" variant="secondary" onPress={() => void stop()}>
-                <Square size={10} fill="currentColor" />
-                停止
-              </Button>
+            {speech.error ? (
+              <span className="truncate text-[9.5px] text-red-600 dark:text-red-400">
+                语音输入不可用：{speech.error}
+              </span>
+            ) : speech.listening ? (
+              <span className="flex min-w-0 items-center gap-1 text-[9.5px] text-red-600 dark:text-red-400">
+                <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-red-500" />
+                <span className="shrink-0">正在聆听…</span>
+                {speech.interim && <span className="truncate text-muted">{speech.interim}</span>}
+              </span>
             ) : (
-              <Button
-                size="sm"
-                variant="primary"
-                isDisabled={!text.trim()}
-                onPress={() => {
-                  void submit(text)
-                  setText('')
-                }}
-              >
-                <ArrowUp size={12} />
-                发送
-              </Button>
+              <span className="text-[9.5px] text-muted">Enter 发送 · Shift+Enter 换行</span>
             )}
+            <div className="ml-auto flex items-center gap-1.5">
+              {speech.supported && (
+                <button
+                  type="button"
+                  aria-label={speech.listening ? '停止语音输入' : '语音输入'}
+                  aria-pressed={speech.listening}
+                  title={speech.listening ? '停止语音输入' : '语音输入'}
+                  disabled={running}
+                  onClick={() => speech.toggle()}
+                  className={
+                    speech.listening
+                      ? 'grid size-6 place-items-center rounded bg-red-500/10 text-red-600 outline-none hover:bg-red-500/15 dark:text-red-400'
+                      : 'grid size-6 place-items-center rounded text-muted outline-none hover:bg-default hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
+                  }
+                >
+                  <Mic size={13} />
+                </button>
+              )}
+              {running ? (
+                <Button size="sm" variant="secondary" onPress={() => void stop()}>
+                  <Square size={10} fill="currentColor" />
+                  停止
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  isDisabled={!text.trim()}
+                  onPress={() => {
+                    speech.cancel()
+                    void submit(text)
+                    setText('')
+                  }}
+                >
+                  <ArrowUp size={12} />
+                  发送
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -545,7 +582,7 @@ function MessageItem({ message }: { message: AiMessage }) {
     <div className="min-w-0">
       <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-medium text-muted">
         <Sparkles size={10} className="text-accent" />
-        Copilot
+        AI
         {streaming && <Loader2 size={10} className="animate-spin" />}
         {message.cancelled && (
           <span className="rounded bg-surface-secondary px-1 py-px text-[9.5px]">已停止</span>

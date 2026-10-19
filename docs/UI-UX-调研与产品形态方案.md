@@ -89,7 +89,7 @@ Web 模式下，真实页面在 Agent 启动的 Chrome 窗口里，中栏只剩�
 
 ### 3.4 AI 放在哪
 
-- **不放在中栏**。中栏是现场；AI 放在右侧可折叠的「Copilot」页签，以及全局 `⌘K` 命令栏。
+- **不放在中栏**。中栏是现场；AI 放在右侧可折叠的「AI」页签，以及全局 `⌘K` 命令栏。
 - AI 执行工具调用时，中栏自动切到 Live，让用户看到它在点什么；工具调用卡片显示参数、结果、可撤销操作（后续）。
 - 这与 Claude in Chrome 的侧边栏、Cursor 的对话+工件一致：**对话解释，舞台验证**。
 
@@ -131,7 +131,7 @@ cdp.on('Page.screencastFrame', async ({ data, sessionId }) => {
 ### 4.3 与 AI/MCP 的衔接
 
 - Tool Registry 中的 `browser.*` 工具与 Session Stage 共用同一套事件（动作开始/结束、截图、URL）。
-- Copilot 的工具调用卡片直接消费这些事件；AI 驱动时中栏自动 Live。
+- AI 的工具调用卡片直接消费这些事件；AI 驱动时中栏自动 Live。
 - MCP 默认可写，不额外加权限层（按已确认的边界）。
 
 ## 5. 分期与验收
@@ -148,9 +148,9 @@ cdp.on('Page.screencastFrame', async ({ data, sessionId }) => {
 - 录制/回放/计划状态与镜像联动；「在 Chrome 中接管」。
 - 验收：打开页面 1s 内出画面；录制时 ≥5 fps；关闭 UI 后 screencast 停止、CPU 回落；页面崩溃显示最后帧与状态。
 
-### Stage 2：Copilot（并入 AI/MCP 切片）
+### Stage 2：AI（并入 AI/MCP 切片）
 
-- 右侧 Copilot 页签 + `⌘K` 命令栏；工具调用卡片；AI 操作时自动 Live。
+- 右侧 AI 页签 + `⌘K` 命令栏；工具调用卡片；AI 操作时自动 Live。
 - 验收：从一句指令到浏览器动作，用户能在中栏看到每一步；没有「黑箱执行」。
 
 ### Stage 3：交互式镜像（可选）

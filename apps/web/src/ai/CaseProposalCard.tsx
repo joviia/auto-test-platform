@@ -155,7 +155,7 @@ export function CaseProposalCard({ proposal }: { proposal: AiCaseProposal }) {
       }
       if (latest.updatedAt !== proposal.baseUpdatedAt) {
         setServerConflict(true)
-        toast.danger('用例已保存过新改动，请让 Copilot 重新生成建议')
+        toast.danger('用例已保存过新改动，请让 AI 重新生成建议')
         return
       }
       const saved = await window.atp.invoke('case:update', proposal.after)
@@ -260,7 +260,7 @@ export function CaseProposalCard({ proposal }: { proposal: AiCaseProposal }) {
         <div className="mt-1.5 flex items-start gap-1.5 rounded border border-amber-500/30 bg-amber-500/[0.06] px-2 py-1.5 text-[10.5px] leading-4 text-amber-700 dark:text-amber-300">
           <CircleAlert size={11} className="mt-0.5 shrink-0" />
           <span>
-            用例在这条建议生成后又保存过。直接应用会覆盖新改动，请让 Copilot 重新读取并生成建议。
+            用例在这条建议生成后又保存过。直接应用会覆盖新改动，请让 AI 重新读取并生成建议。
           </span>
         </div>
       )}

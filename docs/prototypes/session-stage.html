@@ -200,13 +200,13 @@
     display: grid; place-items: center; color: var(--muted);
   }
   .icon-btn:hover { background: var(--surface-2); color: var(--fg); }
-  .copilot-btn {
+  .ai-btn {
     height: 30px; padding: 0 10px; border-radius: 6px;
     display: flex; align-items: center; gap: 6px;
     border: 1px solid var(--border); background: var(--surface-2);
     font-size: 12px; font-weight: 500;
   }
-  .copilot-btn:hover { border-color: var(--border-strong); background: var(--surface-3); }
+  .ai-btn:hover { border-color: var(--border-strong); background: var(--surface-3); }
   .avatar {
     width: 26px; height: 26px; border-radius: 50%;
     display: grid; place-items: center;
@@ -861,13 +861,13 @@
   .statusbar .spacer { margin-left: auto; }
   .statusbar .ok { color: var(--success); }
 
-  /* ---------- Copilot ---------- */
-  .copilot-backdrop {
+  /* ---------- AI ---------- */
+  .ai-backdrop {
     position: fixed; inset: 0; z-index: 55; background: rgba(8, 11, 16, 0.34);
     opacity: 0; transition: opacity .18s ease;
   }
-  .copilot-backdrop.show { opacity: 1; }
-  .copilot {
+  .ai-backdrop.show { opacity: 1; }
+  .ai {
     position: fixed; z-index: 60; top: 16px; right: 16px; bottom: 16px;
     width: min(390px, calc(100vw - 32px));
     display: flex; flex-direction: column; overflow: hidden;
@@ -875,14 +875,14 @@
     box-shadow: var(--shadow-pop);
     transform: translateX(14px); opacity: 0; transition: transform .18s ease, opacity .18s ease;
   }
-  .copilot.show { transform: none; opacity: 1; }
-  .copilot-head { display: flex; align-items: center; gap: 8px; padding: 12px 13px; border-bottom: 1px solid var(--border); }
-  .copilot-head .brand-mark { width: 24px; height: 24px; border-radius: 6px; }
-  .copilot-head b { font-size: 12.5px; font-weight: 600; }
-  .copilot-head .icon-btn { margin-left: auto; }
-  .copilot-context { display: flex; align-items: center; gap: 6px; padding: 8px 13px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; }
-  .copilot-context b { color: var(--fg-2); font-weight: 500; }
-  .copilot-body { flex: 1; min-height: 0; overflow-y: auto; padding: 13px; display: flex; flex-direction: column; gap: 10px; }
+  .ai.show { transform: none; opacity: 1; }
+  .ai-head { display: flex; align-items: center; gap: 8px; padding: 12px 13px; border-bottom: 1px solid var(--border); }
+  .ai-head .brand-mark { width: 24px; height: 24px; border-radius: 6px; }
+  .ai-head b { font-size: 12.5px; font-weight: 600; }
+  .ai-head .icon-btn { margin-left: auto; }
+  .ai-context { display: flex; align-items: center; gap: 6px; padding: 8px 13px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 10px; }
+  .ai-context b { color: var(--fg-2); font-weight: 500; }
+  .ai-body { flex: 1; min-height: 0; overflow-y: auto; padding: 13px; display: flex; flex-direction: column; gap: 10px; }
   .msg { max-width: 88%; padding: 8px 10px; border-radius: 8px; font-size: 11.5px; line-height: 1.6; }
   .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
   .msg.bot { align-self: flex-start; background: var(--surface-2); color: var(--fg-2); border-bottom-left-radius: 3px; }
@@ -895,16 +895,16 @@
   .diff-card .diff-label { color: var(--success); font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
   .diff-line { margin-top: 4px; font-family: var(--font-mono); font-size: 10px; line-height: 1.55; color: var(--fg-2); }
   .diff-line .plus { color: var(--success); font-weight: 600; }
-  .copilot-actions { display: flex; gap: 6px; margin-top: 2px; }
-  .copilot-actions .btn { flex: 1; }
-  .copilot-note { padding: 0 13px 8px; color: var(--muted); font-size: 9.5px; line-height: 1.5; }
-  .copilot-composer { display: flex; align-items: center; gap: 7px; padding: 10px 12px; border-top: 1px solid var(--border); }
-  .copilot-composer input {
+  .ai-actions { display: flex; gap: 6px; margin-top: 2px; }
+  .ai-actions .btn { flex: 1; }
+  .ai-note { padding: 0 13px 8px; color: var(--muted); font-size: 9.5px; line-height: 1.5; }
+  .ai-composer { display: flex; align-items: center; gap: 7px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .ai-composer input {
     flex: 1; min-width: 0; height: 32px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px;
     background: var(--field); color: var(--fg); font-size: 11.5px; outline: 0;
   }
-  .copilot-composer input::placeholder { color: var(--muted); }
-  .copilot-composer .send { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); }
+  .ai-composer input::placeholder { color: var(--muted); }
+  .ai-composer .send { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; background: var(--surface-3); color: var(--muted); }
 
   /* ---------- Prototype dock ---------- */
   .proto-dock {
@@ -986,8 +986,8 @@
     .crumb .case { display: none; }
     .engine-pill .engine-text { display: none; }
     .engine-pill { padding: 0 7px; }
-    .copilot-btn .label { display: none; }
-    .copilot-btn { padding: 0 8px; }
+    .ai-btn .label { display: none; }
+    .ai-btn { padding: 0 8px; }
   }
   @media (max-width: 640px) {
     body { padding-block: 8px; }
@@ -1091,9 +1091,9 @@
     </div>
     <div class="appbar-right">
       <span class="engine-pill"><span class="dot"></span><span class="engine-text">Chrome</span></span>
-      <button class="copilot-btn" id="openCopilot" aria-label="打开 Copilot 预览">
+      <button class="ai-btn" id="openAI" aria-label="打开 AI 预览">
         <svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkle"/></svg>
-        <span class="label">Copilot</span>
+        <span class="label">AI</span>
       </button>
       <button class="icon-btn" id="themeToggle" aria-label="切换明暗主题">
         <svg class="icon" id="themeSun" aria-hidden="true"><use href="#i-sun"/></svg>
@@ -1293,7 +1293,7 @@
           <div class="launch-head">
             <div>
               <h1 id="launchTitle">继续上次的工作</h1>
-              <p>录制、回放，或让 Copilot 从一句话开始。</p>
+              <p>录制、回放，或让 AI 从一句话开始。</p>
             </div>
           </div>
 
@@ -1373,14 +1373,14 @@
             </div>
           </div>
 
-          <div class="ai-bar" id="aiBar" role="button" tabindex="0" aria-label="打开 Copilot 预览">
+          <div class="ai-bar" id="aiBar" role="button" tabindex="0" aria-label="打开 AI 预览">
             <span class="ai-icon"><svg class="icon" aria-hidden="true"><use href="#i-sparkle"/></svg></span>
             <span class="ai-copy">
               <b>用一句话开始测试</b>
               <span>描述要测什么，例如：新建一条电影内容，并验证列表中出现</span>
             </span>
             <span class="preview-badge">AI 即将支持</span>
-            <button class="btn btn-sm" id="openCopilotBar">预览 Copilot</button>
+            <button class="btn btn-sm" id="openAIBar">预览 AI</button>
           </div>        </div>
       </div>
     </main>
@@ -1542,19 +1542,19 @@
   </footer>
 </div>
 
-<div class="copilot-backdrop" id="copilotBackdrop" hidden></div>
-<aside class="copilot" id="copilot" hidden aria-label="Copilot 预览">
-  <div class="copilot-head">
+<div class="ai-backdrop" id="aiBackdrop" hidden></div>
+<aside class="ai" id="ai" hidden aria-label="AI 预览">
+  <div class="ai-head">
     <span class="brand-mark"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkle"/></svg></span>
-    <b>Copilot</b><span class="preview-badge">预览</span>
-    <button class="icon-btn" id="closeCopilot" aria-label="关闭 Copilot">
+    <b>AI</b><span class="preview-badge">预览</span>
+    <button class="icon-btn" id="closeAI" aria-label="关闭 AI">
       <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
     </button>
   </div>
-  <div class="copilot-context">
+  <div class="ai-context">
     <svg class="icon icon-sm" aria-hidden="true"><use href="#i-file"/></svg>当前用例 <b>新建电影内容</b><span style="margin-left:auto" class="mono">4 步</span>
   </div>
-  <div class="copilot-body">
+  <div class="ai-body">
     <div class="msg user">保存后补一个列表校验：列表第一行应出现刚才输入的名称。</div>
     <div class="msg bot">可以。我会复用已录制的元素，在保存后增加一条列表断言，并保留现有步骤不动。</div>
     <div class="tool-card">
@@ -1569,14 +1569,14 @@
       <div class="diff-label">建议修改</div>
       <div class="diff-line"><span class="plus">+</span> 断言 内容列表首行 包含 <span style="color:var(--accent-ink)">${内容名称}</span></div>
     </div>
-    <div class="copilot-actions">
+    <div class="ai-actions">
       <button class="btn btn-primary" data-toast="已应用 1 条断言（原型，不会写入数据）">应用修改</button>
       <button class="btn" data-toast="已取消（原型）">取消</button>
     </div>
-    <div class="copilot-note">AI 能力将在下一个切片接入。这里是交互预览：工具调用、确认与执行结果都会出现在会话里。</div>
+    <div class="ai-note">AI 能力将在下一个切片接入。这里是交互预览：工具调用、确认与执行结果都会出现在会话里。</div>
   </div>
-  <div class="copilot-composer">
-    <input placeholder="描述要测试的内容…" aria-label="Copilot 输入" disabled>
+  <div class="ai-composer">
+    <input placeholder="描述要测试的内容…" aria-label="AI 输入" disabled>
     <button class="send" aria-label="发送（即将支持）" data-toast="AI 能力即将支持"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-send"/></svg></button>
   </div>
 </aside>
@@ -1598,8 +1598,8 @@
     const statusText = document.getElementById('statusText');
     const crumbCase = document.getElementById('crumbCase');
     const toastEl = document.getElementById('toast');
-    const copilot = document.getElementById('copilot');
-    const backdrop = document.getElementById('copilotBackdrop');
+    const ai = document.getElementById('ai');
+    const backdrop = document.getElementById('aiBackdrop');
     const reportCount = document.getElementById('reportCount');
     let mode = 'live';
     let activeTab = 'steps';
@@ -1665,22 +1665,22 @@
       }
     }
 
-    function openCopilot() {
+    function openAI() {
       backdrop.hidden = false;
-      copilot.hidden = false;
+      ai.hidden = false;
       requestAnimationFrame(() => {
         backdrop.classList.add('show');
-        copilot.classList.add('show');
+        ai.classList.add('show');
       });
-      document.getElementById('closeCopilot').focus();
+      document.getElementById('closeAI').focus();
     }
 
-    function closeCopilot() {
+    function closeAI() {
       backdrop.classList.remove('show');
-      copilot.classList.remove('show');
+      ai.classList.remove('show');
       setTimeout(() => {
         backdrop.hidden = true;
-        copilot.hidden = true;
+        ai.hidden = true;
       }, 190);
     }
 
@@ -1729,26 +1729,26 @@
     viewIntent.addEventListener('click', () => setView(false));
     viewRaw.addEventListener('click', () => setView(true));
 
-    document.getElementById('openCopilot').addEventListener('click', openCopilot);
-    document.getElementById('openCopilotBar').addEventListener('click', (event) => {
+    document.getElementById('openAI').addEventListener('click', openAI);
+    document.getElementById('openAIBar').addEventListener('click', (event) => {
       event.stopPropagation();
-      openCopilot();
+      openAI();
     });
-    document.getElementById('aiBar').addEventListener('click', openCopilot);
+    document.getElementById('aiBar').addEventListener('click', openAI);
     document.getElementById('aiBar').addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        openCopilot();
+        openAI();
       }
     });
-    document.getElementById('closeCopilot').addEventListener('click', closeCopilot);
-    backdrop.addEventListener('click', closeCopilot);
+    document.getElementById('closeAI').addEventListener('click', closeAI);
+    backdrop.addEventListener('click', closeAI);
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !copilot.hidden) closeCopilot();
+      if (event.key === 'Escape' && !ai.hidden) closeAI();
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        if (copilot.hidden) openCopilot();
-        else closeCopilot();
+        if (ai.hidden) openAI();
+        else closeAI();
       }
     });
 

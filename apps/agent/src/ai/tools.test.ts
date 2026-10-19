@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { RecordedDraft } from '../browser.js'
-import {
-  COPILOT_TOOL_MAP,
-  type CopilotCaseRun,
-  type CopilotPlatform,
-  type CopilotToolContext,
-} from './tools.js'
+import { AI_TOOL_MAP, type AiCaseRun, type AiPlatform, type AiToolContext } from './tools.js'
 
-function context(platform: Partial<CopilotPlatform>): CopilotToolContext {
+function context(platform: Partial<AiPlatform>): AiToolContext {
   return {
     sessionId: 's-test',
     callId: 'c-test',
@@ -31,7 +26,7 @@ function context(platform: Partial<CopilotPlatform>): CopilotToolContext {
   }
 }
 
-const passedRun: CopilotCaseRun = {
+const passedRun: AiCaseRun = {
   runId: 'r-test',
   status: 'passed',
   durationMs: 1200,
@@ -43,7 +38,7 @@ const passedRun: CopilotCaseRun = {
 
 describe('case_run', () => {
   it('执行用例并回传逐步结果', async () => {
-    const tool = COPILOT_TOOL_MAP.get('case_run')
+    const tool = AI_TOOL_MAP.get('case_run')
     expect(tool).toBeDefined()
     const outcome = await tool?.run(
       { caseId: 'c-test' },
@@ -62,7 +57,7 @@ describe('case_run', () => {
   })
 
   it('失败时返回 ok=false 与错误', async () => {
-    const tool = COPILOT_TOOL_MAP.get('case_run')
+    const tool = AI_TOOL_MAP.get('case_run')
     const outcome = await tool?.run(
       { caseId: 'c-test' },
       context({
@@ -82,7 +77,7 @@ describe('case_run', () => {
 describe('recording tools', () => {
   it('recording_start 调用平台开始录制', async () => {
     let started = false
-    const tool = COPILOT_TOOL_MAP.get('recording_start')
+    const tool = AI_TOOL_MAP.get('recording_start')
     const outcome = await tool?.run(
       {},
       context({
@@ -107,7 +102,7 @@ describe('recording tools', () => {
       diagnostics: { rawEvents: 0, frames: [] },
     }
     let notified: RecordedDraft | null = null
-    const tool = COPILOT_TOOL_MAP.get('recording_stop')
+    const tool = AI_TOOL_MAP.get('recording_stop')
     const outcome = await tool?.run(
       {},
       context({
@@ -123,7 +118,7 @@ describe('recording tools', () => {
   })
 
   it('没有在录制时拒绝停止', async () => {
-    const tool = COPILOT_TOOL_MAP.get('recording_stop')
+    const tool = AI_TOOL_MAP.get('recording_stop')
     await expect(tool?.run({}, context({ isRecording: () => false }))).rejects.toThrow('没有在录制')
   })
 })

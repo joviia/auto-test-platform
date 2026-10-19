@@ -2,7 +2,7 @@ import { Tab, TabIndicator, TabList, TabListContainer, TabPanel, TabsRoot } from
 import { useQuery } from '@tanstack/react-query'
 import { ListChecks, Wrench } from 'lucide-react'
 import { useEffect } from 'react'
-import { CopilotPanel } from '../ai/CopilotPanel'
+import { AiPanel } from '../ai/AiPanel'
 import { qk } from '../api/client'
 import { EmptyHint } from '../components/EmptyHint'
 import { ElementPanel } from '../elements/ElementPanel'
@@ -28,15 +28,15 @@ export function RightPanel() {
   const aiOpen = useUiStore((s) => s.aiOpen)
   const rightTab = useUiStore((s) => s.rightTab)
 
-  // Copilot 是全局的：即使当前停在计划上，AI 面板也能占住右侧
-  if (aiOpen && rightTab === 'copilot') return <CaseRightPanel />
+  // AI 是全局的：即使当前停在计划上，AI 面板也能占住右侧
+  if (aiOpen && rightTab === 'ai') return <CaseRightPanel />
   if (navTab === 'skills' && !aiOpen) {
     if (selected?.kind === 'skill') return <SkillPanel skillId={selected.id} />
     return (
       <EmptyHint
         icon={Wrench}
         title="选择一个操作"
-        description="操作库把滑块、上传、悬浮菜单等复杂控件封装成可复用的确定性技能，Copilot 可以直接调用。"
+        description="操作库把滑块、上传、悬浮菜单等复杂控件封装成可复用的确定性技能，AI 可以直接调用。"
       />
     )
   }
@@ -79,9 +79,9 @@ function CaseRightPanel() {
     }
   }, [selectedRunId, setTab])
 
-  // 记住的 Copilot 页签在启动台模式下也要让右侧面板出现
+  // 记住的 AI 页签在启动台模式下也要让右侧面板出现
   useEffect(() => {
-    if (tab === 'copilot' && !aiOpen) setAiOpen(true)
+    if (tab === 'ai' && !aiOpen) setAiOpen(true)
   }, [tab, aiOpen, setAiOpen])
 
   // 与 StepPanel/ElementPanel 共用同一 query key，用于标签计数
@@ -110,8 +110,8 @@ function CaseRightPanel() {
       onSelectionChange={(key) => {
         const next = String(key)
         setTab(next as typeof tab)
-        if (next === 'copilot') setAiOpen(true)
-        // 从计划上下文临时打开 Copilot 后，切回其它页签应回到计划面板
+        if (next === 'ai') setAiOpen(true)
+        // 从计划上下文临时打开 AI 后，切回其它页签应回到计划面板
         else if (selected?.kind === 'plan') setAiOpen(false)
       }}
     >
@@ -132,8 +132,8 @@ function CaseRightPanel() {
             <CountBadge value={runs.length} />
             <TabIndicator />
           </Tab>
-          <Tab id="copilot" className="h-full flex-1 justify-center text-[13px]">
-            Copilot
+          <Tab id="ai" className="h-full flex-1 justify-center text-[13px]">
+            AI
             {aiRunning && <span className="ml-1 size-1.5 animate-pulse rounded-full bg-accent" />}
             <TabIndicator />
           </Tab>
@@ -148,8 +148,8 @@ function CaseRightPanel() {
       <TabPanel id="report" className="min-h-0 flex-1 overflow-hidden">
         <ReportPanel />
       </TabPanel>
-      <TabPanel id="copilot" className="min-h-0 flex-1 overflow-hidden">
-        <CopilotPanel />
+      <TabPanel id="ai" className="min-h-0 flex-1 overflow-hidden">
+        <AiPanel />
       </TabPanel>
     </TabsRoot>
   )

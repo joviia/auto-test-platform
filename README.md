@@ -139,7 +139,7 @@ pnpm e2e:update
 - npm 与 bundle 两种更新路径
 - M1 录制语义化：意图视图 / 原始步骤切换、自定义下拉合并为复合 select、弹窗/导航分组、意图摘要、待确认项合并或忽略
 
-下一步：AI/MCP（Tool Registry、MCP Server、AI Copilot、审计日志）。
+下一步：AI/MCP（Tool Registry、MCP Server、AI 助手、审计日志）。
 
 ## 录制语义化（M1）
 

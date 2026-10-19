@@ -34,4 +34,4 @@ export interface AiSeed {
   context?: AiContext
 }
 
-export type AiRightTab = 'steps' | 'elements' | 'report' | 'copilot'
+export type AiRightTab = 'steps' | 'elements' | 'report' | 'ai'

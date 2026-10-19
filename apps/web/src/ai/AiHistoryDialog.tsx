@@ -18,7 +18,7 @@ function formatTime(value: string): string {
   })
 }
 
-/** Copilot 历史会话：列最近会话，点开恢复消息、工具卡与证据 */
+/** AI 历史会话：列最近会话，点开恢复消息、工具卡与证据 */
 export function AiHistoryDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   useOverlayGuard(open)
   const running = useUiStore((s) => s.aiRunning)

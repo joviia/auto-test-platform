@@ -20,7 +20,7 @@ export function LeftSidebar() {
     if (tab === navTab) return
     setNavTab(tab)
     setSelected(null)
-    // 操作库需要右侧详情，进入时收起 Copilot；需要时可从顶栏再次打开
+    // 操作库需要右侧详情，进入时收起 AI；需要时可从顶栏再次打开
     if (tab === 'skills') setAiOpen(false)
   }
 

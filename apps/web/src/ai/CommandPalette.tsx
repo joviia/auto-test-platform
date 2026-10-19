@@ -13,7 +13,7 @@ interface PaletteAction {
 
 /**
  * ⌘K 命令栏：不是第二个聊天窗，只负责「问一句」或触发一个业务动作，
- * 提交后把请求交给右侧 Copilot 页签。
+ * 提交后把请求交给右侧 AI 页签。
  */
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
@@ -101,7 +101,7 @@ export function CommandPalette() {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Copilot 命令栏"
+        aria-label="AI 命令栏"
         className="atp-fade-in w-full max-w-[560px] overflow-hidden rounded-xl border border-border bg-surface shadow-overlay"
       >
         <div className="flex items-center gap-2 border-b border-border px-3">
@@ -116,8 +116,8 @@ export function CommandPalette() {
                 ask(query.trim())
               }
             }}
-            placeholder="问 Copilot，或输入一个任务…"
-            aria-label="问 Copilot"
+            placeholder="问 AI，或输入一个任务…"
+            aria-label="问 AI"
             className="h-11 min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted"
             spellCheck={false}
           />
@@ -135,7 +135,7 @@ export function CommandPalette() {
             >
               <Sparkles size={14} className="shrink-0 text-accent" />
               <span className="min-w-0 flex-1 truncate">
-                问 Copilot：<span className="font-medium">{query.trim()}</span>
+                问 AI：<span className="font-medium">{query.trim()}</span>
               </span>
               <span className="shrink-0 text-[10px] text-muted">Enter</span>
             </button>
@@ -165,7 +165,7 @@ export function CommandPalette() {
 
         <div className="flex items-center justify-between border-t border-border px-3 py-1.5 text-[10px] text-muted">
           <span>Enter 发送 · Esc 关闭</span>
-          <span>结果在右侧 Copilot 页签</span>
+          <span>结果在右侧 AI 页签</span>
         </div>
       </div>
     </div>

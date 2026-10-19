@@ -108,19 +108,19 @@ export function AppBar() {
               type="button"
               onClick={() => {
                 setAiOpen(true)
-                setRightTab('copilot')
+                setRightTab('ai')
               }}
               className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-muted outline-none transition-colors hover:bg-accent/[0.07] hover:text-accent"
-              aria-label="打开 Copilot"
+              aria-label="打开 AI"
             >
               <Sparkles size={14} className="text-accent" />
-              Copilot
+              AI
               <kbd className="rounded border border-border bg-surface-secondary px-1 font-mono text-[9px] font-normal text-muted">
                 ⌘K
               </kbd>
             </button>
           </Tooltip.Trigger>
-          <Tooltip.Content>问 Copilot，或让 Agent 操作页面（⌘K）</Tooltip.Content>
+          <Tooltip.Content>问 AI，或让 Agent 操作页面（⌘K）</Tooltip.Content>
         </Tooltip.Root>
         <Tooltip.Root>
           <Tooltip.Trigger>

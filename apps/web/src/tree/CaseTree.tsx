@@ -197,7 +197,7 @@ export function CaseTree() {
     setSelected(currentProjectId ? { kind: 'project', id: currentProjectId } : null)
   }, [currentProjectId, setSelected])
 
-  // / 聚焦搜索（⌘K 留给 Copilot 命令栏）
+  // / 聚焦搜索（⌘K 留给 AI 命令栏）
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.key !== '/') return

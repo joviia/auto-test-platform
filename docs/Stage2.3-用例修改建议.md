@@ -5,7 +5,7 @@
 
 ## 1. 问题
 
-到 Stage 2.2，Copilot 已经能读用例、发现冗余步骤。例如「登陆」用例里有一次账号框回车和一次重复填写，AI 能准确说出来。
+到 Stage 2.2，AI 已经能读用例、发现冗余步骤。例如「登陆」用例里有一次账号框回车和一次重复填写，AI 能准确说出来。
 
 但闭环断在最后一步：它只能用文字建议，用户还得自己回到步骤面板逐步删除。如果让 AI 直接调用 `case:update`，风险更大——用户没看到改了什么，用例就变了。
 
@@ -78,7 +78,7 @@ interface AiCaseProposal {
 应用：
 
 1. 重新读取 `case:list`，比较该用例的 `updatedAt` 与 `baseUpdatedAt`。
-2. 不一致 → 卡片进入冲突状态，禁用应用，提示让 Copilot 重新生成。
+2. 不一致 → 卡片进入冲突状态，禁用应用，提示让 AI 重新生成。
 3. 一致 → 调用 `case:update(proposal.after)`，写入内存缓存并刷新用例列表。
 4. 卡片切到「已应用」，保留 diff，提供「撤销」。
 
@@ -86,7 +86,7 @@ interface AiCaseProposal {
 
 ## 6. 界面
 
-- 建议卡固定在 Copilot 输入框上方，不跟随消息列表滚走。
+- 建议卡固定在 AI 输入框上方，不跟随消息列表滚走。
 - 头部：用例名、AI 的摘要、`−n / +n / ~n` 计数、步数变化。
 - 中部：按 `after` 顺序列出新增与修改的步骤，再列出删除的步骤；修改项显示「旧 → 新」，显示文案相同则写「参数有调整」；最多展示 6 项，超出折叠。
 - 换序与用例元信息变化用独立标签提示。
@@ -112,7 +112,7 @@ event:ai-case-proposal                      → AiCaseProposal
 
 ## 8. 验收
 
-1. 选中「登陆」用例，对 Copilot 说「找出冗余步骤并给出修改建议」。
+1. 选中「登陆」用例，对 AI 说「找出冗余步骤并给出修改建议」。
 2. AI 先 `case_get`，再 `case_propose`；输入框上方出现修改建议卡，列出删除的两步。
 3. 点「应用修改」后步骤数从 6 变 4，左侧树与步骤页签同步刷新。
 4. 点「撤销」后恢复 6 步；再次应用仍然可用。
@@ -176,7 +176,7 @@ event:ai-case-proposal                      → AiCaseProposal
 
 ## 12. 自定义下拉选择（2026-10-19 补充）
 
-录制 Element Plus、Ant Design 等组件库的下拉时，采集到的是 `role="combobox"` 的 `<input>`，而不是原生 `<select>`。回放与 Copilot 的 `browser_select` 直接调用 `selectOption` 会报 `Element is not a <select> element`。
+录制 Element Plus、Ant Design 等组件库的下拉时，采集到的是 `role="combobox"` 的 `<input>`，而不是原生 `<select>`。回放与 AI 的 `browser_select` 直接调用 `selectOption` 会报 `Element is not a <select> element`。
 
 修复：
 

@@ -47,7 +47,7 @@ export const IpcChannel = {
   replayStop: 'replay:stop',
   runList: 'run:list',
   runGet: 'run:get',
-  // Copilot（AI）
+  // AI（AI）
   aiSend: 'ai:send',
   aiCancel: 'ai:cancel',
   aiConfig: 'ai:config',

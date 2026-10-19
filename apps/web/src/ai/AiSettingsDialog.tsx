@@ -290,7 +290,7 @@ export function AiSettingsDialog() {
       if (next.ready && !next.stub) {
         toast.success(`${next.model} 已启用，下一条消息生效`)
       } else {
-        toast.info('设置已保存；仍未检测到可用密钥，Copilot 继续以演示模式运行')
+        toast.info('设置已保存；仍未检测到可用密钥，AI 继续以演示模式运行')
       }
     } catch (err) {
       toast.danger(err instanceof Error ? err.message : '保存模型设置失败')
@@ -323,7 +323,7 @@ export function AiSettingsDialog() {
               ) : (
                 <>
                   <p className="text-[11.5px] leading-5 text-muted">
-                    Copilot 使用这里配置的模型操作浏览器。密钥只保存在本机，不会上传到任何服务器。
+                    AI 助手使用这里配置的模型操作浏览器。密钥只保存在本机，不会上传到任何服务器。
                   </p>
 
                   <div className="space-y-1.5">
@@ -446,7 +446,7 @@ export function AiSettingsDialog() {
 
                     {confirmClear && (
                       <div className="flex flex-wrap items-center gap-2 rounded-md border border-rose-500/25 bg-rose-500/[0.05] px-2.5 py-1.5 text-[10.5px] text-muted">
-                        <span>保存后删除本机密钥，Copilot 将回到演示模式。</span>
+                        <span>保存后删除本机密钥，AI 将回到演示模式。</span>
                         <span className="ml-auto flex items-center gap-1.5">
                           <button
                             type="button"

@@ -17,7 +17,7 @@ export interface SkillResult {
   label: string
 }
 
-export interface CopilotSkill {
+export interface AiSkill {
   manifest: SkillManifest
   schema: z.ZodType
   run(input: Record<string, unknown>, ctx: SkillContext): Promise<SkillResult>
@@ -164,7 +164,7 @@ async function tryDrag(
   return near(actual, target, tolerance) ? actual : null
 }
 
-const sliderSet: CopilotSkill = {
+const sliderSet: AiSkill = {
   manifest: {
     id: 'slider_set',
     name: '设置滑块',
@@ -277,7 +277,7 @@ async function visibleMenuItems(page: Page): Promise<string[]> {
   })
 }
 
-const hoverMenu: CopilotSkill = {
+const hoverMenu: AiSkill = {
   manifest: {
     id: 'hover_menu',
     name: '展开悬停菜单',
@@ -330,7 +330,7 @@ async function resolveUploadPath(dataDir: string, input: string): Promise<string
   return file
 }
 
-const uploadFile: CopilotSkill = {
+const uploadFile: AiSkill = {
   manifest: {
     id: 'upload_file',
     name: '上传文件',
@@ -376,8 +376,8 @@ const uploadFile: CopilotSkill = {
   },
 }
 
-export const COPILOT_SKILLS: CopilotSkill[] = [sliderSet, hoverMenu, uploadFile]
+export const AI_SKILLS: AiSkill[] = [sliderSet, hoverMenu, uploadFile]
 
-export const SKILL_MANIFESTS: SkillManifest[] = COPILOT_SKILLS.map((skill) => skill.manifest)
+export const SKILL_MANIFESTS: SkillManifest[] = AI_SKILLS.map((skill) => skill.manifest)
 
-export const SKILL_MAP = new Map(COPILOT_SKILLS.map((skill) => [skill.manifest.id, skill]))
+export const SKILL_MAP = new Map(AI_SKILLS.map((skill) => [skill.manifest.id, skill]))

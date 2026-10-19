@@ -118,13 +118,13 @@ export function App() {
     const offAiProposal = window.atp.on('event:ai-case-proposal', (p) => {
       useUiStore.getState().addAiProposal(p)
       useUiStore.getState().setAiOpen(true)
-      useUiStore.getState().setRightTab('copilot')
+      useUiStore.getState().setRightTab('ai')
     })
     // AI 新建用例计划卡：执行与保存都由用户在卡片里触发
     const offAiPlan = window.atp.on('event:ai-plan-proposal', (p) => {
       useUiStore.getState().addAiPlan(p)
       useUiStore.getState().setAiOpen(true)
-      useUiStore.getState().setRightTab('copilot')
+      useUiStore.getState().setRightTab('ai')
     })
     const offAiPlanProgress = window.atp.on('event:ai-plan-progress', (p) =>
       useUiStore.getState().applyAiPlanProgress(p),
