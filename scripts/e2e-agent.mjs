@@ -237,6 +237,23 @@ try {
   await page.getByText('观察页面', { exact: false }).first().waitFor({ timeout: 20_000 })
   console.log('[agent] Copilot ✓ 流式输出与工具卡分组')
 
+  // 会话持久化：消息与工具卡落 SQLite，历史入口可恢复
+  const sessions = await invoke(origin, 'ai:session-list', { limit: 10 })
+  if (sessions.length === 0) throw new Error('Copilot 会话没有落库')
+  const storedSession = await invoke(origin, 'ai:session-get', { id: sessions[0].id })
+  if (storedSession.messages.length < 2) {
+    throw new Error(`会话消息不足：${storedSession.messages.length}`)
+  }
+  const storedAssistant = storedSession.messages.find((message) => message.role === 'assistant')
+  if (!storedAssistant?.text.includes('已验证')) throw new Error('助手回复没有落库')
+  if (!storedAssistant.tools?.length) throw new Error('工具卡没有落库')
+  await page.locator('button[aria-label="历史会话"]').click()
+  await page.getByRole('heading', { name: '历史会话' }).waitFor({ timeout: 10_000 })
+  const historyDialog = page.getByRole('dialog')
+  await historyDialog.getByText(sessions[0].title, { exact: true }).first().click()
+  await page.getByText('已验证', { exact: false }).first().waitFor({ timeout: 10_000 })
+  console.log('[agent] 会话持久化 ✓ 落库 / 历史恢复')
+
   // 模型设置：保存密钥 → Copilot 切到真实模型 → 掩码与权限位 → 清除后回到演示
   await page.locator('button[aria-label="模型设置"]').click()
   await page.getByRole('heading', { name: '模型设置' }).waitFor({ timeout: 10_000 })
@@ -337,6 +354,36 @@ try {
     throw new Error(`撤销后期望 4 个步骤，实际 ${undone.case.steps.length} 个`)
   }
   console.log('[agent] 用例修改建议 ✓ diff / 应用 / 撤销')
+
+  // AI 计划卡：从页面生成 → 中栏执行 → 保存为用例
+  await invoke(origin, 'browser:navigate', { url: `${origin}/demo` })
+  await page.waitForTimeout(400)
+  await composer.fill('从当前页面生成一条测试用例')
+  await composer.press('Enter')
+  await page.getByText('AI 计划', { exact: true }).first().waitFor({ timeout: 20_000 })
+  await page.getByRole('button', { name: '在中栏执行' }).waitFor({ timeout: 20_000 })
+  await page.getByRole('button', { name: '在中栏执行' }).click()
+  await page.getByText('已通过', { exact: true }).first().waitFor({ timeout: 30_000 })
+  await page.getByRole('button', { name: '保存为用例' }).click()
+  await page.getByRole('heading', { name: '保存为用例' }).waitFor({ timeout: 10_000 })
+  await page.getByRole('button', { name: '保存用例', exact: true }).click()
+  await page.getByText('已保存为用例', { exact: false }).waitFor({ timeout: 20_000 })
+
+  const planCases = await invoke(origin, 'case:list', { projectId: cases[0].projectId })
+  const planCase = planCases.find((item) => item.name.startsWith('AI 计划新建内容'))
+  if (!planCase) throw new Error('计划卡保存后没有出现在用例列表')
+  const planFile = await invoke(origin, 'case:get', { id: planCase.id })
+  if (planFile.case.steps.length !== 3) {
+    throw new Error(`计划用例期望 3 个步骤，实际 ${planFile.case.steps.length} 个`)
+  }
+  if (Object.keys(planFile.elements).length !== 2) {
+    throw new Error(`计划用例期望 2 个元素，实际 ${Object.keys(planFile.elements).length} 个`)
+  }
+  const fillStep = planFile.case.steps.find((step) => step.action === 'fill')
+  if (!String(fillStep?.params?.value ?? '').startsWith('AI计划_')) {
+    throw new Error(`计划用例的填写值不正确：${String(fillStep?.params?.value ?? '')}`)
+  }
+  console.log('[agent] AI 计划卡 ✓ 生成 / 执行 / 保存')
 
   // 运行态恢复：吞掉 ai-done，模拟 SSE 断线丢事件；5s 心跳应自动解除执行态
   const resumePage = await browser.newPage()

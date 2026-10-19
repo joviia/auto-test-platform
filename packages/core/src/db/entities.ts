@@ -184,6 +184,31 @@ export const RunStep = defineEntity({
   }),
 })
 
+export const AiSession = defineEntity({
+  name: 'AiSession',
+  tableName: 'ai_sessions',
+  properties: (p) => ({
+    id: p.string().primary(),
+    title: p.string(),
+    createdAt: p.string().fieldName('created_at'),
+    updatedAt: p.string().fieldName('updated_at'),
+  }),
+})
+
+export const AiMessage = defineEntity({
+  name: 'AiMessage',
+  tableName: 'ai_messages',
+  properties: (p) => ({
+    id: p.string().primary(),
+    sessionId: p.string().fieldName('session_id').index(),
+    /** 会话内单调递增，避免同一毫秒的消息排序不稳定 */
+    seq: p.integer(),
+    role: p.string(),
+    payload: p.json<unknown>(),
+    createdAt: p.string().fieldName('created_at'),
+  }),
+})
+
 export type ProjectEntity = InferEntity<typeof Project>
 export type ModuleEntity = InferEntity<typeof Module>
 export type TestCaseEntity = InferEntity<typeof TestCase>
@@ -196,6 +221,8 @@ export type PlanRunEntity = InferEntity<typeof PlanRun>
 export type ElementEntity = InferEntity<typeof Element>
 export type RunEntity = InferEntity<typeof Run>
 export type RunStepEntity = InferEntity<typeof RunStep>
+export type AiSessionEntity = InferEntity<typeof AiSession>
+export type AiMessageEntity = InferEntity<typeof AiMessage>
 
 export const entities = [
   Project,
@@ -210,4 +237,6 @@ export const entities = [
   Element,
   Run,
   RunStep,
+  AiSession,
+  AiMessage,
 ] as const

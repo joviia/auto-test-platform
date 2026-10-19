@@ -22,6 +22,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCases, usePlans, useProjects } from '../api/client'
 import { useUiStore } from '../state/ui-store'
+import { AiHistoryDialog } from './AiHistoryDialog'
+import { AiPlanList } from './AiPlanCard'
 import { CaseProposalList } from './CaseProposalCard'
 import { Markdown } from './Markdown'
 import type { AiContext, AiMessage, AiToolCall } from './types'
@@ -83,6 +85,7 @@ export function CopilotPanel() {
 
   const [text, setText] = useState('')
   const [envOpen, setEnvOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -270,6 +273,15 @@ export function CopilotPanel() {
           </span>
         )}
         <div className="ml-auto flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            className="grid size-6 place-items-center rounded text-muted hover:bg-default hover:text-foreground"
+            aria-label="历史会话"
+            title="历史会话"
+          >
+            <History size={12} />
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -462,6 +474,8 @@ export function CopilotPanel() {
         </div>
       </div>
 
+      <AiPlanList />
+
       <CaseProposalList />
 
       <div className="shrink-0 border-t border-border p-2.5">
@@ -508,6 +522,7 @@ export function CopilotPanel() {
           </div>
         </div>
       </div>
+      <AiHistoryDialog open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </div>
   )
 }

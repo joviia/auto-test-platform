@@ -121,6 +121,73 @@ const aiCaseProposalSchema = z.object({
   createdAt: z.string(),
 })
 
+/** AI 生成的新用例计划卡。执行与保存都由用户触发，不直接写库 */
+const aiPlanProposalSchema = z.object({
+  proposalId: z.string().min(1),
+  name: z.string().min(1),
+  summary: z.string().min(1),
+  startUrl: z.string().min(1),
+  caseFile: caseFileSchema,
+  createdAt: z.string(),
+})
+
+const aiPlanStepResultSchema = z.object({
+  /** 1-based，和界面上的步骤序号一致 */
+  index: z.number().int().positive(),
+  stepId: z.string(),
+  action: z.string(),
+  status: stepStatusSchema,
+  durationMs: z.number().nonnegative(),
+  error: z.string().optional(),
+  skipped: z.boolean().optional(),
+  screenshotUrl: z.string().optional(),
+})
+
+const aiTargetSchema = z.object({
+  rect: z.object({
+    x: z.number(),
+    y: z.number(),
+    width: z.number(),
+    height: z.number(),
+  }),
+  viewport: z.object({ width: z.number(), height: z.number() }),
+  role: z.string().optional(),
+  name: z.string().optional(),
+})
+
+/** 持久化的工具卡：历史会话恢复后仍能看到工具、结果与证据 */
+const aiStoredToolSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  label: z.string(),
+  input: z.unknown().optional(),
+  status: z.enum(['running', 'ok', 'error']),
+  durationMs: z.number().nonnegative().optional(),
+  output: z.unknown().optional(),
+  error: z.string().optional(),
+  evidenceUrl: z.string().optional(),
+  target: aiTargetSchema.optional(),
+})
+
+const aiSessionMessageSchema = z.object({
+  id: z.string(),
+  role: z.enum(['user', 'assistant']),
+  text: z.string(),
+  reasoning: z.string().optional(),
+  tools: z.array(aiStoredToolSchema).optional(),
+  cancelled: z.boolean().optional(),
+  error: z.string().optional(),
+  createdAt: z.string(),
+})
+
+const aiSessionRowSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  messageCount: z.number().int().nonnegative(),
+})
+
 /** 录制草稿：recording:stop 与 AI 停止录制事件共用 */
 const recordedDraftSchema = z.object({
   steps: z.array(stepSchema),
@@ -456,6 +523,28 @@ export const ipcContract = {
     }),
   },
 
+  [IpcChannel.aiPlanRun]: {
+    input: z.object({
+      proposalId: z.string().min(1),
+      /** 卡片当前草稿（用户可能已删改步骤） */
+      caseFile: caseFileSchema,
+    }),
+    output: z.object({ runId: z.string() }),
+  },
+  [IpcChannel.aiPlanStop]: { input: z.void(), output: okSchema },
+  [IpcChannel.aiSessionList]: {
+    input: z.object({ limit: z.number().int().positive().max(100).optional() }),
+    output: z.array(aiSessionRowSchema),
+  },
+  [IpcChannel.aiSessionGet]: {
+    input: idInput,
+    output: z.object({
+      session: aiSessionRowSchema,
+      messages: z.array(aiSessionMessageSchema),
+    }),
+  },
+  [IpcChannel.aiSessionDelete]: { input: idInput, output: okSchema },
+
   [IpcChannel.skillList]: {
     input: z.void(),
     output: z.array(skillManifestSchema),
@@ -528,19 +617,7 @@ export const ipcEventContract = {
     output: z.unknown().optional(),
     error: z.string().optional(),
     evidenceUrl: z.string().optional(),
-    target: z
-      .object({
-        rect: z.object({
-          x: z.number(),
-          y: z.number(),
-          width: z.number(),
-          height: z.number(),
-        }),
-        viewport: z.object({ width: z.number(), height: z.number() }),
-        role: z.string().optional(),
-        name: z.string().optional(),
-      })
-      .optional(),
+    target: aiTargetSchema.optional(),
     durationMs: z.number().nonnegative(),
   }),
   [IpcEvent.aiDone]: z.object({
@@ -562,6 +639,23 @@ export const ipcEventContract = {
     running: z.boolean(),
     sessionId: z.string().optional(),
     messageId: z.string().optional(),
+  }),
+  /** AI 生成的新用例计划卡 */
+  [IpcEvent.aiPlanProposal]: aiPlanProposalSchema,
+  [IpcEvent.aiPlanProgress]: z.object({
+    proposalId: z.string(),
+    runId: z.string(),
+    index: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    stepId: z.string(),
+    status: stepStatusSchema,
+  }),
+  [IpcEvent.aiPlanResult]: z.object({
+    proposalId: z.string(),
+    runId: z.string(),
+    status: stepStatusSchema,
+    error: z.string().optional(),
+    steps: z.array(aiPlanStepResultSchema),
   }),
 }
 
@@ -586,6 +680,12 @@ export type SkillParam = z.output<typeof skillParamSchema>
 export type SkillManifest = z.output<typeof skillManifestSchema>
 export type RecordedDraft = z.output<typeof recordedDraftSchema>
 export type AiCaseProposal = z.output<typeof aiCaseProposalSchema>
+export type AiPlanProposal = z.output<typeof aiPlanProposalSchema>
+export type AiPlanProgress = z.output<(typeof ipcEventContract)[typeof IpcEvent.aiPlanProgress]>
+export type AiPlanResult = z.output<(typeof ipcEventContract)[typeof IpcEvent.aiPlanResult]>
+export type AiSessionRow = z.output<typeof aiSessionRowSchema>
+export type AiSessionMessage = z.output<typeof aiSessionMessageSchema>
+export type AiStoredTool = z.output<typeof aiStoredToolSchema>
 
 export type IpcEventPayload<K extends keyof typeof ipcEventContract> = z.output<
   (typeof ipcEventContract)[K]

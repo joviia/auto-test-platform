@@ -1,8 +1,13 @@
 import type {
   AiCaseProposal as AiCaseProposalPayload,
   AiConfig,
+  AiPlanProgress,
+  AiPlanProposal as AiPlanProposalPayload,
+  AiPlanResult,
+  AiSessionMessage,
   AiToolEndPayload,
   AiToolStartPayload,
+  CaseFile,
   CaseGroup,
   Element,
   IpcEventPayload,
@@ -50,6 +55,28 @@ export interface RecordingDraft {
 /** Copilot 的用例修改建议：pending 等用户确认，applied 已写入（可撤销） */
 export interface AiCaseProposal extends AiCaseProposalPayload {
   status: 'pending' | 'applied'
+}
+
+export type AiPlanStatus = 'pending' | 'running' | 'passed' | 'failed' | 'saved'
+
+export interface AiPlanStepResult {
+  status: 'passed' | 'failed'
+  durationMs: number
+  error?: string
+  skipped?: boolean
+  screenshotUrl?: string
+}
+
+/** AI 生成的新用例计划卡：可编辑草稿，执行与保存由用户触发 */
+export interface AiPlanProposal extends AiPlanProposalPayload {
+  status: AiPlanStatus
+  runId?: string
+  error?: string
+  stepResults: Record<string, AiPlanStepResult>
+  savedCaseId?: string
+  savedCaseName?: string
+  /** 保存时是否已经执行通过 */
+  verified?: boolean
 }
 
 const THEME_KEY = 'atp.theme'
@@ -225,6 +252,7 @@ interface UiState {
   aiTarget: { target: NonNullable<AiToolEndPayload['target']>; label: string } | null
   aiSeed: AiSeed | null
   aiProposals: AiCaseProposal[]
+  aiPlans: AiPlanProposal[]
 
   addAiUserMessage: (text: string) => void
   startAiMessage: (sessionId: string, messageId: string) => void
@@ -240,6 +268,14 @@ interface UiState {
   addAiProposal: (proposal: AiCaseProposalPayload) => void
   patchAiProposal: (proposalId: string, patch: Partial<AiCaseProposal>) => void
   removeAiProposal: (proposalId: string) => void
+  addAiPlan: (proposal: AiPlanProposalPayload) => void
+  patchAiPlan: (proposalId: string, patch: Partial<AiPlanProposal>) => void
+  updateAiPlanFile: (proposalId: string, file: CaseFile) => void
+  applyAiPlanProgress: (progress: AiPlanProgress) => void
+  applyAiPlanResult: (result: AiPlanResult) => void
+  removeAiPlan: (proposalId: string) => void
+  /** 从 SQLite 恢复历史会话；工具卡与证据一并还原 */
+  replaceAiSession: (sessionId: string, messages: AiSessionMessage[]) => void
   resetAi: () => void
 }
 
@@ -247,6 +283,24 @@ const initialDevice = readStoredDevice()
 
 function newAiId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+}
+
+function storedToAiMessage(message: AiSessionMessage): AiMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    text: message.text,
+    reasoning: message.reasoning ?? '',
+    tools: (message.tools ?? []).map((tool) => ({
+      ...tool,
+      input: tool.input ?? {},
+      status: tool.status === 'running' ? 'error' : tool.status,
+      ...(tool.status === 'running' ? { error: '执行中断' } : {}),
+    })),
+    pending: false,
+    ...(message.cancelled ? { cancelled: true } : {}),
+    ...(message.error ? { error: message.error } : {}),
+  }
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
@@ -349,6 +403,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   aiTarget: null,
   aiSeed: null,
   aiProposals: [],
+  aiPlans: [],
 
   addAiUserMessage: (text) =>
     set((s) => ({
@@ -538,6 +593,84 @@ export const useUiStore = create<UiState>((set, get) => ({
       ].slice(0, 8),
     })),
 
+  addAiPlan: (proposal) =>
+    set((s) => ({
+      aiPlans: [
+        { ...proposal, status: 'pending' as const, stepResults: {} },
+        ...s.aiPlans.filter((item) => item.proposalId !== proposal.proposalId),
+      ].slice(0, 3),
+      aiOpen: true,
+      rightTab: 'copilot' as const,
+    })),
+
+  patchAiPlan: (proposalId, patch) =>
+    set((s) => ({
+      aiPlans: s.aiPlans.map((item) =>
+        item.proposalId === proposalId ? { ...item, ...patch } : item,
+      ),
+    })),
+
+  updateAiPlanFile: (proposalId, file) =>
+    set((s) => ({
+      aiPlans: s.aiPlans.map((item) =>
+        item.proposalId === proposalId ? { ...item, caseFile: file } : item,
+      ),
+    })),
+
+  applyAiPlanProgress: (progress) =>
+    set((s) => ({
+      aiPlans: s.aiPlans.map((item) => {
+        if (item.proposalId !== progress.proposalId) return item
+        const previous = item.stepResults[progress.stepId]
+        return {
+          ...item,
+          status: 'running' as const,
+          runId: progress.runId,
+          error: undefined,
+          stepResults: {
+            ...item.stepResults,
+            [progress.stepId]: {
+              status: progress.status,
+              durationMs: previous?.durationMs ?? 0,
+              ...(previous?.error ? { error: previous.error } : {}),
+              ...(previous?.screenshotUrl ? { screenshotUrl: previous.screenshotUrl } : {}),
+              ...(previous?.skipped !== undefined ? { skipped: previous.skipped } : {}),
+            },
+          },
+        }
+      }),
+    })),
+
+  applyAiPlanResult: (result) =>
+    set((s) => ({
+      aiPlans: s.aiPlans.map((item) => {
+        if (item.proposalId !== result.proposalId) return item
+        const stepResults: Record<string, AiPlanStepResult> = {}
+        for (const step of result.steps) {
+          stepResults[step.stepId] = {
+            status: step.status,
+            durationMs: step.durationMs,
+            ...(step.error ? { error: step.error } : {}),
+            ...(step.skipped !== undefined ? { skipped: step.skipped } : {}),
+            ...(step.screenshotUrl ? { screenshotUrl: step.screenshotUrl } : {}),
+          }
+        }
+        return {
+          ...item,
+          status: result.status,
+          runId: result.runId,
+          stepResults,
+          error: result.error,
+          verified: result.status === 'passed',
+        }
+      }),
+    })),
+
+  removeAiPlan: (proposalId) =>
+    set((s) => ({
+      aiPlans: s.aiPlans.filter((item) => item.proposalId !== proposalId),
+    })),
+
   patchAiProposal: (proposalId, patch) =>
     set((s) => ({
       aiProposals: s.aiProposals.map((item) =>
@@ -550,6 +683,19 @@ export const useUiStore = create<UiState>((set, get) => ({
       aiProposals: s.aiProposals.filter((item) => item.proposalId !== proposalId),
     })),
 
+  replaceAiSession: (sessionId, messages) =>
+    set({
+      aiSessionId: sessionId,
+      aiMessages: messages.map(storedToAiMessage),
+      aiRunning: false,
+      aiStartedAt: null,
+      aiActiveTool: null,
+      aiTarget: null,
+      aiSeed: null,
+      aiProposals: [],
+      aiPlans: [],
+    }),
+
   resetAi: () =>
     set({
       aiSessionId: null,
@@ -560,5 +706,6 @@ export const useUiStore = create<UiState>((set, get) => ({
       aiTarget: null,
       aiSeed: null,
       aiProposals: [],
+      aiPlans: [],
     }),
 }))

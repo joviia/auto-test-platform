@@ -5,12 +5,18 @@ import type {
   AiConfig,
   AiModelsInput,
   AiModelsResult,
+  AiPlanProgress,
+  AiPlanProposal,
+  AiPlanResult,
   AiSaveConfigInput,
   AiSendInput,
   AiTestInput,
   AiTestResult,
+  CaseFile,
   CaseRow,
+  IpcChannel,
   IpcEventPayload,
+  IpcOutput,
   LiveStep,
   StepResult,
 } from '@atp/model'
@@ -59,6 +65,9 @@ export type AgentEvent =
   | { type: 'draft'; stepCount: number; rawEvents: number; startUrl: string }
   | ({ type: 'ai-recording-draft' } & RecordedDraft)
   | ({ type: 'ai-case-proposal' } & AiCaseProposal)
+  | ({ type: 'ai-plan-proposal' } & AiPlanProposal)
+  | { type: 'ai-plan-progress'; progress: AiPlanProgress }
+  | { type: 'ai-plan-result'; result: AiPlanResult }
   | {
       type: 'replay-progress'
       runId: string
@@ -77,6 +86,7 @@ export class Agent {
   private browser: ChromeController | null = null
   private lastDraft: RecordedDraft | null = null
   private replayAbort: AbortController | null = null
+  private planDraftAbort: AbortController | null = null
   private listeners = new Set<(event: AgentEvent) => void>()
   private started = false
   private copilot: CopilotService | null = null
@@ -105,6 +115,7 @@ export class Agent {
         stopRecording: () => this.stopRecording(),
         notifyRecordingDraft: (draft) => this.emit({ type: 'ai-recording-draft', ...draft }),
         proposeCase: (proposal) => this.emit({ type: 'ai-case-proposal', ...proposal }),
+        proposePlan: (proposal) => this.emit({ type: 'ai-plan-proposal', ...proposal }),
         runCase: async (caseId) => {
           const result = await this.replayCase(caseId)
           return {
@@ -150,7 +161,7 @@ export class Agent {
       engine: this.browser?.engine ?? '',
       url: this.browser?.currentUrl ?? '',
       recording: this.browser?.isRecording ?? false,
-      replaying: this.replayAbort !== null,
+      replaying: this.replayAbort !== null || this.planDraftAbort !== null,
       cases: await this.allCases(),
     }
   }
@@ -186,11 +197,14 @@ export class Agent {
   }
 
   async emulate(metrics: DeviceMetrics | null): Promise<void> {
-    await this.requireBrowser().emulate(metrics)
+    // UI 挂载时会先发一次 clear，此刻 Chrome 可能还没启动；忽略这次初始化调用
+    if (!this.browser) return
+    await this.browser.emulate(metrics)
   }
 
   startRecording(): void {
     if (this.replayAbort) throw new Error('回放中不能开始录制')
+    if (this.planDraftAbort) throw new Error('AI 计划执行中不能开始录制')
     if (isPlanRunning()) throw new Error('计划执行中不能开始录制')
     const browser = this.requireBrowser()
     this.lastDraft = null
@@ -246,6 +260,7 @@ export class Agent {
   async replayCase(id: string): Promise<ReplayResult> {
     if (this.browser?.isRecording) throw new Error('录制中不能回放')
     if (this.replayAbort) throw new Error('已有回放正在执行')
+    if (this.planDraftAbort) throw new Error('AI 计划正在执行')
     if (isPlanRunning()) throw new Error('计划执行中不能回放')
     const uow = getDb().uow()
     const file = await uow.cases.get(id)
@@ -302,6 +317,7 @@ export class Agent {
   async startPlan(planId: string, caseIds?: string[]): Promise<{ planRunId: string }> {
     if (this.browser?.isRecording) throw new Error('录制进行中，无法执行计划')
     if (this.replayAbort) throw new Error('单用例回放进行中，无法执行计划')
+    if (this.planDraftAbort) throw new Error('AI 计划正在执行，无法启动测试计划')
     const page = await this.requireBrowser().runnerPage()
     const result = await startPlanRun(
       page,
@@ -319,15 +335,96 @@ export class Agent {
     return stopPlanRun()
   }
 
+  /**
+   * 执行 AI 计划卡草稿。立即返回 runId，进度与结果通过事件推送；
+   * 不写 runs 表（计划还没有对应的用例），证据仍落在 runDir。
+   */
+  startPlanDraft(proposalId: string, caseFile: CaseFile): { runId: string } {
+    if (this.browser?.isRecording) throw new Error('录制进行中，无法执行计划')
+    if (this.replayAbort) throw new Error('回放进行中，无法执行计划')
+    if (this.planDraftAbort) throw new Error('已有 AI 计划正在执行')
+    if (isPlanRunning()) throw new Error('测试计划执行中，无法执行 AI 计划')
+
+    const browser = this.requireBrowser()
+    const runId = getDb().uow().runs.newRunId()
+    const abort = new AbortController()
+    this.planDraftAbort = abort
+    this.emitStatus()
+
+    void (async () => {
+      try {
+        const result = await browser.replay(caseFile, {
+          evidenceDir: runDir(runId),
+          runId,
+          signal: abort.signal,
+          onStep: (step, index, total) => {
+            this.emit({
+              type: 'ai-plan-progress',
+              progress: {
+                proposalId,
+                runId,
+                index: index + 1,
+                total,
+                stepId: step.stepId,
+                status: step.status,
+              },
+            })
+          },
+        })
+        const steps = result.steps.map((step, index) => ({
+          index: index + 1,
+          stepId: step.stepId,
+          action: step.action,
+          status: step.status,
+          durationMs: step.durationMs,
+          ...(step.error ? { error: step.error } : {}),
+          ...(step.skipped !== undefined ? { skipped: step.skipped } : {}),
+          ...(step.screenshotPath
+            ? { screenshotUrl: `/evidence/${runId}/${basename(step.screenshotPath)}` }
+            : {}),
+        }))
+        this.emit({
+          type: 'ai-plan-result',
+          result: {
+            proposalId,
+            runId,
+            status: result.status,
+            ...(result.error ? { error: result.error } : {}),
+            steps,
+          },
+        })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        this.emit({
+          type: 'ai-plan-result',
+          result: { proposalId, runId, status: 'failed', error: message, steps: [] },
+        })
+        this.emit({ type: 'error', message })
+      } finally {
+        this.planDraftAbort = null
+        this.emitStatus()
+      }
+    })()
+
+    return { runId }
+  }
+
+  stopPlanDraft(): { ok: true } {
+    this.planDraftAbort?.abort()
+    return { ok: true }
+  }
+
   async runDemo(): Promise<void> {
     // 演示操作本身就应该在录制中执行；只拦截回放
     if (this.replayAbort) throw new Error('回放中不能执行演示操作')
+    if (this.planDraftAbort) throw new Error('AI 计划执行中不能执行演示操作')
     await this.requireBrowser().runDemo(this.options.demoUrl)
     this.emitStatus()
   }
 
   async aiSend(input: AiSendInput): Promise<{ sessionId: string; messageId: string }> {
     if (!this.copilot) throw new Error('Copilot 尚未初始化')
+    if (this.planDraftAbort) throw new Error('AI 计划正在执行，请先停止')
     return this.copilot.send(input)
   }
 
@@ -370,10 +467,27 @@ export class Agent {
     return this.copilot.models(input)
   }
 
+  async aiSessionList(limit?: number): Promise<IpcOutput<typeof IpcChannel.aiSessionList>> {
+    if (!this.copilot) return []
+    return this.copilot.listSessions(limit)
+  }
+
+  async aiSessionGet(id: string): Promise<IpcOutput<typeof IpcChannel.aiSessionGet>> {
+    if (!this.copilot) throw new Error('Copilot 尚未初始化')
+    return this.copilot.getSession(id)
+  }
+
+  async aiSessionDelete(id: string): Promise<{ ok: true }> {
+    if (!this.copilot) return { ok: true }
+    await this.copilot.deleteSession(id)
+    return { ok: true }
+  }
+
   async close(): Promise<void> {
     this.aiCancel()
     this.stopReplay()
     this.stopPlan()
+    this.stopPlanDraft()
     await this.browser?.close()
     this.browser = null
     this.copilot = null
@@ -398,7 +512,7 @@ export class Agent {
       engine: this.browser?.engine ?? '',
       url: this.browser?.currentUrl ?? '',
       recording: this.browser?.isRecording ?? false,
-      replaying: this.replayAbort !== null,
+      replaying: this.replayAbort !== null || this.planDraftAbort !== null,
     })
   }
 

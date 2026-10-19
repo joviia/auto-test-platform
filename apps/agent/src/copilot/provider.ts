@@ -70,8 +70,12 @@ class StubProvider implements CopilotProvider {
     if (this.reason) input.onText(`（${this.reason}）\n\n`)
     await pause()
 
+    type StubSnapshot = {
+      elements?: Array<{ ref: string; role: string; name: string; disabled?: boolean }>
+    }
+    let snapshot: StubSnapshot | null = null
     try {
-      await input.callTool('browser_snapshot', {})
+      snapshot = (await input.callTool('browser_snapshot', {})) as StubSnapshot
       await pause()
       input.onText('页面已经快照完成。\n\n')
     } catch (err) {
@@ -113,6 +117,51 @@ class StubProvider implements CopilotProvider {
         input.onText('已生成修改建议，请在输入框上方确认是否应用。\n\n')
       } catch (err) {
         input.onText(`修改建议生成失败：${err instanceof Error ? err.message : String(err)}\n\n`)
+      }
+    }
+
+    // 演示模式覆盖「从页面生成计划卡」：用快照里的 ref 拼一条可执行计划
+    const wantsPlan = /生成.*用例|用例.*生成|沉淀|计划卡/.test(lastUserText(input.messages))
+    if (wantsPlan && snapshot?.elements?.length) {
+      const textbox =
+        snapshot.elements.find((el) => el.role === 'textbox' && /内容/.test(el.name)) ??
+        snapshot.elements.find((el) => el.role === 'textbox' && !el.disabled)
+      const saveButton =
+        snapshot.elements.find((el) => el.role === 'button' && /保存/.test(el.name)) ??
+        snapshot.elements.find((el) => el.role === 'button' && !el.disabled)
+      if (textbox) {
+        const stamp = Date.now().toString(36).slice(-4)
+        try {
+          await input.callTool('case_plan', {
+            name: `AI 计划新建内容 ${stamp}`,
+            summary: '填写内容名称、保存，并验证页面出现保存成功提示。',
+            steps: [
+              {
+                action: 'fill',
+                ref: textbox.ref,
+                name: textbox.name || '内容名称',
+                value: `AI计划_${stamp}`,
+              },
+              ...(saveButton
+                ? [
+                    {
+                      action: 'click',
+                      ref: saveButton.ref,
+                      name: saveButton.name || '保存',
+                    },
+                  ]
+                : []),
+              {
+                action: 'assert',
+                assertion: { type: 'pageText', match: 'contains', expected: '保存成功' },
+              },
+            ],
+          })
+          await pause()
+          input.onText('已生成可执行的计划卡，请在输入框上方执行或保存。\n\n')
+        } catch (err) {
+          input.onText(`计划卡生成失败：${err instanceof Error ? err.message : String(err)}\n\n`)
+        }
       }
     }
 

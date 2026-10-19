@@ -85,7 +85,7 @@ function evidenceContent(file: string): string {
  */
 function shimSource(): string {
   return `(() => {
-  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error', 'ai-recording-draft', 'ai-case-proposal', 'ai-state'];
+  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error', 'ai-recording-draft', 'ai-case-proposal', 'ai-state', 'ai-plan-proposal', 'ai-plan-progress', 'ai-plan-result'];
   const listeners = new Map(names.map((name) => [name, new Set()]));
   const last = new Map();
   const reportClientError = (message) => {
@@ -255,6 +255,19 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
         }
         if (event.type === 'plan-progress') {
           void send('plan-progress', event.progress)
+          return
+        }
+        if (event.type === 'ai-plan-progress') {
+          void send('ai-plan-progress', event.progress)
+          return
+        }
+        if (event.type === 'ai-plan-result') {
+          void send('ai-plan-result', event.result)
+          return
+        }
+        if (event.type === 'ai-plan-proposal') {
+          // 与 ai-case-proposal 一致：附带 type 字段，界面忽略多余字段
+          void send('ai-plan-proposal', event)
           return
         }
         void send(event.type, event)

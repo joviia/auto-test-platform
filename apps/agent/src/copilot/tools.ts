@@ -1,10 +1,11 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDb } from '@atp/core'
-import type { AiCaseProposal, AiTarget } from '@atp/model'
+import type { AiCaseProposal, AiPlanProposal, AiTarget, Element, Locator, Step } from '@atp/model'
+import { assertionSchema, caseFileSchema, isPageLevelAssertion } from '@atp/model'
 import { selectCustom } from '@atp/runner'
 import { z } from 'zod'
-import type { ChromeController, RecordedDraft } from '../browser.js'
+import type { ChromeController, RecordedDraft, RefDescription } from '../browser.js'
 import { buildCaseProposal, type CaseProposalInput, caseProposalOpsSchema } from './proposals.js'
 import { SKILL_MANIFESTS, SKILL_MAP } from './skills.js'
 
@@ -31,6 +32,8 @@ export interface CopilotPlatform {
   runCase: (caseId: string) => Promise<CopilotCaseRun>
   /** 把修改建议交给界面展示 diff；真正写入要等用户确认 */
   proposeCase: (proposal: AiCaseProposal) => void
+  /** 把新用例计划卡交给界面；执行与保存由用户触发 */
+  proposePlan: (proposal: AiPlanProposal) => void
 }
 
 export interface CopilotToolContext {
@@ -115,6 +118,51 @@ async function act(
     evidenceUrl: await saveEvidence(ctx),
     target: resolved.target,
   }
+}
+
+/** 计划卡的定位候选：语义优先，结构兜底 */
+function planLocators(info: RefDescription): Locator[] {
+  const out: Locator[] = []
+  if (info.testId) out.push({ type: 'testId', value: info.testId })
+  if (info.role && info.name) out.push({ type: 'role', value: info.role, name: info.name })
+  if (info.text) out.push({ type: 'text', value: info.text })
+  if (info.css) out.push({ type: 'css', value: info.css })
+  if (info.role && !info.name) out.push({ type: 'role', value: info.role })
+  if (info.xpath) out.push({ type: 'xpath', value: info.xpath })
+  return out
+}
+
+const PLAN_VERB: Record<string, string> = {
+  click: '点击',
+  fill: '填写',
+  select: '选择',
+  press: '按键',
+  scroll: '滚动',
+  wait: '等待',
+  assert: '断言',
+}
+
+const planStepSchema = z.object({
+  action: z.enum(['click', 'fill', 'select', 'press', 'scroll', 'wait', 'assert']),
+  ref: z.string().optional().describe('元素动作必填，来自最近一次 browser_snapshot'),
+  name: z.string().optional().describe('展示用名称；缺省取页面上的可读名'),
+  value: z.string().optional().describe('fill 的值 / select 的选项文本'),
+  key: z.string().optional().describe('press 的按键，例如 Enter'),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  assertion: assertionSchema.optional(),
+})
+
+export const casePlanInputSchema = z.object({
+  name: z.string().min(1).describe('建议的用例名称'),
+  summary: z.string().min(1).describe('一句话说明测什么、怎么验证'),
+  startUrl: z.string().optional().describe('缺省使用当前页面地址'),
+  steps: z.array(planStepSchema).min(1).max(30),
+})
+
+function needsElement(action: string): boolean {
+  return action === 'click' || action === 'fill' || action === 'select'
 }
 
 export const COPILOT_TOOLS: CopilotTool[] = [
@@ -639,6 +687,158 @@ export const COPILOT_TOOLS: CopilotTool[] = [
           note: 'diff 卡已显示，等待用户确认应用；不要声称已经修改。',
         },
         label: `提议修改用例「${current.case.name}」${counts ? ` · ${counts}` : ''}`,
+      }
+    },
+  },
+  {
+    name: 'case_plan',
+    description:
+      '从当前页面生成一条可执行的用例计划卡（新建用例）。必须先调用 browser_snapshot，再用快照里的 ref 指定每一步的目标元素；ref 只在最近一次快照有效。' +
+      '平台会展示步骤卡，由用户决定在中栏执行、保存为用例或放弃；不要声称已经保存。' +
+      '只覆盖 click / fill / select / press / scroll / wait / assert；需要悬停、上传等动作时说明当前不支持。' +
+      '用户要求「生成用例」「把流程沉淀为用例」「从当前页面写一条测试」时使用。',
+    schema: casePlanInputSchema,
+    async run(input, ctx) {
+      checkAbort(ctx)
+      const parsed = casePlanInputSchema.parse(input)
+      const browser = requireBrowser(ctx)
+      const startUrl = (parsed.startUrl?.trim() || browser.currentUrl || '').trim()
+      if (!startUrl || startUrl === 'about:blank') {
+        throw new Error('当前没有可用的页面地址：请先打开被测页面，或传入 startUrl')
+      }
+
+      const elements: Record<string, Element> = {}
+      const described = new Map<string, { elementId: string; info: RefDescription }>()
+      const steps: Step[] = []
+
+      for (const [index, raw] of parsed.steps.entries()) {
+        checkAbort(ctx)
+        const id = `s-${String(index + 1).padStart(3, '0')}`
+        const elementAssertion =
+          raw.action === 'assert' &&
+          raw.assertion !== undefined &&
+          !isPageLevelAssertion(raw.assertion)
+        const needsRef = needsElement(raw.action) || elementAssertion
+
+        let refInfo: RefDescription | undefined
+        let elementId: string | undefined
+        if (needsRef) {
+          if (!raw.ref) {
+            throw new Error(
+              `第 ${index + 1} 步（${raw.action}）缺少 ref：请先 browser_snapshot，再引用快照里的元素`,
+            )
+          }
+          const cached = described.get(raw.ref)
+          if (cached) {
+            refInfo = cached.info
+            elementId = cached.elementId
+          } else {
+            const info = await browser.describeRef(raw.ref)
+            if (!info) {
+              throw new Error(
+                `第 ${index + 1} 步的 ref「${raw.ref}」已失效：请重新 browser_snapshot 后生成计划`,
+              )
+            }
+            elementId = `el-plan-${String(described.size + 1).padStart(3, '0')}`
+            elements[elementId] = {
+              id: elementId,
+              name: clippedName(raw.name) ?? info.name ?? info.tag,
+              locators: planLocators(info),
+            }
+            described.set(raw.ref, { elementId, info })
+            refInfo = info
+          }
+        }
+
+        let params: Record<string, unknown> | undefined
+        switch (raw.action) {
+          case 'click':
+            break
+          case 'fill':
+            if (raw.value === undefined) {
+              throw new Error(`第 ${index + 1} 步（fill）缺少 value`)
+            }
+            params = { value: raw.value }
+            break
+          case 'select':
+            if (raw.value === undefined) {
+              throw new Error(`第 ${index + 1} 步（select）缺少 value（选项可见文本）`)
+            }
+            params = { value: raw.value, mode: refInfo?.tag === 'select' ? 'native' : 'custom' }
+            break
+          case 'press':
+            params = { key: raw.key ?? 'Enter' }
+            break
+          case 'scroll':
+            params = { x: raw.x ?? 0, y: raw.y ?? 0 }
+            break
+          case 'wait':
+            params = { kind: 'timeout', ms: raw.timeoutMs ?? 1000 }
+            break
+          case 'assert':
+            if (!raw.assertion) {
+              throw new Error(`第 ${index + 1} 步（assert）缺少 assertion`)
+            }
+            break
+        }
+
+        const field = clippedName(raw.name) ?? refInfo?.name
+        const displayValue =
+          raw.value ??
+          (raw.action === 'press' ? (raw.key ?? 'Enter') : undefined) ??
+          (raw.assertion && 'expected' in raw.assertion && raw.assertion.expected !== undefined
+            ? String(raw.assertion.expected)
+            : raw.assertion?.type)
+
+        steps.push({
+          id,
+          action: raw.action,
+          ...(elementId ? { elementId } : {}),
+          ...(params ? { params } : {}),
+          ...(raw.assertion ? { assertion: raw.assertion } : {}),
+          display: {
+            verb: PLAN_VERB[raw.action] ?? raw.action,
+            ...(field ? { field } : {}),
+            ...(displayValue ? { value: displayValue } : {}),
+          },
+        })
+      }
+
+      const project = (await getDb().uow().projects.list())[0]
+      if (!project) throw new Error('还没有项目，请先在平台创建项目')
+      const caseFile = caseFileSchema.parse({
+        case: {
+          id: `ai-plan-${Date.now().toString(36)}`,
+          name: parsed.name,
+          projectId: project.id,
+          startUrl,
+          variables: {},
+          intent: parsed.summary,
+          steps,
+        },
+        elements,
+      })
+      const proposal: AiPlanProposal = {
+        proposalId: `plan-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+        name: parsed.name,
+        summary: parsed.summary,
+        startUrl,
+        caseFile,
+        createdAt: new Date().toISOString(),
+      }
+      ctx.platform.proposePlan(proposal)
+
+      return {
+        result: {
+          ok: true,
+          proposalId: proposal.proposalId,
+          name: proposal.name,
+          startUrl,
+          stepCount: steps.length,
+          elementCount: Object.keys(elements).length,
+          note: '计划卡已显示，等待用户在中栏执行或保存；不要声称已经保存。',
+        },
+        label: `生成用例计划「${proposal.name}」· ${steps.length} 步`,
       }
     },
   },

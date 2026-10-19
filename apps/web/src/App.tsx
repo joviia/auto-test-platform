@@ -120,6 +120,18 @@ export function App() {
       useUiStore.getState().setAiOpen(true)
       useUiStore.getState().setRightTab('copilot')
     })
+    // AI 新建用例计划卡：执行与保存都由用户在卡片里触发
+    const offAiPlan = window.atp.on('event:ai-plan-proposal', (p) => {
+      useUiStore.getState().addAiPlan(p)
+      useUiStore.getState().setAiOpen(true)
+      useUiStore.getState().setRightTab('copilot')
+    })
+    const offAiPlanProgress = window.atp.on('event:ai-plan-progress', (p) =>
+      useUiStore.getState().applyAiPlanProgress(p),
+    )
+    const offAiPlanResult = window.atp.on('event:ai-plan-result', (p) =>
+      useUiStore.getState().applyAiPlanResult(p),
+    )
     // SSE 建连 / 重连时的运行快照：清掉错过的 ai-done 留下的转圈状态
     const offAiState = window.atp.on('event:ai-state', (p) => {
       // 只处理「服务端已结束」：running=true 不重建消息，避免停止过程中的竞态
@@ -142,6 +154,9 @@ export function App() {
       offAiError()
       offAiDraft()
       offAiProposal()
+      offAiPlan()
+      offAiPlanProgress()
+      offAiPlanResult()
       offAiState()
     }
   }, [

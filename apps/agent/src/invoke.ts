@@ -169,6 +169,13 @@ export function createInvokeRouter(agent: Agent, dataDir: string) {
   route(IpcChannel.aiSaveConfig, async (input) => agent.aiSaveConfig(input))
   route(IpcChannel.aiTest, async (input) => agent.aiTest(input))
   route(IpcChannel.aiModels, async (input) => agent.aiModels(input))
+  route(IpcChannel.aiSessionList, async (input) => agent.aiSessionList(input.limit))
+  route(IpcChannel.aiSessionGet, async (input) => agent.aiSessionGet(input.id))
+  route(IpcChannel.aiSessionDelete, async (input) => agent.aiSessionDelete(input.id))
+  route(IpcChannel.aiPlanRun, async (input) =>
+    agent.startPlanDraft(input.proposalId, input.caseFile),
+  )
+  route(IpcChannel.aiPlanStop, async () => agent.stopPlanDraft())
   route(IpcChannel.skillList, async () => SKILL_MANIFESTS)
 
   return async (channel: string, payload: unknown): Promise<unknown> => {

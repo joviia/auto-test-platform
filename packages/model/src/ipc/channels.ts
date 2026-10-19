@@ -54,6 +54,13 @@ export const IpcChannel = {
   aiSaveConfig: 'ai:saveConfig',
   aiTest: 'ai:test',
   aiModels: 'ai:models',
+  /** 执行 AI 计划卡草稿（不写 runs 表） */
+  aiPlanRun: 'ai:plan-run',
+  aiPlanStop: 'ai:plan-stop',
+  /** AI 历史会话 */
+  aiSessionList: 'ai:session-list',
+  aiSessionGet: 'ai:session-get',
+  aiSessionDelete: 'ai:session-delete',
   // 操作库
   skillList: 'skill:list',
 } as const
@@ -73,6 +80,10 @@ export const IpcEvent = {
   aiRecordingDraft: 'event:ai-recording-draft',
   aiCaseProposal: 'event:ai-case-proposal',
   aiState: 'event:ai-state',
+  /** AI 计划卡：生成 / 执行进度 / 执行结果 */
+  aiPlanProposal: 'event:ai-plan-proposal',
+  aiPlanProgress: 'event:ai-plan-progress',
+  aiPlanResult: 'event:ai-plan-result',
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]

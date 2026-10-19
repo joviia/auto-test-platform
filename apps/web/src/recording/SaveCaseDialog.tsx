@@ -1,10 +1,11 @@
+import type { CaseFile } from '@atp/model'
 import { Button, Input, Modal, toast } from '@heroui/react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, FileCheck2, Layers, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { qk, useModules, useProjects } from '../api/client'
 import { useOverlayGuard } from '../hooks/use-overlay-guard'
-import { useUiStore } from '../state/ui-store'
+import { type RecordingDraft, useUiStore } from '../state/ui-store'
 import { actionMeta } from '../steps/step-meta'
 
 const SAVE_TIMEOUT_MS = 30_000
@@ -23,14 +24,30 @@ async function withTimeout<T>(work: Promise<T>, message: string): Promise<T> {
   }
 }
 
-/** 停止录制后的保存对话框：命名 + 归属项目/模块，元素随用例 upsert 进元素库 */
-export function SaveCaseDialog() {
+/** 保存对话框中可复用的草稿形态 */
+export interface SaveCaseDialogProps {
+  /** 外部草稿（AI 计划卡）；缺省使用录制草稿 */
+  draft?: RecordingDraft | null
+  defaultName?: string
+  title?: string
+  onClose?: () => void
+  onSaved?: (saved: CaseFile) => void
+}
+
+/** 保存用例：命名 + 归属项目/模块，元素随用例 upsert 进元素库。录制与 AI 计划共用。 */
+export function SaveCaseDialog(props: SaveCaseDialogProps = {}) {
   const qc = useQueryClient()
-  const draft = useUiStore((s) => s.draftRecording)
+  const recordingDraft = useUiStore((s) => s.draftRecording)
+  const draft = props.draft !== undefined ? props.draft : recordingDraft
   const setDraftRecording = useUiStore((s) => s.setDraftRecording)
   const setSelected = useUiStore((s) => s.setSelected)
   const currentProjectId = useUiStore((s) => s.currentProjectId)
   const setCurrentProjectId = useUiStore((s) => s.setCurrentProjectId)
+
+  const close = (): void => {
+    props.onClose?.()
+    if (props.draft === undefined) setDraftRecording(null)
+  }
 
   const [name, setName] = useState('')
   const [projectId, setProjectId] = useState('')
@@ -45,10 +62,13 @@ export function SaveCaseDialog() {
 
   useEffect(() => {
     if (!draft) return
-    setName(`录制 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`)
+    setName(
+      props.defaultName?.trim() ||
+        `录制 ${new Date().toLocaleTimeString('zh-CN', { hour12: false })}`,
+    )
     setProjectId(currentProjectId ?? projects[0]?.id ?? '')
     setModuleId('')
-  }, [draft, currentProjectId, projects])
+  }, [draft, currentProjectId, projects, props.defaultName])
 
   if (!draft) return null
 
@@ -86,7 +106,8 @@ export function SaveCaseDialog() {
       void qc.invalidateQueries({ queryKey: qk.caseFile(saved.case.id) })
       setCurrentProjectId(projectId)
       setSelected({ kind: 'case', id: saved.case.id })
-      setDraftRecording(null)
+      props.onSaved?.(saved)
+      close()
       toast.success(`用例「${saved.case.name}」已保存`)
     } catch (err) {
       toast.danger(err instanceof Error ? err.message : '保存用例失败')
@@ -100,17 +121,17 @@ export function SaveCaseDialog() {
   const uninjected = draft.diagnostics?.frames.filter((f) => !f.injected) ?? []
 
   return (
-    <Modal.Root isOpen onOpenChange={(open) => !open && setDraftRecording(null)}>
+    <Modal.Root isOpen onOpenChange={(open) => !open && close()}>
       <Modal.Backdrop>
         <Modal.Container size="lg">
           <Modal.Dialog>
             <Modal.Header>
-              <Modal.Heading>保存录制的用例</Modal.Heading>
+              <Modal.Heading>{props.title ?? '保存录制的用例'}</Modal.Heading>
               <Modal.CloseTrigger />
             </Modal.Header>
 
             <Modal.Body className="space-y-4">
-              <div className="grid grid-cols-3 gap-2">
+              <div className={`grid gap-2 ${draft.diagnostics ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <div className="rounded-md border border-border bg-surface-secondary px-2.5 py-2">
                   <p className="text-[10px] text-muted">步骤</p>
                   <p className="text-lg font-semibold tabular-nums">{draft.steps.length}</p>
@@ -121,12 +142,14 @@ export function SaveCaseDialog() {
                     {Object.keys(draft.elements).length}
                   </p>
                 </div>
-                <div className="rounded-md border border-border bg-surface-secondary px-2.5 py-2">
-                  <p className="text-[10px] text-muted">采集帧</p>
-                  <p className="text-lg font-semibold tabular-nums">
-                    {frameInjected}/{frameTotal}
-                  </p>
-                </div>
+                {draft.diagnostics && (
+                  <div className="rounded-md border border-border bg-surface-secondary px-2.5 py-2">
+                    <p className="text-[10px] text-muted">采集帧</p>
+                    <p className="text-lg font-semibold tabular-nums">
+                      {frameInjected}/{frameTotal}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {draft.steps.length === 0 && (
@@ -262,9 +285,9 @@ export function SaveCaseDialog() {
             </Modal.Body>
 
             <Modal.Footer>
-              <Button variant="ghost" size="sm" onPress={() => setDraftRecording(null)}>
+              <Button variant="ghost" size="sm" onPress={close}>
                 <Trash2 size={13} />
-                丢弃
+                {props.draft !== undefined ? '取消' : '丢弃'}
               </Button>
               <Button
                 variant="primary"

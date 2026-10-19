@@ -24,6 +24,7 @@ function context(platform: Partial<CopilotPlatform>): CopilotToolContext {
         throw new Error('runCase 不应被调用')
       },
       proposeCase: () => undefined,
+      proposePlan: () => undefined,
       ...platform,
     },
     signal: new AbortController().signal,

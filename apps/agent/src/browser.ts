@@ -99,6 +99,17 @@ export interface TargetInfo {
   name: string
 }
 
+/** 把一次快照里的 ref 解析成可持久化的定位信息（AI 计划卡生成用） */
+export interface RefDescription {
+  role: string
+  name: string
+  tag: string
+  testId?: string
+  text?: string
+  css: string
+  xpath: string
+}
+
 const INIT_SCRIPT = `window.__atpBridge={send:(e)=>window.__atpSend(e)};${collectorSource()}`
 
 function framePathOf(frame: Frame): number[] {
@@ -581,6 +592,141 @@ export class ChromeController {
       }
     })
     return { locator, target }
+  }
+
+  /** 解析 ref 的角色、可读名与定位候选（不写入 DOM） */
+  async describeRef(ref: string): Promise<RefDescription | null> {
+    if (!/^[a-z0-9-]{1,32}$/i.test(ref)) return null
+    const page = await this.ensurePage()
+    const locator = page.locator(`[data-atp-ref="${ref}"]`).first()
+    if ((await locator.count()) === 0) return null
+    return locator.evaluate((el) => {
+      const cssEscape = (value: string): string =>
+        typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(value) : value
+
+      const roleOf = (node: Element): string => {
+        const explicit = node.getAttribute('role')
+        if (explicit) return explicit
+        const tag = node.tagName.toLowerCase()
+        if (tag === 'a') return 'link'
+        if (tag === 'button') return 'button'
+        if (tag === 'select') return 'combobox'
+        if (tag === 'textarea') return 'textbox'
+        if (tag === 'input') {
+          const type = (node as HTMLInputElement).type
+          if (type === 'checkbox') return 'checkbox'
+          if (type === 'radio') return 'radio'
+          if (type === 'range') return 'slider'
+          if (type === 'submit' || type === 'button' || type === 'reset') return 'button'
+          return 'textbox'
+        }
+        if ((node as HTMLElement).isContentEditable) return 'textbox'
+        return tag
+      }
+
+      const nameOf = (node: Element): string => {
+        const aria = node.getAttribute('aria-label')
+        if (aria?.trim()) return aria.trim()
+        const labelledBy = node.getAttribute('aria-labelledby')
+        if (labelledBy) {
+          const text = labelledBy
+            .split(/\s+/)
+            .map((id) => document.getElementById(id)?.textContent ?? '')
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+          if (text) return text.slice(0, 80)
+        }
+        if (
+          node instanceof HTMLInputElement ||
+          node instanceof HTMLTextAreaElement ||
+          node instanceof HTMLSelectElement
+        ) {
+          if (node.id) {
+            const label = document.querySelector(`label[for="${cssEscape(node.id)}"]`)
+            const text = label?.textContent?.replace(/\s+/g, ' ').trim()
+            if (text) return text.slice(0, 80)
+          }
+          const parentLabel = node.closest('label')?.textContent?.replace(/\s+/g, ' ').trim()
+          if (parentLabel) return parentLabel.slice(0, 80)
+          const placeholder = node.getAttribute('placeholder')
+          if (placeholder) return placeholder
+          const name = node.getAttribute('name')
+          if (name) return name
+        }
+        const text = (node.textContent ?? '').replace(/\s+/g, ' ').trim()
+        if (text) return text.slice(0, 80)
+        return node.getAttribute('title') ?? node.getAttribute('name') ?? node.tagName.toLowerCase()
+      }
+
+      const nthOfType = (node: Element): number => {
+        let index = 1
+        let sibling = node.previousElementSibling
+        while (sibling) {
+          if (sibling.tagName === node.tagName) index++
+          sibling = sibling.previousElementSibling
+        }
+        return index
+      }
+
+      const cssChain = (node: Element): string => {
+        const parts: string[] = []
+        let current: Element | null = node
+        while (current && current.nodeType === 1 && current !== document.documentElement) {
+          let segment = current.tagName.toLowerCase()
+          if (current.id) {
+            parts.unshift(`${segment}#${cssEscape(current.id)}`)
+            break
+          }
+          const testId = current.getAttribute('data-testid')
+          if (testId) segment += `[data-testid="${cssEscape(testId)}"]`
+          else if (current.classList.length > 0) segment += `.${cssEscape(current.classList[0])}`
+          else segment += `:nth-of-type(${nthOfType(current)})`
+          parts.unshift(segment)
+          current = current.parentElement
+          try {
+            if (document.querySelectorAll(parts.join(' > ')).length === 1) break
+          } catch {
+            break
+          }
+        }
+        return parts.join(' > ')
+      }
+
+      const xpathOf = (node: Element): string => {
+        const parts: string[] = []
+        let current: Element | null = node
+        while (current && current.nodeType === 1) {
+          if (current === document.documentElement) {
+            parts.unshift('html[1]')
+            break
+          }
+          let index = 1
+          let sibling = current.previousElementSibling
+          while (sibling) {
+            if (sibling.tagName === current.tagName) index++
+            sibling = sibling.previousElementSibling
+          }
+          parts.unshift(`${current.tagName.toLowerCase()}[${index}]`)
+          current = current.parentElement
+        }
+        return `/${parts.join('/')}`
+      }
+
+      const testId = el.getAttribute('data-testid')?.trim()
+      const directText =
+        el.children.length === 0 ? (el.textContent ?? '').replace(/\s+/g, ' ').trim() : ''
+      const name = nameOf(el)
+      return {
+        role: roleOf(el),
+        name,
+        tag: el.tagName.toLowerCase(),
+        ...(testId ? { testId } : {}),
+        ...(directText && directText.length <= 60 ? { text: directText } : {}),
+        css: cssChain(el),
+        xpath: xpathOf(el),
+      }
+    })
   }
 
   /** Copilot 证据截图（操作后自动调用） */

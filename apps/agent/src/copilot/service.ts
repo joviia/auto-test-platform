@@ -1,3 +1,4 @@
+import { getDb } from '@atp/core'
 import type {
   AiConfig,
   AiEnvironment,
@@ -5,6 +6,9 @@ import type {
   AiModelsResult,
   AiSaveConfigInput,
   AiSendInput,
+  AiSessionMessage,
+  AiSessionRow,
+  AiStoredTool,
   AiTarget,
   AiTestInput,
   AiTestResult,
@@ -46,6 +50,15 @@ export type CopilotEvent =
 interface Session {
   id: string
   messages: ModelMessage[]
+  /** 已从 SQLite 恢复过上下文，避免重复读取 */
+  loaded: boolean
+}
+
+/** 单轮运行的产出，用于取消/错误时也能完整落库 */
+interface RunState {
+  text: string
+  reasoning: string
+  tools: AiStoredTool[]
 }
 
 export interface CopilotServiceOptions {
@@ -66,6 +79,8 @@ const SYSTEM_PROMPT = `你是 ATP（本地 Web UI 自动化测试平台）的测
 - 受控浏览器只用于被测系统。ATP 平台自身的界面不在这里，不要导航到平台 UI 去找用例页。
 - 用例、计划、运行记录都用平台工具读取；用户要求执行或回放用例时直接调用 case_run，不要让用户手动去点回放。
 - 修改已有用例：先用 case_get 读取，再用 case_propose 提交操作列表。平台会显示 diff 卡，用户确认后才写入；不要声称已经修改。
+- 新建用例：用户要求从当前页面生成用例 / 把流程沉淀为用例时，先 browser_snapshot，再调用 case_plan，用快照里的 ref 指定目标。平台会显示计划卡，由用户决定执行和保存；不要声称已经保存或已经执行。
+- case_plan 只支持 click / fill / select / press / scroll / wait / assert；需要悬停、上传、多标签等动作时，说明当前计划卡不支持。
 - 单轮最多 50 次工具调用。不要因为需要用户点击而停下；如果达到上限，明确说明已完成和未完成。
 
 工作方式：
@@ -80,6 +95,28 @@ const SYSTEM_PROMPT = `你是 ATP（本地 Web UI 自动化测试平台）的测
 
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+}
+
+function sessionTitle(message: string): string {
+  const text = message
+    .replace(/[#>*`]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return text.slice(0, 40) || '新会话'
+}
+
+/** 快照结果体积大，历史里只保留摘要；其余工具输出原样保存 */
+function compactToolOutput(name: string, output: unknown): unknown {
+  if (name === 'browser_snapshot' && output && typeof output === 'object') {
+    const snapshot = output as { url?: unknown; title?: unknown; elements?: unknown[] }
+    return {
+      url: snapshot.url,
+      title: snapshot.title,
+      elements: Array.isArray(snapshot.elements) ? snapshot.elements.length : 0,
+    }
+  }
+  if (name === 'browser_screenshot') return { ok: true }
+  return output
 }
 
 function toolLabel(name: string, input: Record<string, unknown>): string {
@@ -136,6 +173,8 @@ function toolLabel(name: string, input: Record<string, unknown>): string {
       return '读取用例'
     case 'case_propose':
       return '提议修改用例'
+    case 'case_plan':
+      return '生成用例计划'
     case 'run_list':
       return '查看执行记录'
     case 'run_get':
@@ -372,13 +411,56 @@ export class CopilotService {
     }
   }
 
+  async listSessions(limit?: number): Promise<AiSessionRow[]> {
+    return getDb()
+      .uow()
+      .aiSessions.list(limit ?? 30)
+  }
+
+  async getSession(id: string): Promise<{ session: AiSessionRow; messages: AiSessionMessage[] }> {
+    const uow = getDb().uow()
+    const session = await uow.aiSessions.get(id)
+    if (!session) throw new Error(`会话不存在：${id}`)
+    return { session, messages: await uow.aiSessions.messages(id) }
+  }
+
+  async deleteSession(id: string): Promise<void> {
+    if (this.activeSessionId === id) throw new Error('会话正在执行，请先停止')
+    this.sessions.delete(id)
+    await getDb().uow().aiSessions.remove(id)
+  }
+
+  private async createSession(firstMessage: string): Promise<Session> {
+    const row = await getDb().uow().aiSessions.create(sessionTitle(firstMessage))
+    const session: Session = { id: row.id, messages: [], loaded: true }
+    this.sessions.set(row.id, session)
+    return session
+  }
+
+  /** 重启后首次发送时从 SQLite 重建模型上下文（只含文本） */
+  private async loadSession(id: string): Promise<Session> {
+    const existing = this.sessions.get(id)
+    if (existing?.loaded) return existing
+    const uow = getDb().uow()
+    const row = await uow.aiSessions.get(id)
+    if (!row) throw new Error('会话不存在或已被删除，请新开一个会话')
+    const stored = await uow.aiSessions.messages(id)
+    const messages = stored
+      .filter((message) => message.text.trim())
+      .map((message) => ({ role: message.role, content: message.text }) as ModelMessage)
+      .slice(-40)
+    const session: Session = { id, messages, loaded: true }
+    this.sessions.set(id, session)
+    return session
+  }
+
   async send(input: AiSendInput): Promise<{ sessionId: string; messageId: string }> {
     if (this.activeAbort) throw new Error('Copilot 正在执行，请先停止')
     await this.init()
     const session = input.sessionId
-      ? (this.sessions.get(input.sessionId) ?? { id: input.sessionId, messages: [] })
-      : { id: newId('s'), messages: [] }
-    this.sessions.set(session.id, session)
+      ? await this.loadSession(input.sessionId)
+      : await this.createSession(input.message)
+    await getDb().uow().aiSessions.append(session.id, 'user', { text: input.message })
     const messageId = newId('m')
     const abort = new AbortController()
     this.activeAbort = abort
@@ -435,8 +517,10 @@ export class CopilotService {
     }
     const system = buildSystemPrompt(context)
     const history: ModelMessage[] = [...session.messages, { role: 'user', content: userText }]
-    const tools = this.buildTools(session, messageId, abort.signal)
+    const runState: RunState = { text: '', reasoning: '', tools: [] }
+    const tools = this.buildTools(session, messageId, abort.signal, runState)
     let cancelled = false
+    let errorText: string | undefined
     try {
       const responseMessages = await provider.run({
         system,
@@ -444,26 +528,32 @@ export class CopilotService {
         tools,
         context,
         signal: abort.signal,
-        onText: (text) =>
+        onText: (text) => {
+          runState.text += text
           this.options.onEvent({
             type: 'ai-delta',
             sessionId: session.id,
             messageId,
             kind: 'text',
             text,
-          }),
-        onReasoning: (text) =>
+          })
+        },
+        onReasoning: (text) => {
+          runState.reasoning += text
           this.options.onEvent({
             type: 'ai-delta',
             sessionId: session.id,
             messageId,
             kind: 'reasoning',
             text,
-          }),
-        onError: (error) =>
-          this.options.onEvent({ type: 'ai-error', sessionId: session.id, messageId, error }),
+          })
+        },
+        onError: (error) => {
+          errorText = errorText ?? error
+          this.options.onEvent({ type: 'ai-error', sessionId: session.id, messageId, error })
+        },
         callTool: (name, input) =>
-          this.callToolByName(session, messageId, name, input, abort.signal),
+          this.callToolByName(session, messageId, name, input, abort.signal, runState),
       })
       session.messages = [...history, ...responseMessages].slice(-40)
     } catch (err) {
@@ -471,6 +561,7 @@ export class CopilotService {
         cancelled = true
       } else {
         const text = err instanceof Error ? err.message : String(err)
+        errorText = errorText ?? text
         console.log(`[ai] error session=${session.id} message=${messageId}: ${redactForLog(text)}`)
         this.options.onEvent({
           type: 'ai-error',
@@ -480,6 +571,23 @@ export class CopilotService {
         })
       }
     } finally {
+      try {
+        await getDb()
+          .uow()
+          .aiSessions.append(session.id, 'assistant', {
+            text: runState.text,
+            reasoning: runState.reasoning,
+            tools: runState.tools,
+            ...(cancelled ? { cancelled: true } : {}),
+            ...(errorText ? { error: errorText } : {}),
+          })
+      } catch (err) {
+        console.log(
+          `[ai] persist error session=${session.id}: ${redactForLog(
+            err instanceof Error ? err.message : String(err),
+          )}`,
+        )
+      }
       this.activeAbort = null
       this.activeSessionId = null
       this.activeMessageId = null
@@ -495,13 +603,19 @@ export class CopilotService {
     }
   }
 
-  private buildTools(session: Session, messageId: string, signal: AbortSignal): ToolSet {
+  private buildTools(
+    session: Session,
+    messageId: string,
+    signal: AbortSignal,
+    runState: RunState,
+  ): ToolSet {
     const tools: ToolSet = {}
     for (const def of COPILOT_TOOL_MAP.values()) {
       tools[def.name] = tool({
         description: def.description,
         inputSchema: def.schema,
-        execute: async (input) => this.executeTool(session, messageId, def, input, signal),
+        execute: async (input) =>
+          this.executeTool(session, messageId, def, input, signal, runState),
       })
     }
     return tools
@@ -513,10 +627,11 @@ export class CopilotService {
     name: string,
     input: unknown,
     signal: AbortSignal,
+    runState: RunState,
   ): Promise<unknown> {
     const def = COPILOT_TOOL_MAP.get(name)
     if (!def) throw new Error(`未知工具：${name}`)
-    return this.executeTool(session, messageId, def, input, signal)
+    return this.executeTool(session, messageId, def, input, signal, runState)
   }
 
   private async executeTool(
@@ -525,16 +640,26 @@ export class CopilotService {
     def: CopilotTool,
     rawInput: unknown,
     signal: AbortSignal,
+    runState: RunState,
   ): Promise<unknown> {
     const input = (rawInput ?? {}) as Record<string, unknown>
     const callId = newId('tc')
+    const label = toolLabel(def.name, input)
+    const stored: AiStoredTool = {
+      id: callId,
+      name: def.name,
+      label,
+      input,
+      status: 'running',
+    }
+    runState.tools.push(stored)
     this.options.onEvent({
       type: 'ai-tool-start',
       sessionId: session.id,
       messageId,
       callId,
       name: def.name,
-      label: toolLabel(def.name, input),
+      label,
       input,
     })
     console.log(`[ai] tool start ${def.name}`)
@@ -551,6 +676,11 @@ export class CopilotService {
       const outcome = await def.run(input, ctx)
       const toolMs = Date.now() - startedAt
       console.log(`[ai] tool ok ${def.name} ${toolMs}ms`)
+      stored.status = 'ok'
+      stored.durationMs = toolMs
+      stored.output = compactToolOutput(def.name, outcome.result)
+      if (outcome.evidenceUrl) stored.evidenceUrl = outcome.evidenceUrl
+      if (outcome.target) stored.target = outcome.target as AiTarget
       this.options.onEvent({
         type: 'ai-tool-end',
         sessionId: session.id,
@@ -561,14 +691,16 @@ export class CopilotService {
         output: outcome.result,
         ...(outcome.evidenceUrl ? { evidenceUrl: outcome.evidenceUrl } : {}),
         ...(outcome.target ? { target: outcome.target as AiTarget } : {}),
-        durationMs: Date.now() - startedAt,
+        durationMs: toolMs,
       })
       return outcome.result
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      console.log(
-        `[ai] tool error ${def.name} ${Date.now() - startedAt}ms: ${redactForLog(message)}`,
-      )
+      const toolMs = Date.now() - startedAt
+      console.log(`[ai] tool error ${def.name} ${toolMs}ms: ${redactForLog(message)}`)
+      stored.status = 'error'
+      stored.durationMs = toolMs
+      stored.error = message
       this.options.onEvent({
         type: 'ai-tool-end',
         sessionId: session.id,
@@ -577,7 +709,7 @@ export class CopilotService {
         name: def.name,
         status: 'error',
         error: message,
-        durationMs: Date.now() - startedAt,
+        durationMs: toolMs,
       })
       // 工具失败回给模型，让它决定重试或换一种方式
       return { error: message }

@@ -5,6 +5,7 @@ import { type EntityManager, MikroORM } from '@mikro-orm/sqlite'
 import Database from 'better-sqlite3'
 import { entities } from './entities.js'
 import { Migration20261019000000_initial } from './migrations/Migration20261019000000_initial.js'
+import { Migration20261019120000AiSessions } from './migrations/Migration20261019120000_ai_sessions.js'
 import { UnitOfWork } from './unit-of-work.js'
 
 export interface InitDbOptions {
@@ -69,7 +70,7 @@ export class AtpDatabase {
       dbName: path,
       extensions: [Migrator],
       migrations: {
-        migrationsList: [Migration20261019000000_initial],
+        migrationsList: [Migration20261019000000_initial, Migration20261019120000AiSessions],
         transactional: true,
         // 迁移由代码显式维护，不需要在运行期回写 schema 快照
         snapshotOnMigrate: false,
