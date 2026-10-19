@@ -46,7 +46,8 @@
       "!**/dist",
       "!**/out",
       "!**/node_modules",
-      "!**/artifacts"
+      "!**/artifacts",
+      "!docs/prototypes"
     ]
   },
   "css": {

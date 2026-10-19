@@ -12,7 +12,6 @@ import { renderUi } from './ui.js'
 
 export interface ServerOptions {
   dataDir: string
-  token: string
   /** 监听端口，0 = 随机 */
   port?: number
   /** 浏览器 UI 构建产物目录；默认 <repo>/apps/web/dist 或包内 web */
@@ -44,8 +43,32 @@ const MIME: Record<string, string> = {
   '.map': 'application/json; charset=utf-8',
 }
 
-function authorized(c: Context, token: string): boolean {
-  return c.req.header('x-atp-token') === token || c.req.query('token') === token
+function isLocalHostname(host: string): boolean {
+  const name = host.replace(/^\[|\]$/g, '').toLowerCase()
+  return name === '127.0.0.1' || name === 'localhost' || name === '::1'
+}
+
+/**
+ * 本机服务只接受本机来源：
+ * - Host 不是 127.0.0.1 / localhost / ::1 时拒绝，防 DNS rebinding；
+ * - 浏览器带 Origin 时必须也是本机来源，防其他网页 CSRF 调本地接口。
+ * 不引入 token、账号或权限层。
+ */
+async function localOnly(c: Context, next: () => Promise<void>): Promise<Response | undefined> {
+  const host = c.req.header('host')
+  if (host) {
+    const hostname = host.replace(/:\d+$/, '')
+    if (!isLocalHostname(hostname)) return c.text('Not found', 404)
+  }
+  const origin = c.req.header('origin')
+  if (origin) {
+    try {
+      if (!isLocalHostname(new URL(origin).hostname)) return c.text('Forbidden', 403)
+    } catch {
+      return c.text('Forbidden', 403)
+    }
+  }
+  await next()
 }
 
 function evidenceContent(file: string): string {
@@ -60,13 +83,12 @@ function evidenceContent(file: string): string {
  * 浏览器侧 window.atp 垫片：invoke → POST /api/invoke，on → SSE。
  * React UI 完全按 Electron preload 的契约工作。
  */
-function shimSource(token: string): string {
+function shimSource(): string {
   return `(() => {
-  const token = ${JSON.stringify(token)};
   const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress'];
   const listeners = new Map(names.map((name) => [name, new Set()]));
   const last = new Map();
-  const source = new EventSource('/events?token=' + encodeURIComponent(token));
+  const source = new EventSource('/events');
   for (const name of names) {
     source.addEventListener(name, (event) => {
       try {
@@ -80,11 +102,10 @@ function shimSource(token: string): string {
   }
   window.atp = {
     mode: 'web',
-    token,
     invoke: async (channel, payload) => {
       const res = await fetch('/api/invoke', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-atp-token': token },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ channel, payload }),
       });
       let data = {};
@@ -107,8 +128,8 @@ function shimSource(token: string): string {
 })();`
 }
 
-function injectShim(html: string, token: string): string {
-  const script = `<script>${shimSource(token)}</script>`
+function injectShim(html: string): string {
+  const script = `<script>${shimSource()}</script>`
   return html.includes('</head>') ? html.replace('</head>', `${script}</head>`) : `${script}${html}`
 }
 
@@ -138,17 +159,17 @@ function fileResponse(target: string, contentType: string, cache: string) {
 
 /** 本地 Agent HTTP 服务：React UI、SSE、invoke、录制/回放 API、证据文件 */
 export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServer {
-  const { token } = opts
   const rendererDir = opts.rendererDir ?? defaultRendererDir()
   const hasRenderer = existsSync(join(rendererDir, 'index.html'))
   const invoke: InvokeRouter = createInvokeRouter(agent, opts.dataDir)
 
   const app = new Hono()
+  app.use('*', localOnly)
 
   app.get('/favicon.ico', () => new Response(null, { status: 204 }))
   app.get('/demo', (c) => c.html(demoHtml()))
 
-  // 静态资源不校验 token：它们只是前端代码，敏感数据都走 /api 与 /evidence
+  // 静态资源只提供前端代码；接口与证据统一走 localOnly。
   app.get('/assets/*', async (c) => {
     if (!hasRenderer) return c.text('前端尚未构建，请先执行 pnpm build', 404)
     const target = safeJoin(rendererDir, c.req.path.replace(/^\/+/, ''))
@@ -163,24 +184,12 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
   })
 
   app.get('/', async (c) => {
-    if (!authorized(c, token)) return c.text('缺少访问 token，请使用启动时打印的地址', 401)
-    if (!hasRenderer) return c.html(renderUi(token))
+    if (!hasRenderer) return c.html(renderUi())
     const html = await readFile(join(rendererDir, 'index.html'), 'utf8')
-    return c.html(injectShim(html, token))
+    return c.html(injectShim(html))
   })
 
-  app.get('/simple', (c) => {
-    if (!authorized(c, token)) return c.text('缺少访问 token，请使用启动时打印的地址', 401)
-    return c.html(renderUi(token))
-  })
-
-  const guard = async (c: Context, next: () => Promise<void>) => {
-    if (!authorized(c, token)) return c.json({ error: '未授权' }, 401)
-    await next()
-  }
-  app.use('/events', guard)
-  app.use('/api/*', guard)
-  app.use('/evidence/*', guard)
+  app.get('/simple', (c) => c.html(renderUi()))
 
   app.get('/events', (c) =>
     streamSSE(c, async (stream) => {

@@ -8,7 +8,7 @@ atp-agent --demo
 atp-agent --url http://localhost:8080
 ```
 
-- 启动后打印带 token 的本地 UI 地址，并自动打开浏览器。
+- 启动后打印本地 UI 地址，并自动打开浏览器。
 - 默认数据目录 `~/.atp-agent`：SQLite、Chrome profile、截图/视频证据。
 - 录制结束后生成意图层：可读步骤、下拉合并、弹窗分组、一句话摘要；原始步骤可切换查看。
 - `atp-agent doctor` 自检环境；`atp-agent install-browser` 安装 Playwright Chromium。

@@ -17,23 +17,11 @@ const { chromium } = require('playwright')
 
 const cli = resolve(import.meta.dirname, '../apps/agent/dist/cli.js')
 const dataDir = await mkdtemp(join(tmpdir(), 'atp-agent-e2e-'))
-const token = 'e2e'
 
 function startAgent() {
   const child = spawn(
     process.execPath,
-    [
-      cli,
-      '--demo',
-      '--no-open',
-      '--headless',
-      '--port',
-      '0',
-      '--data-dir',
-      dataDir,
-      '--token',
-      token,
-    ],
+    [cli, '--demo', '--no-open', '--headless', '--port', '0', '--data-dir', dataDir],
     { stdio: ['ignore', 'pipe', 'pipe'] },
   )
   let output = ''
@@ -74,7 +62,7 @@ async function stop(child) {
 async function invoke(origin, channel, payload) {
   const res = await fetch(`${origin}/api/invoke`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-atp-token': token },
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ channel, payload }),
   })
   const data = await res.json()
@@ -114,7 +102,7 @@ try {
   await page.waitForTimeout(300)
   const demo = await fetch(`${origin}/api/demo`, {
     method: 'POST',
-    headers: { 'x-atp-token': token },
+    headers: {},
   })
   if (!demo.ok) throw new Error(`演示操作失败：HTTP ${demo.status}`)
 

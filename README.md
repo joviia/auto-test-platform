@@ -47,7 +47,7 @@ atp-agent --demo
 atp-agent --url http://localhost:8080
 ```
 
-启动后终端会打印带 token 的本地 UI 地址，并自动打开浏览器。录制时直接操作真实 Chrome，停止后可在 UI 中保存与回放。
+启动后终端会打印本地 UI 地址，并自动打开浏览器。录制时直接操作真实 Chrome，停止后可在 UI 中保存与回放。
 
 ## 常用命令
 
@@ -72,7 +72,7 @@ atp-agent update             # npm 模式安装最新版；bundle 模式下载�
 atp-agent version [--json]   # 版本与安装形态
 ```
 
-`start` 选项：`--url`、`--demo`、`--port`、`--data-dir`、`--profile`、`--token`、`--headless`、`--no-open`、`--no-update-check`。
+`start` 选项：`--url`、`--demo`、`--port`、`--data-dir`、`--profile`、`--headless`、`--no-open`、`--no-update-check`。
 
 ## 目录结构
 
@@ -96,7 +96,7 @@ atp.db                # SQLite（WAL）
 profile/              # Chrome 专用 profile
 runs/<runId>/         # 步骤截图、视频
 exports/              # 导出的 Playwright spec
-agent.json            # 运行中实例的端口/token（0600）
+agent.json            # 运行中实例的端口与数据目录（0600）
 update-check.json     # 更新检查缓存
 ```
 

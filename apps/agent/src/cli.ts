@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { homedir } from 'node:os'
@@ -26,7 +25,6 @@ interface StartOptions {
   port?: string
   dataDir?: string
   profile?: string
-  token?: string
   headless: boolean
   open: boolean
   updateCheck: boolean
@@ -35,7 +33,6 @@ interface StartOptions {
 interface AgentInfo {
   pid: number
   origin: string
-  token: string
   dataDir: string
   startedAt: string
   version: string
@@ -67,7 +64,6 @@ async function start(opts: StartOptions): Promise<void> {
   const dataDir = dataDirOf(opts)
   mkdirSync(dataDir, { recursive: true })
   const profileDir = opts.profile ?? join(dataDir, 'profile')
-  const token = opts.token ?? randomBytes(16).toString('hex')
   const headless = opts.headless
   const port = opts.port ? Number(opts.port) : 0
   if (!Number.isInteger(port) || port < 0 || port > 65535) {
@@ -83,7 +79,7 @@ async function start(opts: StartOptions): Promise<void> {
   })
 
   const agent = new Agent({ dataDir, profileDir, headless, demoUrl: '' })
-  const server = createAgentServer(agent, { dataDir, token, port })
+  const server = createAgentServer(agent, { dataDir, port })
   let info: AgentInfo | null = null
 
   const shutdown = async (): Promise<void> => {
@@ -97,13 +93,12 @@ async function start(opts: StartOptions): Promise<void> {
   try {
     const { origin } = await server.start()
     const demoUrl = `${origin}/demo`
-    const uiUrl = `${origin}/?token=${encodeURIComponent(token)}`
+    const uiUrl = `${origin}/`
     agent.setDemoUrl(demoUrl)
 
     info = {
       pid: process.pid,
       origin,
-      token,
       dataDir,
       startedAt: new Date().toISOString(),
       version: VERSION,
@@ -259,7 +254,6 @@ program
   .option('--port <端口>', '本地服务端口，默认随机')
   .option('--data-dir <目录>', '数据目录，默认 ~/.atp-agent')
   .option('--profile <目录>', 'Chrome 专用 profile，默认 <data-dir>/profile')
-  .option('--token <token>', '访问 token，默认随机生成')
   .option('--headless', '不显示 Chrome 窗口（CI/无桌面环境）', false)
   .addOption(new Option('--no-open', '不自动打开浏览器'))
   .addOption(new Option('--no-update-check', '启动后不检查更新'))

@@ -13,7 +13,7 @@ function toEvidenceUrl(path: string | null | undefined): string | undefined {
   const idx = path.indexOf('runs/')
   if (idx < 0) return undefined
   const rel = path.slice(idx + 5)
-  return `/evidence/${rel}?token=${encodeURIComponent(window.atp.token ?? '')}`
+  return `/evidence/${rel}`
 }
 
 const ACTION_LABEL: Record<string, string> = {

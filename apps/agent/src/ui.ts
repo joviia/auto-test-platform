@@ -1,5 +1,5 @@
 /** Agent 自带的最小 Web UI：录制、保存、回放、演示 */
-export function renderUi(token: string): string {
+export function renderUi(): string {
   const html = `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -119,7 +119,6 @@ export function renderUi(token: string): string {
 </main>
 <div id="toast"></div>
 <script>
-  var TOKEN = __ATP_TOKEN__;
   var state = { engine: '', url: '', recording: false, replaying: false, cases: [], steps: [], draft: null, result: null };
   var $ = function (id) { return document.getElementById(id); };
   var ACTION = { click:'点击', fill:'输入', select:'选择', press:'按键', scroll:'滚动', drag:'拖拽', assert:'断言' };
@@ -129,7 +128,6 @@ export function renderUi(token: string): string {
       return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
     });
   }
-  function withToken(path) { return path + (path.indexOf('?') >= 0 ? '&' : '?') + 'token=' + encodeURIComponent(TOKEN); }
   function toast(message, bad) {
     var el = $('toast');
     el.textContent = message;
@@ -140,7 +138,7 @@ export function renderUi(token: string): string {
   async function api(path, body) {
     var res = await fetch(path, {
       method: body === undefined ? 'GET' : 'POST',
-      headers: { 'content-type': 'application/json', 'x-atp-token': TOKEN },
+      headers: { 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     var data = await res.json().catch(function () { return {}; });
@@ -201,7 +199,7 @@ export function renderUi(token: string): string {
     if (r.error) html += '<p class="err">' + esc(r.error) + '</p>';
     html += r.steps.map(function (s) {
       var ok = s.status === 'passed';
-      var img = s.screenshotUrl ? '<img src="' + esc(withToken(s.screenshotUrl)) + '" alt="步骤截图" />' : '';
+      var img = s.screenshotUrl ? '<img src="' + esc(s.screenshotUrl) + '" alt="步骤截图" />' : '';
       var err = s.error ? '<div class="err">' + esc(s.error) + '</div>' : '';
       return '<div class="rstep ' + (ok ? '' : 'fail') + '"><div class="top"><span class="badge ' +
         (ok ? 'ok' : 'fail') + '">' + (ok ? '通过' : '失败') + '</span><span class="muted">#' +
@@ -211,7 +209,7 @@ export function renderUi(token: string): string {
     $('result').innerHTML = html;
   }
   function connect() {
-    var es = new EventSource(withToken('/events'));
+    var es = new EventSource('/events');
     es.addEventListener('status', function (m) {
       var d = JSON.parse(m.data);
       state.engine = d.engine; state.url = d.url; state.recording = d.recording; state.replaying = d.replaying;
@@ -299,5 +297,5 @@ export function renderUi(token: string): string {
 </script>
 </body>
 </html>`
-  return html.replace('__ATP_TOKEN__', JSON.stringify(token))
+  return html
 }
