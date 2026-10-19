@@ -269,6 +269,61 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
 
   app.get('/api/state', async (c) => c.json(await agent.describe()))
 
+  /**
+   * 真实 Chrome 的只读实时画面（MJPEG）。
+   * `<img src="/api/live/stream">` 即可直接显示，不需要额外的前端解码。
+   */
+  app.get('/api/live/stream', (c) => {
+    const boundary = 'atpframe'
+    let unsubscribe: (() => void) | null = null
+    let closed = false
+    const close = (): void => {
+      if (closed) return
+      closed = true
+      unsubscribe?.()
+      unsubscribe = null
+    }
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const write = (frame: Buffer): void => {
+          if (closed) return
+          // 订阅者读得慢时丢帧，只保留最新画面
+          if (controller.desiredSize !== null && controller.desiredSize <= 0) return
+          try {
+            controller.enqueue(
+              Buffer.concat([
+                Buffer.from(
+                  `--${boundary}\r\nContent-Type: image/jpeg\r\nContent-Length: ${frame.length}\r\n\r\n`,
+                ),
+                frame,
+                Buffer.from('\r\n'),
+              ]),
+            )
+          } catch {
+            close()
+          }
+        }
+        try {
+          unsubscribe = agent.subscribeLive(write)
+        } catch {
+          close()
+          controller.close()
+        }
+      },
+      cancel() {
+        close()
+      },
+    })
+    c.req.raw.signal.addEventListener('abort', close, { once: true })
+    return new Response(stream, {
+      headers: {
+        'content-type': `multipart/x-mixed-replace; boundary=${boundary}`,
+        'cache-control': 'no-store, no-transform',
+        'x-accel-buffering': 'no',
+      },
+    })
+  })
+
   app.post('/api/navigate', async (c) => {
     const body = await c.req.json<{ url?: unknown }>().catch(() => ({}) as { url?: unknown })
     const target = typeof body.url === 'string' ? body.url : ''

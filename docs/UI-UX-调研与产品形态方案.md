@@ -164,7 +164,20 @@ cdp.on('Page.screencastFrame', async ({ data, sessionId }) => {
 3. **多标签页**：当前只镜像受控 page；多标签页录制仍在 backlog。
 4. **性能**：低配机器上 JPEG 编码约 2–3% CPU；默认 5–8 fps，可在设置里降为「仅步骤截图」。
 
-## 7. 参考
+## 7. Stage 1 实现记录（2026-10-19）
+
+Stage 1 已按方案落地：
+
+- Agent 新增 `LiveView`：CDP `Page.startScreencast` + 逐帧 ack，只保留最新帧，按 8 fps 上限分发。
+- `GET /api/live/stream` 返回 `multipart/x-mixed-replace`（MJPEG），UI 用 `<img>` 直接显示。
+- 订阅生命周期：首个订阅者接入才启动，最后一个离开 1.2s 后停止；页面重建时重绑。
+- 遮挡问题：Chrome 窗口在后台时默认停止重绘，启动参数关闭后台节流；再加 watchdog，2s 无新帧时用截图兜底。
+- UI：`LiveMirror` 负责连接/断线重连/兜底态；左上角「实时镜像 · 只读」，右上角「在 Chrome 中接管」。
+- E2E 增加实时镜像断言：中栏 `<img>` 的首帧必须成功解码。
+
+仍未做（按计划留给 Stage 3）：输入转发、接管/交还模式、多标签页镜像。
+
+## 8. 参考
 
 - Playwright UI Mode / Trace Viewer：https://playwright.dev/docs/test-ui-mode
 - Cypress Open Mode（Command Log、time travel）：https://docs.cypress.io/app/core-concepts/open-mode

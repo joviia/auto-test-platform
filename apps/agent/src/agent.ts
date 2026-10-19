@@ -128,6 +128,11 @@ export class Agent {
     await this.requireBrowser().focus()
   }
 
+  /** 订阅真实 Chrome 的只读实时画面（JPEG 帧） */
+  subscribeLive(listener: (frame: Buffer) => void): () => void {
+    return this.requireBrowser().live.subscribe(listener)
+  }
+
   async emulate(metrics: DeviceMetrics | null): Promise<void> {
     await this.requireBrowser().emulate(metrics)
   }

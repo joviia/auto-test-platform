@@ -98,6 +98,17 @@ try {
   await page.getByPlaceholder(/输入被测页面地址，回车打开/).waitFor({ state: 'visible' })
   await page.waitForTimeout(300)
 
+  // 实时镜像：真实 Chrome 画面通过 MJPEG 显示在中栏
+  await page.waitForFunction(
+    () => {
+      const img = document.querySelector('img[alt="Chrome 实时画面"]')
+      return img instanceof HTMLImageElement && img.complete && img.naturalWidth > 0
+    },
+    null,
+    { timeout: 20_000 },
+  )
+  console.log('[agent] 实时镜像 ✓')
+
   // 录制：UI 负责开关，演示操作由内置脚本完成（真实 Chrome 里执行）
   await page.getByRole('button', { name: '开始录制' }).click()
   await page.waitForTimeout(300)
@@ -174,7 +185,7 @@ try {
   await runButton.first().click()
   await page.waitForTimeout(500)
   const images = await page
-    .locator('img')
+    .locator('img[src^="/evidence/"]')
     .evaluateAll((els) =>
       els.map((el) => ({ src: el.getAttribute('src'), width: el.naturalWidth })),
     )

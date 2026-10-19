@@ -27,6 +27,7 @@ import {
   useUiStore,
 } from '../state/ui-store'
 import { DEVICE_PRESETS, deviceSize, getDevicePreset } from './devices'
+import { LiveMirror } from './LiveMirror'
 
 const ZOOM_OPTIONS: Array<{ value: DeviceZoom; label: string }> = [
   { value: 'fit', label: '适应舞台' },
@@ -472,7 +473,8 @@ export function BrowserStage() {
             {elapsed}
           </span>
           <span className="ml-1 truncate text-muted">
-            操作中间的页面，步骤实时出现在右侧；点击「断言」后点选目标即可插入断言
+            {webMode ? '操作真实 Chrome 窗口' : '操作中间的页面'}
+            ，步骤实时出现在右侧；点击「断言」后点选目标即可插入断言
           </span>
           <Button
             size="sm"
@@ -535,33 +537,7 @@ export function BrowserStage() {
 
       <div ref={stageRef} className="atp-stage relative min-h-0 flex-1 overflow-hidden">
         {webMode ? (
-          <div className="absolute inset-0 grid place-items-center p-6">
-            <div className="max-w-md text-center">
-              <div className="mx-auto grid size-12 place-items-center rounded-xl border border-border bg-surface-secondary text-muted">
-                <Globe size={22} />
-              </div>
-              <h3 className="mt-3 text-sm font-semibold">被测页面在真实 Chrome 窗口中运行</h3>
-              <p className="mt-1 text-xs leading-5 text-muted">
-                录制与回放都发生在启动 Agent 时打开的那个 Chrome 窗口；这里展示步骤、进度与结果。
-              </p>
-              {url && (
-                <p className="mt-3 truncate rounded-md border border-border bg-surface-secondary px-2 py-1 font-mono text-[11px] text-muted">
-                  {url}
-                </p>
-              )}
-              <div className="mt-4 flex items-center justify-center gap-2">
-                <Button size="sm" variant="secondary" onPress={() => void focusChrome()}>
-                  聚焦 Chrome 窗口
-                </Button>
-                {recording && (
-                  <span className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400">
-                    <span className="atp-rec-dot size-2 rounded-full bg-red-500" />
-                    录制中
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
+          <LiveMirror onTakeover={() => void focusChrome()} />
         ) : (
           !url &&
           !recording && (

@@ -11,6 +11,7 @@ import {
 } from '@atp/recorder'
 import { runCaseOnPage } from '@atp/runner'
 import { type BrowserContext, type CDPSession, chromium, type Frame, type Page } from 'playwright'
+import { LiveView } from './live-view.js'
 
 export type BrowserEvent =
   | { type: 'recording-step'; step: LiveStep }
@@ -106,6 +107,7 @@ export class ChromeController {
   private assertionArmed = false
   private assertionSteps: Step[] = []
   private assertionElements: Record<string, Element> = {}
+  readonly live: LiveView
 
   private constructor(
     readonly context: BrowserContext,
@@ -113,6 +115,7 @@ export class ChromeController {
     private readonly options: BrowserOptions,
   ) {
     this.page = context.pages()[0] as Page
+    this.live = new LiveView(() => (this.page && !this.page.isClosed() ? this.page : null))
   }
 
   static async launch(options: BrowserOptions): Promise<ChromeController> {
@@ -127,7 +130,14 @@ export class ChromeController {
           ...(attempt.channel ? { channel: attempt.channel } : {}),
           headless: options.headless,
           viewport: { width: 1280, height: 800 },
-          args: ['--no-first-run', '--no-default-browser-check'],
+          args: [
+            '--no-first-run',
+            '--no-default-browser-check',
+            // 窗口被遮挡时 Chrome 默认会停止重绘，实时镜像会停在旧帧
+            '--disable-backgrounding-occluded-windows',
+            '--disable-renderer-backgrounding',
+            '--disable-background-timer-throttling',
+          ],
         })
         const version = context.browser()?.version()
         const engine = version ? `${attempt.label} ${version}` : attempt.label
@@ -151,13 +161,17 @@ export class ChromeController {
     await this.context.addInitScript({ content: INIT_SCRIPT })
     this.page = await this.ensurePage()
     this.context.on('page', (page) => {
-      if (this.page.isClosed()) this.page = page
+      if (this.page.isClosed()) {
+        this.page = page
+        void this.live.rebind()
+      }
     })
   }
 
   private async ensurePage(): Promise<Page> {
     if (!this.page || this.page.isClosed()) {
       this.page = await this.context.newPage()
+      void this.live.rebind()
     }
     return this.page
   }
@@ -333,6 +347,7 @@ export class ChromeController {
   }
 
   async close(): Promise<void> {
+    await this.live.stop()
     await this.cdp?.detach().catch(() => undefined)
     this.cdp = null
     await this.context.close()
