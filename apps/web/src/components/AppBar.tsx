@@ -1,5 +1,5 @@
 import { Dropdown, Tooltip } from '@heroui/react'
-import { ChevronDown, FlaskConical, FolderKanban, Monitor, Moon, Sun } from 'lucide-react'
+import { ChevronDown, FlaskConical, FolderKanban, Monitor, Moon, Sparkles, Sun } from 'lucide-react'
 import { useCases, usePlans, useProjects } from '../api/client'
 import { useUiStore } from '../state/ui-store'
 
@@ -15,6 +15,8 @@ export function AppBar() {
   const theme = useUiStore((s) => s.theme)
   const setTheme = useUiStore((s) => s.setTheme)
   const navTab = useUiStore((s) => s.navTab)
+  const setAiOpen = useUiStore((s) => s.setAiOpen)
+  const setRightTab = useUiStore((s) => s.setRightTab)
 
   const { data: cases = [] } = useCases(currentProjectId)
   const { data: plans = [] } = usePlans(currentProjectId)
@@ -78,6 +80,26 @@ export function AppBar() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        <Tooltip.Root>
+          <Tooltip.Trigger>
+            <button
+              type="button"
+              onClick={() => {
+                setAiOpen(true)
+                setRightTab('copilot')
+              }}
+              className="flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-muted outline-none transition-colors hover:bg-accent/[0.07] hover:text-accent"
+              aria-label="打开 Copilot"
+            >
+              <Sparkles size={14} className="text-accent" />
+              Copilot
+              <kbd className="rounded border border-border bg-surface-secondary px-1 font-mono text-[9px] font-normal text-muted">
+                ⌘K
+              </kbd>
+            </button>
+          </Tooltip.Trigger>
+          <Tooltip.Content>问 Copilot，或让 Agent 操作页面（⌘K）</Tooltip.Content>
+        </Tooltip.Root>
         <Tooltip.Root>
           <Tooltip.Trigger>
             <button

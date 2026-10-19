@@ -1,5 +1,15 @@
-import type { CaseGroup, Element, IpcEventPayload, LiveStep, Step } from '@atp/model'
+import type {
+  AiConfig,
+  AiToolEndPayload,
+  AiToolStartPayload,
+  CaseGroup,
+  Element,
+  IpcEventPayload,
+  LiveStep,
+  Step,
+} from '@atp/model'
 import { create } from 'zustand'
+import type { AiContext, AiMessage, AiRightTab, AiSeed } from '../ai/types'
 
 export type SelectedNode = { kind: 'project' | 'module' | 'case' | 'plan'; id: string }
 
@@ -36,6 +46,27 @@ export interface RecordingDraft {
 const THEME_KEY = 'atp.theme'
 const DEVICE_KEY = 'atp.device'
 const REPLAY_MODE_KEY = 'atp.replayMode'
+const RIGHT_WIDTH_KEY = 'atp.rightWidth'
+const RIGHT_MIN = 360
+const RIGHT_MAX = 560
+
+function readRightWidth(): number {
+  try {
+    const value = Number(localStorage.getItem(RIGHT_WIDTH_KEY))
+    if (Number.isFinite(value) && value >= RIGHT_MIN && value <= RIGHT_MAX) return value
+  } catch {
+    // 忽略
+  }
+  return 404
+}
+
+function storeRightWidth(width: number): void {
+  try {
+    localStorage.setItem(RIGHT_WIDTH_KEY, String(width))
+  } catch {
+    // 忽略
+  }
+}
 
 function readStoredTheme(): ThemePreference {
   try {
@@ -160,9 +191,48 @@ interface UiState {
 
   planProgress: IpcEventPayload<'event:plan-progress'> | null
   setPlanProgress: (progress: IpcEventPayload<'event:plan-progress'> | null) => void
+
+  /** 右侧面板宽度（可拖拽） */
+  rightWidth: number
+  setRightWidth: (width: number) => void
+
+  /** 右侧当前页签 */
+  rightTab: AiRightTab
+  setRightTab: (tab: AiRightTab) => void
+
+  /** Copilot 是否占用右侧面板（启动台整幅模式下也能打开） */
+  aiOpen: boolean
+  setAiOpen: (open: boolean) => void
+  aiConfig: AiConfig | null
+  setAiConfig: (config: AiConfig | null) => void
+
+  aiSessionId: string | null
+  aiMessages: AiMessage[]
+  aiRunning: boolean
+  aiStartedAt: number | null
+  aiActiveTool: { callId: string; name: string; label: string; startedAt: number } | null
+  aiTarget: { target: NonNullable<AiToolEndPayload['target']>; label: string } | null
+  aiSeed: AiSeed | null
+
+  addAiUserMessage: (text: string) => void
+  startAiMessage: (sessionId: string, messageId: string) => void
+  setAiRunning: (running: boolean) => void
+  appendAiDelta: (messageId: string, kind: 'text' | 'reasoning', text: string) => void
+  startAiTool: (messageId: string, payload: AiToolStartPayload) => void
+  endAiTool: (messageId: string, payload: AiToolEndPayload) => void
+  finishAiMessage: (messageId: string, cancelled?: boolean) => void
+  failAiMessage: (messageId: string, error: string) => void
+  addAiErrorMessage: (error: string) => void
+  requestAi: (message: string, context?: AiContext) => void
+  consumeAiSeed: (id: string) => void
+  resetAi: () => void
 }
 
 const initialDevice = readStoredDevice()
+
+function newAiId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+}
 
 export const useUiStore = create<UiState>((set, get) => ({
   selected: null,
@@ -238,4 +308,214 @@ export const useUiStore = create<UiState>((set, get) => ({
 
   planProgress: null,
   setPlanProgress: (planProgress) => set({ planProgress }),
+
+  rightWidth: readRightWidth(),
+  setRightWidth: (width) => {
+    const next = Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, Math.round(width)))
+    storeRightWidth(next)
+    set({ rightWidth: next })
+  },
+
+  rightTab: 'steps',
+  setRightTab: (rightTab) => set({ rightTab }),
+
+  aiOpen: false,
+  setAiOpen: (aiOpen) => set({ aiOpen }),
+  aiConfig: null,
+  setAiConfig: (aiConfig) => set({ aiConfig }),
+
+  aiSessionId: null,
+  aiMessages: [],
+  aiRunning: false,
+  aiStartedAt: null,
+  aiActiveTool: null,
+  aiTarget: null,
+  aiSeed: null,
+
+  addAiUserMessage: (text) =>
+    set((s) => ({
+      aiMessages: [
+        ...s.aiMessages,
+        {
+          id: newAiId('u'),
+          role: 'user' as const,
+          text,
+          reasoning: '',
+          tools: [],
+          pending: false,
+        },
+      ],
+      aiOpen: true,
+      rightTab: 'copilot' as const,
+    })),
+
+  startAiMessage: (sessionId, messageId) =>
+    set((s) => ({
+      aiSessionId: sessionId,
+      aiRunning: true,
+      aiStartedAt: s.aiStartedAt ?? Date.now(),
+      aiMessages: s.aiMessages.some((message) => message.id === messageId)
+        ? s.aiMessages
+        : [
+            ...s.aiMessages,
+            {
+              id: messageId,
+              role: 'assistant' as const,
+              text: '',
+              reasoning: '',
+              tools: [],
+              pending: true,
+            },
+          ],
+    })),
+
+  appendAiDelta: (messageId, kind, text) =>
+    set((s) => ({
+      aiMessages: s.aiMessages.map((message) =>
+        message.id === messageId
+          ? kind === 'text'
+            ? { ...message, text: message.text + text }
+            : { ...message, reasoning: message.reasoning + text }
+          : message,
+      ),
+    })),
+
+  startAiTool: (messageId, payload) =>
+    set((s) => ({
+      aiActiveTool: {
+        callId: payload.callId,
+        name: payload.name,
+        label: payload.label,
+        startedAt: Date.now(),
+      },
+      aiTarget: null,
+      aiMessages: s.aiMessages.map((message) =>
+        message.id === messageId
+          ? {
+              ...message,
+              tools: [
+                ...message.tools,
+                {
+                  id: payload.callId,
+                  name: payload.name,
+                  label: payload.label,
+                  input: payload.input,
+                  status: 'running' as const,
+                },
+              ],
+            }
+          : message,
+      ),
+    })),
+
+  endAiTool: (messageId, payload) =>
+    set((s) => {
+      const message = s.aiMessages.find((item) => item.id === messageId)
+      const tool = message?.tools.find((item) => item.id === payload.callId)
+      const label = tool?.label ?? payload.callId
+      // Copilot 观察/导航到的页面立即成为舞台内容：
+      // 启动台上发起的任务也能在中间看到 Agent 的操作
+      const observedUrl =
+        payload.status === 'ok' && payload.output && typeof payload.output === 'object'
+          ? (payload.output as { url?: unknown }).url
+          : undefined
+      const stageUrl =
+        typeof observedUrl === 'string' && /^(https?|file):/i.test(observedUrl)
+          ? observedUrl
+          : undefined
+      return {
+        ...(stageUrl ? { url: stageUrl } : {}),
+        aiActiveTool: s.aiActiveTool?.callId === payload.callId ? null : s.aiActiveTool,
+        aiTarget:
+          payload.status === 'ok' && payload.target
+            ? { target: payload.target, label }
+            : s.aiTarget,
+        aiMessages: s.aiMessages.map((item) =>
+          item.id === messageId
+            ? {
+                ...item,
+                tools: item.tools.map((call) =>
+                  call.id === payload.callId
+                    ? {
+                        ...call,
+                        status: payload.status,
+                        durationMs: payload.durationMs,
+                        ...(payload.output !== undefined ? { output: payload.output } : {}),
+                        ...(payload.error ? { error: payload.error } : {}),
+                        ...(payload.evidenceUrl ? { evidenceUrl: payload.evidenceUrl } : {}),
+                        ...(payload.target ? { target: payload.target } : {}),
+                      }
+                    : call,
+                ),
+              }
+            : item,
+        ),
+      }
+    }),
+
+  finishAiMessage: (messageId, cancelled) =>
+    set((s) => ({
+      aiRunning: false,
+      aiStartedAt: null,
+      aiActiveTool: null,
+      aiSeed: null,
+      aiMessages: s.aiMessages.map((message) =>
+        message.id === messageId
+          ? {
+              ...message,
+              pending: false,
+              ...(cancelled ? { cancelled: true } : {}),
+            }
+          : message,
+      ),
+    })),
+
+  setAiRunning: (aiRunning) =>
+    set((s) => ({ aiRunning, aiStartedAt: aiRunning ? (s.aiStartedAt ?? Date.now()) : null })),
+
+  failAiMessage: (messageId, error) =>
+    set((s) => ({
+      aiMessages: s.aiMessages.map((message) =>
+        message.id === messageId ? { ...message, error } : message,
+      ),
+    })),
+
+  addAiErrorMessage: (error) =>
+    set((s) => ({
+      aiRunning: false,
+      aiStartedAt: null,
+      aiActiveTool: null,
+      aiMessages: [
+        ...s.aiMessages,
+        {
+          id: newAiId('e'),
+          role: 'assistant' as const,
+          text: '',
+          reasoning: '',
+          tools: [],
+          pending: false,
+          error,
+        },
+      ],
+    })),
+
+  requestAi: (message, context) =>
+    set({
+      aiOpen: true,
+      rightTab: 'copilot',
+      aiSeed: { id: newAiId('seed'), message, ...(context ? { context } : {}) },
+    }),
+
+  consumeAiSeed: (id) => set((s) => (s.aiSeed?.id === id ? { aiSeed: null } : {})),
+
+  resetAi: () =>
+    set({
+      aiSessionId: null,
+      aiMessages: [],
+      aiRunning: false,
+      aiStartedAt: null,
+      aiActiveTool: null,
+      aiTarget: null,
+      aiSeed: null,
+    }),
 }))

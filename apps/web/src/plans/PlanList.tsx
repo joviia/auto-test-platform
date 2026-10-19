@@ -43,6 +43,7 @@ function StatusChip({ status }: { status: PlanRow['lastRunStatus'] }) {
 export function PlanList() {
   const selected = useUiStore((s) => s.selected)
   const setSelected = useUiStore((s) => s.setSelected)
+  const setAiOpen = useUiStore((s) => s.setAiOpen)
   const currentProjectId = useUiStore((s) => s.currentProjectId)
   const qc = useQueryClient()
 
@@ -201,7 +202,10 @@ export function PlanList() {
                       >
                         <button
                           type="button"
-                          onClick={() => setSelected({ kind: 'plan', id: plan.id })}
+                          onClick={() => {
+                            setAiOpen(false)
+                            setSelected({ kind: 'plan', id: plan.id })
+                          }}
                           className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-left outline-none"
                         >
                           <StatusChip status={plan.lastRunStatus} />
@@ -261,7 +265,10 @@ export function PlanList() {
           projectId={currentProjectId}
           planId={planDialog.id}
           onClose={() => setPlanDialog(null)}
-          onSaved={(id) => setSelected({ kind: 'plan', id })}
+          onSaved={(id) => {
+            setAiOpen(false)
+            setSelected({ kind: 'plan', id })
+          }}
         />
       )}
 

@@ -1,12 +1,20 @@
 import { basename } from 'node:path'
 import { getDb, initDb, initEvidence, runDir } from '@atp/core'
-import type { CaseRow, IpcEventPayload, LiveStep, StepResult } from '@atp/model'
+import type {
+  AiConfig,
+  AiSendInput,
+  CaseRow,
+  IpcEventPayload,
+  LiveStep,
+  StepResult,
+} from '@atp/model'
 import {
   type BrowserEvent,
   ChromeController,
   type DeviceMetrics,
   type RecordedDraft,
 } from './browser.js'
+import { type CopilotEvent, CopilotService } from './copilot/service.js'
 import { isPlanRunning, startPlanRun, stopPlanRun } from './plan-runner.js'
 
 export interface AgentOptions {
@@ -54,6 +62,7 @@ export type AgentEvent =
   | { type: 'plan-progress'; progress: IpcEventPayload<'event:plan-progress'> }
   | { type: 'cases'; cases: CaseRow[] }
   | { type: 'error'; message: string }
+  | CopilotEvent
 
 /** 本地 Agent：SQLite 用例仓 + 真实 Chrome + 事件总线 */
 export class Agent {
@@ -62,6 +71,7 @@ export class Agent {
   private replayAbort: AbortController | null = null
   private listeners = new Set<(event: AgentEvent) => void>()
   private started = false
+  private copilot: CopilotService | null = null
 
   constructor(private readonly options: AgentOptions) {}
 
@@ -78,6 +88,12 @@ export class Agent {
       headless: this.options.headless,
       onEvent: (event) => this.onBrowserEvent(event),
     })
+    this.copilot = new CopilotService({
+      dataDir: this.options.dataDir,
+      getBrowser: () => this.browser,
+      onEvent: (event) => this.emit(event),
+    })
+    await this.copilot.init()
     if (initialUrl) {
       await this.browser.navigate(initialUrl).catch((err: unknown) => {
         this.emit({ type: 'error', message: err instanceof Error ? err.message : String(err) })
@@ -274,11 +290,35 @@ export class Agent {
     this.emitStatus()
   }
 
+  async aiSend(input: AiSendInput): Promise<{ sessionId: string; messageId: string }> {
+    if (!this.copilot) throw new Error('Copilot 尚未初始化')
+    return this.copilot.send(input)
+  }
+
+  aiCancel(sessionId?: string): { ok: true } {
+    return this.copilot?.cancel(sessionId) ?? { ok: true }
+  }
+
+  aiConfig(): AiConfig {
+    return (
+      this.copilot?.aiConfig ?? {
+        ready: false,
+        provider: 'stub',
+        model: 'stub',
+        stub: true,
+        reason: 'Copilot 尚未初始化',
+        env: [],
+      }
+    )
+  }
+
   async close(): Promise<void> {
+    this.aiCancel()
     this.stopReplay()
     this.stopPlan()
     await this.browser?.close()
     this.browser = null
+    this.copilot = null
     this.listeners.clear()
   }
 

@@ -1,6 +1,7 @@
+import type { AiTarget } from '@atp/model'
 import { Button } from '@heroui/react'
 import { Globe, Loader2, MonitorPlay } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 const RETRY_MS = 3000
 
@@ -10,9 +11,77 @@ const RETRY_MS = 3000
  * Agent 用 CDP screencast 推 JPEG 帧，这里用 `<img>` 直接吃 MJPEG，
  * 不做输入转发：需要操作时用「在 Chrome 中接管」回到真实窗口。
  */
-export function LiveMirror({ onTakeover }: { onTakeover: () => void }) {
+interface MirrorHighlight {
+  target: AiTarget
+  label: string
+}
+
+interface Box {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+export function LiveMirror({
+  onTakeover,
+  highlight,
+}: {
+  onTakeover: () => void
+  highlight?: MirrorHighlight | null
+}) {
   const [epoch, setEpoch] = useState(0)
   const [status, setStatus] = useState<'connecting' | 'live' | 'error'>('connecting')
+  const [imageBox, setImageBox] = useState<Box | null>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const imageRef = useRef<HTMLImageElement>(null)
+
+  // 镜像按 object-contain 显示，记下图片实际占用的矩形，用来把页面坐标映射到舞台
+  useLayoutEffect(() => {
+    const update = (): void => {
+      const root = rootRef.current
+      const image = imageRef.current
+      if (!root || !image) return
+      if (!image.complete || image.naturalWidth === 0) return
+      const imageRect = image.getBoundingClientRect()
+      const rootRect = root.getBoundingClientRect()
+      setImageBox({
+        left: imageRect.left - rootRect.left,
+        top: imageRect.top - rootRect.top,
+        width: imageRect.width,
+        height: imageRect.height,
+      })
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    if (rootRef.current) observer.observe(rootRef.current)
+    if (imageRef.current) observer.observe(imageRef.current)
+    window.addEventListener('resize', update)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
+  const highlightBox =
+    highlight && imageBox && status === 'live'
+      ? {
+          left:
+            imageBox.left +
+            (highlight.target.rect.x / Math.max(1, highlight.target.viewport.width)) *
+              imageBox.width,
+          top:
+            imageBox.top +
+            (highlight.target.rect.y / Math.max(1, highlight.target.viewport.height)) *
+              imageBox.height,
+          width:
+            (highlight.target.rect.width / Math.max(1, highlight.target.viewport.width)) *
+            imageBox.width,
+          height:
+            (highlight.target.rect.height / Math.max(1, highlight.target.viewport.height)) *
+            imageBox.height,
+        }
+      : null
 
   // 流断开后自动重连；每次重连换一个 URL 参数，确保 <img> 重新发起请求
   useEffect(() => {
@@ -24,11 +93,14 @@ export function LiveMirror({ onTakeover }: { onTakeover: () => void }) {
     return () => clearTimeout(timer)
   }, [status])
 
+  const labelBelow =
+    highlightBox !== null && imageBox !== null && highlightBox.top - imageBox.top < 24
+
   return (
-    <div className="absolute inset-0">
+    <div ref={rootRef} className="absolute inset-0">
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <img
-          key={epoch}
+          ref={imageRef}
           src={`/api/live/stream?v=${epoch}`}
           alt="Chrome 实时画面"
           draggable={false}
@@ -66,6 +138,27 @@ export function LiveMirror({ onTakeover }: { onTakeover: () => void }) {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {highlightBox && (
+        <div
+          className="pointer-events-none absolute z-20 rounded-[3px] outline-2 outline-offset-1 outline-accent transition-all duration-200"
+          style={{
+            left: highlightBox.left,
+            top: highlightBox.top,
+            width: highlightBox.width,
+            height: highlightBox.height,
+          }}
+        >
+          <span className="absolute inset-0 rounded-[3px] ring-4 ring-accent/20" />
+          <span
+            className={`absolute left-0 max-w-full truncate bg-accent px-1.5 py-0.5 text-[10px] font-medium text-accent-foreground shadow-surface ${
+              labelBelow ? 'top-full mt-1 rounded-b' : 'bottom-full mb-1 rounded-t'
+            }`}
+          >
+            {highlight?.label}
+          </span>
         </div>
       )}
 

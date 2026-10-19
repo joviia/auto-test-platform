@@ -162,6 +162,10 @@ export function createInvokeRouter(agent: Agent, dataDir: string) {
     return { ok: true }
   })
 
+  route(IpcChannel.aiSend, async (input) => agent.aiSend(input))
+  route(IpcChannel.aiCancel, async (input) => agent.aiCancel(input.sessionId))
+  route(IpcChannel.aiConfig, async () => agent.aiConfig())
+
   return async (channel: string, payload: unknown): Promise<unknown> => {
     const handler = routes.get(channel)
     if (!handler) throw new Error(`未知通道：${channel}`)

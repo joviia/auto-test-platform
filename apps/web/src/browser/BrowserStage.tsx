@@ -6,6 +6,7 @@ import {
   House,
   ListChecks,
   Loader2,
+  MonitorPlay,
   MonitorSmartphone,
   Play,
   Plus,
@@ -78,8 +79,15 @@ export function BrowserStage() {
   const setReplayProgress = useUiStore((s) => s.setReplayProgress)
   const planProgress = useUiStore((s) => s.planProgress)
   const navTab = useUiStore((s) => s.navTab)
+  const aiRunning = useUiStore((s) => s.aiRunning)
+  const aiStartedAt = useUiStore((s) => s.aiStartedAt)
+  const aiActiveTool = useUiStore((s) => s.aiActiveTool)
+  const aiTarget = useUiStore((s) => s.aiTarget)
+  const setAiOpen = useUiStore((s) => s.setAiOpen)
+  const setRightTab = useUiStore((s) => s.setRightTab)
   const qc = useQueryClient()
   const elapsed = useElapsed(recordingStartedAt)
+  const aiElapsed = useElapsed(aiStartedAt)
 
   const preset = getDevicePreset(devicePresetId)
   const size = deviceSize(preset, deviceOrientation)
@@ -292,6 +300,24 @@ export function BrowserStage() {
     }
   }
 
+  const stopAi = async (): Promise<void> => {
+    try {
+      await window.atp.invoke('ai:cancel', {})
+    } catch (err) {
+      toast.danger(err instanceof Error ? err.message : '停止 Copilot 失败')
+    }
+  }
+
+  const takeoverAi = async (): Promise<void> => {
+    await stopAi()
+    await focusChrome()
+  }
+
+  const showAiPanel = (): void => {
+    setAiOpen(true)
+    setRightTab('copilot')
+  }
+
   const stopReplay = async (): Promise<void> => {
     try {
       await window.atp.invoke('replay:stop')
@@ -502,6 +528,36 @@ export function BrowserStage() {
         </div>
       )}
 
+      {aiRunning && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex h-9 shrink-0 items-center gap-2 border-b border-accent/30 bg-accent/[0.07] px-3 text-xs"
+        >
+          <Loader2 size={13} className="animate-spin text-accent" />
+          <span className="shrink-0 font-medium text-accent">Copilot</span>
+          <span className="min-w-0 flex-1 truncate text-muted">
+            {aiActiveTool ? `正在${aiActiveTool.label}…` : '正在读取页面并规划下一步…'}
+          </span>
+          <span className="shrink-0 font-mono tabular-nums text-muted">{aiElapsed}</span>
+          <button
+            type="button"
+            onClick={showAiPanel}
+            className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-accent hover:bg-accent/10"
+          >
+            查看步骤
+          </button>
+          <Button size="sm" variant="secondary" onPress={() => void takeoverAi()}>
+            <MonitorPlay size={11} />
+            接管
+          </Button>
+          <Button size="sm" variant="secondary" onPress={() => void stopAi()}>
+            <Square size={10} fill="currentColor" />
+            停止
+          </Button>
+        </div>
+      )}
+
       {replaying && (
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-accent/25 bg-accent/[0.06] px-3 text-xs">
           <Loader2 size={13} className="animate-spin text-accent" />
@@ -537,7 +593,7 @@ export function BrowserStage() {
 
       <div ref={stageRef} className="atp-stage relative min-h-0 flex-1 overflow-hidden">
         {webMode ? (
-          <LiveMirror onTakeover={() => void focusChrome()} />
+          <LiveMirror highlight={aiTarget} onTakeover={() => void focusChrome()} />
         ) : (
           !url &&
           !recording && (

@@ -1,7 +1,7 @@
 import type { RunRow } from '@atp/model'
 import { Button, toast } from '@heroui/react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChartNoAxesColumn, Circle, Clock, Globe, Play, Sparkles } from 'lucide-react'
+import { ArrowRight, ChartNoAxesColumn, Circle, Clock, Globe, Play, Sparkles } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { qk, useCases } from '../api/client'
 import { useUiStore } from '../state/ui-store'
@@ -41,6 +41,8 @@ export function Launchpad() {
   const setReplayProgress = useUiStore((s) => s.setReplayProgress)
   const setSelectedRunId = useUiStore((s) => s.setSelectedRunId)
   const replayMode = useUiStore((s) => s.replayMode)
+  const setAiOpen = useUiStore((s) => s.setAiOpen)
+  const setRightTab = useUiStore((s) => s.setRightTab)
   const { data: cases = [] } = useCases(currentProjectId)
   const qc = useQueryClient()
 
@@ -381,7 +383,14 @@ export function Launchpad() {
           </div>
         </div>
 
-        <div className="mt-3.5 flex items-center gap-3 rounded-lg border border-accent/30 bg-surface p-3 shadow-surface">
+        <button
+          type="button"
+          onClick={() => {
+            setAiOpen(true)
+            setRightTab('copilot')
+          }}
+          className="mt-3.5 flex w-full items-center gap-3 rounded-lg border border-accent/30 bg-surface p-3 text-left shadow-surface transition-colors hover:border-accent/50 hover:bg-accent/[0.03]"
+        >
           <span className="grid size-8 shrink-0 place-items-center rounded-md bg-accent/10 text-accent">
             <Sparkles size={16} />
           </span>
@@ -391,10 +400,11 @@ export function Launchpad() {
               描述要测什么，例如：新建一条电影内容，并验证列表中出现
             </span>
           </span>
-          <span className="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 text-[9.5px] font-semibold text-amber-600 dark:text-amber-400">
-            AI 即将支持
+          <span className="flex shrink-0 items-center gap-1 rounded bg-accent/10 px-1.5 py-0.5 text-[9.5px] font-semibold text-accent">
+            开始对话
+            <ArrowRight size={10} />
           </span>
-        </div>
+        </button>
       </div>
     </div>
   )

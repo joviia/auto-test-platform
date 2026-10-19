@@ -1,4 +1,11 @@
-import type { CaseFile, CaseGroup, Element, LiveStep, Step, StepResult } from '@atp/model'
+import type {
+  Element as CaseElement,
+  CaseFile,
+  CaseGroup,
+  LiveStep,
+  Step,
+  StepResult,
+} from '@atp/model'
 import {
   buildElement,
   buildRecordedCase,
@@ -10,7 +17,14 @@ import {
   type RecorderStep,
 } from '@atp/recorder'
 import { runCaseOnPage } from '@atp/runner'
-import { type BrowserContext, type CDPSession, chromium, type Frame, type Page } from 'playwright'
+import {
+  type BrowserContext,
+  type CDPSession,
+  chromium,
+  type Frame,
+  type Locator,
+  type Page,
+} from 'playwright'
 import { LiveView } from './live-view.js'
 
 export type BrowserEvent =
@@ -33,7 +47,7 @@ export interface DeviceMetrics {
 
 export interface RecordedDraft {
   steps: Step[]
-  elements: Record<string, Element>
+  elements: Record<string, CaseElement>
   startUrl: string
   intent: string
   groups: CaseGroup[]
@@ -49,6 +63,35 @@ export interface ReplayOptions {
   runId: string
   signal?: AbortSignal
   onStep?: (result: StepResult, index: number, total: number) => void
+}
+
+export interface SnapshotElement {
+  ref: string
+  role: string
+  name: string
+  value?: string
+  checked?: boolean
+  disabled?: boolean
+  tag: string
+  inViewport: boolean
+}
+
+export interface PageSnapshot {
+  url: string
+  title: string
+  viewport: { width: number; height: number }
+  scroll: { x: number; y: number }
+  /** 页面可见文本摘录，帮助模型理解内容 */
+  text: string
+  elements: SnapshotElement[]
+  truncated: boolean
+}
+
+export interface TargetInfo {
+  rect: { x: number; y: number; width: number; height: number }
+  viewport: { width: number; height: number }
+  role: string
+  name: string
 }
 
 const INIT_SCRIPT = `window.__atpBridge={send:(e)=>window.__atpSend(e)};${collectorSource()}`
@@ -106,7 +149,7 @@ export class ChromeController {
   private startUrl = ''
   private assertionArmed = false
   private assertionSteps: Step[] = []
-  private assertionElements: Record<string, Element> = {}
+  private assertionElements: Record<string, CaseElement> = {}
   readonly live: LiveView
 
   private constructor(
@@ -344,6 +387,177 @@ export class ChromeController {
     await page.check('#show-title')
     await page.click('#save')
     await page.waitForTimeout(350)
+  }
+
+  /**
+   * 给 Copilot 的页面语义快照：只返回可交互元素与可见文本，不暴露选择器。
+   * 每次快照重新分配 ref，旧 ref 立即失效，避免模型拿旧编号误点新元素。
+   */
+  async snapshot(): Promise<PageSnapshot> {
+    const page = await this.ensurePage()
+    return page.evaluate(() => {
+      const MAX = 120
+      document.querySelectorAll('[data-atp-ref]').forEach((el) => {
+        el.removeAttribute('data-atp-ref')
+      })
+      const generation = Math.random().toString(36).slice(2, 6)
+      const selector = [
+        'a[href]',
+        'button',
+        'input',
+        'textarea',
+        'select',
+        '[role="button"]',
+        '[role="link"]',
+        '[role="checkbox"]',
+        '[role="radio"]',
+        '[role="tab"]',
+        '[role="menuitem"]',
+        '[role="combobox"]',
+        '[contenteditable="true"]',
+        'summary',
+      ].join(',')
+      const nodes = Array.from(document.querySelectorAll(selector))
+
+      const visible = (el: Element): boolean => {
+        const rect = el.getBoundingClientRect()
+        const style = getComputedStyle(el)
+        return (
+          rect.width > 0.5 &&
+          rect.height > 0.5 &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden'
+        )
+      }
+      const roleOf = (el: Element): string => {
+        const explicit = el.getAttribute('role')
+        if (explicit) return explicit
+        const tag = el.tagName.toLowerCase()
+        if (tag === 'a') return 'link'
+        if (tag === 'button') return 'button'
+        if (tag === 'select') return 'combobox'
+        if (tag === 'textarea') return 'textbox'
+        if (tag === 'input') {
+          const type = (el as HTMLInputElement).type
+          if (type === 'checkbox') return 'checkbox'
+          if (type === 'radio') return 'radio'
+          if (type === 'submit' || type === 'button' || type === 'reset') return 'button'
+          return 'textbox'
+        }
+        if ((el as HTMLElement).isContentEditable) return 'textbox'
+        return tag
+      }
+      const nameOf = (el: Element): string => {
+        const aria = el.getAttribute('aria-label')
+        if (aria?.trim()) return aria.trim()
+        const labelledBy = el.getAttribute('aria-labelledby')
+        if (labelledBy) {
+          const text = labelledBy
+            .split(/\s+/)
+            .map((id) => document.getElementById(id)?.textContent ?? '')
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+          if (text) return text.slice(0, 80)
+        }
+        if (
+          el instanceof HTMLInputElement ||
+          el instanceof HTMLTextAreaElement ||
+          el instanceof HTMLSelectElement
+        ) {
+          if (el.id) {
+            const label = document.querySelector(`label[for="${CSS.escape(el.id)}"]`)
+            const text = label?.textContent?.replace(/\s+/g, ' ').trim()
+            if (text) return text.slice(0, 80)
+          }
+          const parentLabel = el.closest('label')?.textContent?.replace(/\s+/g, ' ').trim()
+          if (parentLabel) return parentLabel.slice(0, 80)
+          const placeholder = el.getAttribute('placeholder')
+          if (placeholder) return placeholder
+          const name = el.getAttribute('name')
+          if (name) return name
+        }
+        const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim()
+        if (text) return text.slice(0, 80)
+        return el.getAttribute('title') ?? el.getAttribute('name') ?? el.tagName.toLowerCase()
+      }
+
+      const elements: Array<{
+        ref: string
+        role: string
+        name: string
+        value?: string
+        checked?: boolean
+        disabled?: boolean
+        tag: string
+        inViewport: boolean
+      }> = []
+      let index = 0
+      for (const el of nodes) {
+        if (elements.length >= MAX) break
+        if (!visible(el) || el.closest('[aria-hidden="true"]')) continue
+        const rect = el.getBoundingClientRect()
+        const ref = `${generation}-${++index}`
+        el.setAttribute('data-atp-ref', ref)
+        const entry: (typeof elements)[number] = {
+          ref,
+          role: roleOf(el),
+          name: nameOf(el),
+          tag: el.tagName.toLowerCase(),
+          inViewport:
+            rect.bottom > 0 && rect.right > 0 && rect.top < innerHeight && rect.left < innerWidth,
+        }
+        if (el instanceof HTMLInputElement) {
+          if (el.type === 'checkbox' || el.type === 'radio') entry.checked = el.checked
+          else if (el.type !== 'password') entry.value = el.value
+          entry.disabled = el.disabled
+        } else if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
+          entry.value = el.value
+          entry.disabled = el.disabled
+        } else if (el.getAttribute('aria-disabled') === 'true') {
+          entry.disabled = true
+        }
+        elements.push(entry)
+      }
+
+      return {
+        url: location.href,
+        title: document.title,
+        viewport: { width: innerWidth, height: innerHeight },
+        scroll: { x: scrollX, y: scrollY },
+        text: (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 1800),
+        elements,
+        truncated: nodes.length > MAX,
+      }
+    })
+  }
+
+  /** 解析一次快照里的 ref；旧 ref 已被下一次快照清除，会返回 null */
+  async resolveRef(ref: string): Promise<{ locator: Locator; target: TargetInfo } | null> {
+    if (!/^[a-z0-9-]{1,32}$/i.test(ref)) return null
+    const page = await this.ensurePage()
+    const locator = page.locator(`[data-atp-ref="${ref}"]`).first()
+    if ((await locator.count()) === 0) return null
+    await locator.scrollIntoViewIfNeeded({ timeout: 2000 }).catch(() => undefined)
+    const target = await locator.evaluate((el) => {
+      const rect = el.getBoundingClientRect()
+      return {
+        rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        viewport: { width: innerWidth, height: innerHeight },
+        role: el.getAttribute('role') ?? el.tagName.toLowerCase(),
+        name: (el.getAttribute('aria-label') ?? el.textContent ?? '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 80),
+      }
+    })
+    return { locator, target }
+  }
+
+  /** Copilot 证据截图（操作后自动调用） */
+  async screenshotJpeg(quality = 55): Promise<Buffer> {
+    const page = await this.ensurePage()
+    return page.screenshot({ type: 'jpeg', quality, timeout: 8000 })
   }
 
   async close(): Promise<void> {

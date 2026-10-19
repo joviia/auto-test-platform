@@ -1,5 +1,6 @@
-import { Toast } from '@heroui/react'
-import { useEffect } from 'react'
+import { Toast, toast } from '@heroui/react'
+import { type PointerEvent as ReactPointerEvent, useEffect } from 'react'
+import { CommandPalette } from './ai/CommandPalette'
 import { useProjects } from './api/client'
 import { BrowserStage } from './browser/BrowserStage'
 import { AppBar } from './components/AppBar'
@@ -23,10 +24,25 @@ export function App() {
   const selectedRunId = useUiStore((s) => s.selectedRunId)
   const navTab = useUiStore((s) => s.navTab)
   const selected = useUiStore((s) => s.selected)
+  const aiOpen = useUiStore((s) => s.aiOpen)
+  const rightWidth = useUiStore((s) => s.rightWidth)
+  const setRightWidth = useUiStore((s) => s.setRightWidth)
+  const startAiMessage = useUiStore((s) => s.startAiMessage)
+  const appendAiDelta = useUiStore((s) => s.appendAiDelta)
+  const startAiTool = useUiStore((s) => s.startAiTool)
+  const endAiTool = useUiStore((s) => s.endAiTool)
+  const finishAiMessage = useUiStore((s) => s.finishAiMessage)
+  const failAiMessage = useUiStore((s) => s.failAiMessage)
   // 项目/模块只是树上的定位，不算「打开了东西」；启动台仍应保持干净的整幅舞台
   const openedNode = selected?.kind === 'case' || selected?.kind === 'plan'
   const launchMode =
-    navTab === 'cases' && !url && !recording && !draftRecording && !selectedRunId && !openedNode
+    navTab === 'cases' &&
+    !url &&
+    !recording &&
+    !draftRecording &&
+    !selectedRunId &&
+    !openedNode &&
+    !aiOpen
   const { data: projects = [] } = useProjects()
 
   // 明暗：跟随系统；手动切换时以 html class 覆盖（Tailwind dark: 已改为 class 策略）
@@ -62,13 +78,65 @@ export function App() {
       setReplayProgress({ runId: p.runId, index: p.index, total: p.total }),
     )
     const offPlan = window.atp.on('event:plan-progress', (p) => setPlanProgress(p))
+    const offAiStart = window.atp.on('event:ai-start', (p) =>
+      startAiMessage(p.sessionId, p.messageId),
+    )
+    const offAiDelta = window.atp.on('event:ai-delta', (p) =>
+      appendAiDelta(p.messageId, p.kind, p.text),
+    )
+    const offAiToolStart = window.atp.on('event:ai-tool-start', (p) => startAiTool(p.messageId, p))
+    const offAiToolEnd = window.atp.on('event:ai-tool-end', (p) => endAiTool(p.messageId, p))
+    const offAiDone = window.atp.on('event:ai-done', (p) =>
+      finishAiMessage(p.messageId, p.cancelled),
+    )
+    const offAiError = window.atp.on('event:ai-error', (p) => {
+      if (p.messageId) failAiMessage(p.messageId, p.error)
+      else toast.danger(p.error)
+    })
     return () => {
       offStatus()
       offStep()
       offReplay()
       offPlan()
+      offAiStart()
+      offAiDelta()
+      offAiToolStart()
+      offAiToolEnd()
+      offAiDone()
+      offAiError()
     }
-  }, [setRecording, pushLiveStep, setReplayProgress, setPlanProgress])
+  }, [
+    setRecording,
+    pushLiveStep,
+    setReplayProgress,
+    setPlanProgress,
+    startAiMessage,
+    appendAiDelta,
+    startAiTool,
+    endAiTool,
+    finishAiMessage,
+    failAiMessage,
+  ])
+
+  // 拖拽右侧面板：向左拖动变宽，宽度持久化到本地
+  const beginResize = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    event.preventDefault()
+    const startX = event.clientX
+    const startWidth = rightWidth
+    document.body.style.userSelect = 'none'
+    document.body.style.cursor = 'col-resize'
+    const onMove = (moveEvent: PointerEvent): void => {
+      setRightWidth(startWidth + (startX - moveEvent.clientX))
+    }
+    const onUp = (): void => {
+      document.body.style.userSelect = ''
+      document.body.style.cursor = ''
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
 
   return (
     <>
@@ -82,14 +150,26 @@ export function App() {
             <BrowserStage />
           </main>
           {!launchMode && (
-            <aside className="flex w-[404px] shrink-0 flex-col border-l border-border bg-surface">
-              <RightPanel />
-            </aside>
+            <>
+              <hr
+                aria-orientation="vertical"
+                aria-label="调整右侧面板宽度"
+                onPointerDown={beginResize}
+                className="m-0 w-1 shrink-0 cursor-col-resize border-0 transition-colors hover:bg-accent/30"
+              />
+              <aside
+                className="flex shrink-0 flex-col border-l border-border bg-surface"
+                style={{ width: rightWidth }}
+              >
+                <RightPanel />
+              </aside>
+            </>
           )}
         </div>
         <StatusBar />
       </div>
       <SaveCaseDialog />
+      <CommandPalette />
       <Toast.Provider placement="bottom end" />
     </>
   )

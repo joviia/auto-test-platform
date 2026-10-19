@@ -193,6 +193,20 @@ try {
   if (images.some((img) => img.width === 0)) throw new Error('存在未成功加载的步骤截图')
   if (errors.length > 0) throw new Error(`页面错误：${errors.join(' / ')}`)
   console.log('[agent] 报告 ✓ 4 张截图可加载')
+
+  // Copilot 演示链路：页签 → 流式输出 → 工具卡 → 落款
+  await page.locator('[role=tab]').filter({ hasText: 'Copilot' }).click()
+  const composer = page.locator('textarea[placeholder^="描述要测什么"]')
+  await composer.waitFor({ state: 'visible' })
+  const panelText = await page.locator('body').innerText()
+  if (!panelText.includes('让 Copilot 操作页面')) throw new Error('Copilot 空状态未渲染')
+  await composer.fill('帮我观察一下当前页面')
+  await composer.press('Enter')
+  await page.getByText('当前是演示模式', { exact: false }).first().waitFor({ timeout: 20_000 })
+  await page.getByText('观察页面', { exact: false }).first().waitFor({ timeout: 20_000 })
+  await page.getByText('已验证', { exact: false }).first().waitFor({ timeout: 20_000 })
+  console.log('[agent] Copilot ✓ 流式输出与工具卡')
+  if (errors.length > 0) throw new Error(`页面错误：${errors.join(' / ')}`)
   console.log('[agent] 通过 ✅')
 } finally {
   await browser?.close().catch(() => {})

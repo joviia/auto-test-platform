@@ -197,13 +197,19 @@ export function CaseTree() {
     setSelected(currentProjectId ? { kind: 'project', id: currentProjectId } : null)
   }, [currentProjectId, setSelected])
 
-  // ⌘K / Ctrl+K 聚焦搜索
+  // / 聚焦搜索（⌘K 留给 Copilot 命令栏）
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        searchRef.current?.focus()
+      if (e.metaKey || e.ctrlKey || e.altKey || e.key !== '/') return
+      const target = e.target as HTMLElement | null
+      if (target) {
+        const tag = target.tagName.toLowerCase()
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) {
+          return
+        }
       }
+      e.preventDefault()
+      searchRef.current?.focus()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -400,7 +406,7 @@ export function CaseTree() {
         <span>
           {modules.length} 个模块 · {cases.length} 条用例
         </span>
-        <span className="font-mono">⌘K 搜索</span>
+        <span className="font-mono">/ 搜索</span>
       </div>
 
       {/* 关闭时整棵弹层卸载：避免退出动画被打断后遮罩残留、拦截点击 */}

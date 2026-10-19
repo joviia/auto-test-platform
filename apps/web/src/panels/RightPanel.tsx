@@ -1,7 +1,8 @@
 import { Tab, TabIndicator, TabList, TabListContainer, TabPanel, TabsRoot } from '@heroui/react'
 import { useQuery } from '@tanstack/react-query'
 import { ListChecks } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { CopilotPanel } from '../ai/CopilotPanel'
 import { qk } from '../api/client'
 import { EmptyHint } from '../components/EmptyHint'
 import { ElementPanel } from '../elements/ElementPanel'
@@ -23,8 +24,13 @@ function CountBadge({ value }: { value: number }) {
 export function RightPanel() {
   const selected = useUiStore((s) => s.selected)
   const navTab = useUiStore((s) => s.navTab)
+  const aiOpen = useUiStore((s) => s.aiOpen)
+  const rightTab = useUiStore((s) => s.rightTab)
+
+  // Copilot 是全局的：即使当前停在计划上，AI 面板也能占住右侧
+  if (aiOpen && rightTab === 'copilot') return <CaseRightPanel />
   if (selected?.kind === 'plan') return <PlanPanel planId={selected.id} />
-  if (navTab === 'plans') {
+  if (navTab === 'plans' && !aiOpen) {
     return (
       <EmptyHint
         icon={ListChecks}
@@ -42,18 +48,30 @@ function CaseRightPanel() {
   const liveSteps = useUiStore((s) => s.liveSteps)
   const draftRecording = useUiStore((s) => s.draftRecording)
   const selectedRunId = useUiStore((s) => s.selectedRunId)
+  const tab = useUiStore((s) => s.rightTab)
+  const setTab = useUiStore((s) => s.setRightTab)
+  const aiOpen = useUiStore((s) => s.aiOpen)
+  const setAiOpen = useUiStore((s) => s.setAiOpen)
+  const aiRunning = useUiStore((s) => s.aiRunning)
   const caseId = selected?.kind === 'case' ? selected.id : null
-  const [tab, setTab] = useState('steps')
 
   // 开始录制 / 停止待保存时都回到「步骤」页
   useEffect(() => {
     if (recording || draftRecording) setTab('steps')
-  }, [recording, draftRecording])
+  }, [recording, draftRecording, setTab])
 
-  // 在舞台中打开运行记录时，右侧直接切到报告
+  // 在舞台中打开运行记录时，右侧直接切到报告（AI 正在执行时不抢焦点）
   useEffect(() => {
-    if (selectedRunId) setTab('report')
-  }, [selectedRunId])
+    if (selectedRunId) {
+      const state = useUiStore.getState()
+      if (!state.aiRunning) setTab('report')
+    }
+  }, [selectedRunId, setTab])
+
+  // 记住的 Copilot 页签在启动台模式下也要让右侧面板出现
+  useEffect(() => {
+    if (tab === 'copilot' && !aiOpen) setAiOpen(true)
+  }, [tab, aiOpen, setAiOpen])
 
   // 与 StepPanel/ElementPanel 共用同一 query key，用于标签计数
   const { data: file } = useQuery({
@@ -78,7 +96,13 @@ function CaseRightPanel() {
       variant="secondary"
       className="flex h-full flex-col"
       selectedKey={tab}
-      onSelectionChange={(key) => setTab(String(key))}
+      onSelectionChange={(key) => {
+        const next = String(key)
+        setTab(next as typeof tab)
+        if (next === 'copilot') setAiOpen(true)
+        // 从计划上下文临时打开 Copilot 后，切回其它页签应回到计划面板
+        else if (selected?.kind === 'plan') setAiOpen(false)
+      }}
     >
       <TabListContainer className="h-[52px] shrink-0 px-3">
         <TabList className="h-full gap-0">
@@ -97,6 +121,11 @@ function CaseRightPanel() {
             <CountBadge value={runs.length} />
             <TabIndicator />
           </Tab>
+          <Tab id="copilot" className="h-full flex-1 justify-center text-[13px]">
+            Copilot
+            {aiRunning && <span className="ml-1 size-1.5 animate-pulse rounded-full bg-accent" />}
+            <TabIndicator />
+          </Tab>
         </TabList>
       </TabListContainer>
       <TabPanel id="steps" className="min-h-0 flex-1 overflow-hidden">
@@ -107,6 +136,9 @@ function CaseRightPanel() {
       </TabPanel>
       <TabPanel id="report" className="min-h-0 flex-1 overflow-hidden">
         <ReportPanel />
+      </TabPanel>
+      <TabPanel id="copilot" className="min-h-0 flex-1 overflow-hidden">
+        <CopilotPanel />
       </TabPanel>
     </TabsRoot>
   )

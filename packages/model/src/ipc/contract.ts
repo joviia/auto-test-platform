@@ -304,6 +304,38 @@ export const ipcContract = {
     input: z.object({ runId: z.string().min(1) }),
     output: z.object({ run: runRowSchema, steps: z.array(runStepRowSchema) }),
   },
+
+  [IpcChannel.aiSend]: {
+    input: z.object({
+      message: z.string().min(1),
+      sessionId: z.string().min(1).optional(),
+      context: z
+        .object({
+          url: z.string().optional(),
+          caseId: z.string().optional(),
+          caseName: z.string().optional(),
+          runId: z.string().optional(),
+        })
+        .optional(),
+    }),
+    output: z.object({ sessionId: z.string(), messageId: z.string() }),
+  },
+  [IpcChannel.aiCancel]: {
+    input: z.object({ sessionId: z.string().min(1).optional() }),
+    output: okSchema,
+  },
+  [IpcChannel.aiConfig]: {
+    input: z.void(),
+    output: z.object({
+      ready: z.boolean(),
+      provider: z.string(),
+      model: z.string(),
+      stub: z.boolean(),
+      reason: z.string().optional(),
+      /** 读取的环境变量名，配置卡里展示 */
+      env: z.array(z.string()),
+    }),
+  },
 } satisfies Record<string, IpcEndpoint>
 
 export type IpcContract = typeof ipcContract
@@ -344,7 +376,66 @@ export const ipcEventContract = {
     status: z.enum(['running', 'passed', 'failed', 'retrying', 'cancelled']).optional(),
     error: z.string().optional(),
   }),
+
+  [IpcEvent.aiStart]: z.object({
+    sessionId: z.string(),
+    messageId: z.string(),
+  }),
+  [IpcEvent.aiDelta]: z.object({
+    sessionId: z.string(),
+    messageId: z.string(),
+    kind: z.enum(['text', 'reasoning']),
+    text: z.string(),
+  }),
+  [IpcEvent.aiToolStart]: z.object({
+    sessionId: z.string(),
+    messageId: z.string(),
+    callId: z.string(),
+    name: z.string(),
+    label: z.string(),
+    input: z.unknown(),
+  }),
+  [IpcEvent.aiToolEnd]: z.object({
+    sessionId: z.string(),
+    messageId: z.string(),
+    callId: z.string(),
+    status: z.enum(['ok', 'error']),
+    output: z.unknown().optional(),
+    error: z.string().optional(),
+    evidenceUrl: z.string().optional(),
+    target: z
+      .object({
+        rect: z.object({
+          x: z.number(),
+          y: z.number(),
+          width: z.number(),
+          height: z.number(),
+        }),
+        viewport: z.object({ width: z.number(), height: z.number() }),
+        role: z.string().optional(),
+        name: z.string().optional(),
+      })
+      .optional(),
+    durationMs: z.number().nonnegative(),
+  }),
+  [IpcEvent.aiDone]: z.object({
+    sessionId: z.string(),
+    messageId: z.string(),
+    cancelled: z.boolean().optional(),
+  }),
+  [IpcEvent.aiError]: z.object({
+    sessionId: z.string().optional(),
+    messageId: z.string().optional(),
+    error: z.string(),
+  }),
 }
+
+/** Copilot 事件与上下文类型（agent / web 共用） */
+export type AiToolStartPayload = z.output<(typeof ipcEventContract)[typeof IpcEvent.aiToolStart]>
+export type AiToolEndPayload = z.output<(typeof ipcEventContract)[typeof IpcEvent.aiToolEnd]>
+export type AiTarget = NonNullable<AiToolEndPayload['target']>
+export type AiSendInput = z.output<(typeof ipcContract)[typeof IpcChannel.aiSend]['input']>
+export type AiConfig = z.output<(typeof ipcContract)[typeof IpcChannel.aiConfig]['output']>
 
 export type IpcEventPayload<K extends keyof typeof ipcEventContract> = z.output<
   (typeof ipcEventContract)[K]

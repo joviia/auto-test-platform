@@ -47,6 +47,10 @@ export const IpcChannel = {
   replayStop: 'replay:stop',
   runList: 'run:list',
   runGet: 'run:get',
+  // Copilot（AI）
+  aiSend: 'ai:send',
+  aiCancel: 'ai:cancel',
+  aiConfig: 'ai:config',
 } as const
 
 /** 推送类 channel：main → renderer（webContents.send） */
@@ -55,6 +59,12 @@ export const IpcEvent = {
   recordingStep: 'event:recording-step',
   replayProgress: 'event:replay-progress',
   planProgress: 'event:plan-progress',
+  aiStart: 'event:ai-start',
+  aiDelta: 'event:ai-delta',
+  aiToolStart: 'event:ai-tool-start',
+  aiToolEnd: 'event:ai-tool-end',
+  aiDone: 'event:ai-done',
+  aiError: 'event:ai-error',
 } as const
 
 export type IpcChannelName = (typeof IpcChannel)[keyof typeof IpcChannel]

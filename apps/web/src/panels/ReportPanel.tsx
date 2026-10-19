@@ -1,7 +1,15 @@
 import type { RunStepRow } from '@atp/model'
 import { formatLocator } from '@atp/model'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, ChevronDown, ChevronRight, FileVideo, History, XCircle } from 'lucide-react'
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  FileVideo,
+  History,
+  Sparkles,
+  XCircle,
+} from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { usePlans } from '../api/client'
 import { EmptyHint } from '../components/EmptyHint'
@@ -29,6 +37,7 @@ export function ReportPanel() {
   const currentProjectId = useUiStore((s) => s.currentProjectId)
   const selectedRunId = useUiStore((s) => s.selectedRunId)
   const setSelectedRunId = useUiStore((s) => s.setSelectedRunId)
+  const requestAi = useUiStore((s) => s.requestAi)
   const caseId = selected?.kind === 'case' ? selected.id : undefined
   const { data: plans = [] } = usePlans(currentProjectId)
   const [planFilter, setPlanFilter] = useState('')
@@ -158,6 +167,24 @@ export function ReportPanel() {
                           {formatTime(detail.run.startedAt)} → {formatTime(detail.run.finishedAt)}
                           {detail.run.error ? ` · 运行错误：${detail.run.error}` : ''}
                         </p>
+                        {!passed && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              requestAi(
+                                '请分析这次运行中失败的步骤，结合证据给出原因和修复建议。',
+                                {
+                                  runId: run.id,
+                                  caseId: run.caseId,
+                                  ...(run.caseName ? { caseName: run.caseName } : {}),
+                                },
+                              )
+                            }
+                            className="flex shrink-0 items-center gap-1 rounded border border-accent/30 bg-accent/[0.06] px-2 py-1 text-[10px] font-medium text-accent hover:border-accent/50 hover:bg-accent/10"
+                          >
+                            <Sparkles size={10} />让 AI 分析
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => setSelectedRunId(run.id)}

@@ -389,11 +389,13 @@ URL: http://…/demo
 
 ### Stage 2.1：Copilot 骨架 + 页面感知（先交付可感知的一层）
 
+> **状态（2026-10-19）**：已交付。会话暂存 Agent 内存（单次运行内保留多轮上下文）；SQLite 会话历史与「最近会话」随 2.3 的会话管理一起交付，避免只写不读的半成品。
+
 - 右侧 Copilot 页签、可拖拽宽度、上下文 chips、命令栏。
-- Vercel AI SDK（默认 DeepSeek profile）+ 自有 `CopilotProvider` 封装 + StubProvider、SSE 事件、会话持久化。
+- Vercel AI SDK（默认 DeepSeek profile）+ 自有 `CopilotProvider` 封装 + StubProvider、SSE 事件。
 - 感知工具：`browser.snapshot`（语义 ref）、`browser.screenshot`、`case.list/get`、`run.list/get`。
 - 工具卡片（折叠/展开/失败态）、思考摘要、结论脚注、顶部 AI 状态条。
-- **验收**：选中失败运行 → 点「分析这一步」→ 自动带上下文 → AI 先快照/截图再输出归因与建议；全程中栏镜像可见。
+- **验收**：选中失败运行 → 点「让 AI 分析」→ 自动带上下文 → AI 先快照/截图再输出归因与建议；全程中栏镜像可见。
 
 ### Stage 2.2：Browser Use 操作 + 中栏可视化（关键切片）
 
@@ -409,6 +411,7 @@ Stage 2.2 是 Agent 能力的验收门槛：如果只能按固定脚本演示，
 ### Stage 2.3：计划与用例
 
 - 计划卡（编辑/排序/删除）、`在中栏执行`、`保存为用例`、diff 卡与撤销。
+- AI 会话与消息落 SQLite（`ai_sessions` / `ai_messages`），新增「最近会话」恢复入口。
 - **验收**：一句话生成 5 步计划 → 中栏执行通过 → 保存后用例与人工录制的结构一致 → 修改已有用例必须先看到 diff。
 
 ### Stage 2.4：MCP 与增强

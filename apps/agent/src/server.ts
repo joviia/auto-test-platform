@@ -85,7 +85,7 @@ function evidenceContent(file: string): string {
  */
 function shimSource(): string {
   return `(() => {
-  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress'];
+  const names = ['recording-status', 'recording-step', 'replay-progress', 'plan-progress', 'ai-start', 'ai-delta', 'ai-tool-start', 'ai-tool-end', 'ai-done', 'ai-error'];
   const listeners = new Map(names.map((name) => [name, new Set()]));
   const last = new Map();
   const source = new EventSource('/events');
@@ -362,6 +362,20 @@ export function createAgentServer(agent: Agent, opts: ServerOptions): AgentServe
   app.post('/api/demo', async (c) => {
     await agent.runDemo()
     return c.json({ ok: true })
+  })
+
+  app.get('/ai-evidence/:sessionId/:file', async (c) => {
+    const sessionId = c.req.param('sessionId')
+    const file = c.req.param('file')
+    if (!/^[A-Za-z0-9_-]+$/.test(sessionId) || !/^[A-Za-z0-9._-]+$/.test(file)) {
+      return c.json({ error: '证据不存在' }, 404)
+    }
+    const base = join(opts.dataDir, 'ai-evidence', sessionId)
+    const target = safeJoin(base, file)
+    if (!target) return c.json({ error: '证据不存在' }, 404)
+    const info = await stat(target).catch(() => null)
+    if (!info?.isFile()) return c.json({ error: '证据不存在' }, 404)
+    return fileResponse(target, 'image/jpeg', 'no-store')
   })
 
   app.get('/evidence/:runId/:file', async (c) => {
