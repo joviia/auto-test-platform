@@ -4,9 +4,9 @@
 >
 > 结论先行：**不做悬浮抽屉，也不做以聊天为中心的界面**。Copilot 是右侧检查器里的一个常驻页签，配合三处「业务现场入口」和一个 `⌘K` 命令栏；AI 的产物是可编辑的测试计划/用例草稿，而不是一段对话。
 >
-> **已拍板**：① 右侧常驻页签；② 用例修改走计划卡/diff 卡显式应用；③ 默认模型 `deepseek-flash`（可配置）。
+> **已拍板**：① 右侧常驻页签；② 用例修改走计划卡/diff 卡显式应用；③ 默认模型 `deepseek-flash`（可配置）；④ 接入层用 Vercel AI SDK + 自有 `CopilotProvider` 封装（分析见 §6.3）。
 >
-> **接入层建议**：Vercel AI SDK + 自有 `CopilotProvider` 封装（分析见 §6.3，待确认）；Claude 作为可切换 provider。
+> **能力边界（已确认）**：Copilot 必须是真正的 Browser Use Agent——能感知页面、自主规划、操作浏览器、验证结果，而不是只会改用例文本。所有操作在中栏实时可视化：目标高亮、动作说明、步骤进度、证据回看。
 
 ## 1. 问题定义
 
@@ -48,15 +48,14 @@ AI 如果以「抽屉」形式盖在中栏上，会出现四个问题：
 
 ```
 ┌──────────────┬──────────────────────────────────────┬──────────────────────┐
-│  用例库       │            会话舞台                    │ 步骤 元素 报告 Copilot│
-│              │                                      │ ──────────────────── │
-│  默认项目     │        ┌────────────────────┐        │ 上下文 chips          │
-│   ├ 登录      │        │                    │        │ [用例 登录] [失败 #3] │
-│   ├ 播放      │        │   Chrome 实时镜像   │        │                      │
-│   └ 搜索      │        │                    │        │  对话 / 工具卡片      │
+│  用例库       │  ◐ AI 操作 · 3/8「保存」 00:06 [停止][接管]│ 步骤 元素 报告 Copilot│
+│              │        ┌────────────────────┐        │ ──────────────────── │
+│  默认项目     │        │  ┌──────────────┐  │        │ 上下文 chips          │
+│   ├ 登录      │        │  │  [保存] ←高亮 │  │        │ [用例 登录] [失败 #3] │
+│   ├ 播放      │        │  └──────────────┘  │        │                      │
+│   └ 搜索      │        │   Chrome 实时镜像   │        │  对话 / 工具卡片      │
 │              │        └────────────────────┘        │  ▸ 点击「保存」 1.2s  │
-│              │                                      │  ▸ 断言 列表包含…     │
-│              │  ◐ AI 正在操作 · 第 3 步 · 00:06 [停止]│                      │
+│              │        点击「保存」 · 已截图          │  ▸ 断言 列表包含…     │
 │              │                                      │ ┌──────────────────┐ │
 │              │                                      │ │ 问 Copilot…  ⌘K  │ │
 │              │                                      │ └──────────────────┘ │
@@ -66,7 +65,9 @@ AI 如果以「抽屉」形式盖在中栏上，会出现四个问题：
 关键细节：
 
 - **宽度可拖拽**：右侧默认 404px，可拖到 360–560px，宽度记在本地。中栏最小可用宽度 640px，低于时不再允许继续拉宽。
-- **AI 运行时自动出现状态条**：状态条放在中栏顶部（与录制/回放/计划同一条槽位），36px 高，不覆盖镜像；显示当前工具名、步号、耗时和「停止」。
+- **AI 运行时自动出现状态条**：状态条放在中栏顶部（与录制/回放/计划同一条槽位），36px 高，不覆盖镜像；显示当前工具名、步号、耗时和「停止 / 接管」。
+- **中栏可视化**：AI 操作时在镜像上叠加目标元素高亮框与动作说明（点击 / 输入 / 选择 / 断言）；每步自动截图，底部说明条可展开证据。高亮坐标来自工具返回的 `getBoundingClientRect` 与视口尺寸，按 `object-contain` 映射到镜像显示区域，不修改被测页面 DOM。
+- **接管**：状态条的「接管」= 停止 AI 循环 + 聚焦真实 Chrome；已完成动作与证据保留，不丢上下文。
 - **页签切换不抢焦点**：会话从 Copilot 页签发起时停留在 Copilot；从上下文按钮发起时自动切到 Copilot；AI 持续运行时如果用户切到「步骤」，Copilot 页签显示活动小圆点，不强行拉回。
 - **收起检查器**：保留现有「启动台整幅模式」；Copilot 页签也遵循这一规则，没有打开任何东西时整幅显示启动台。
 - **窄窗口降级**：宽度 < 1100px 时，右侧页签改为覆盖中栏的全高面板（带返回按钮）；再窄则用底部全屏面板。桌面为主，降级只保证可用。
@@ -153,13 +154,33 @@ AI 如果以「抽屉」形式盖在中栏上，会出现四个问题：
 - 用户可移除；移除后本轮不再发送。
 - 不默认发送截图、Cookie、Storage。模型需要看画面时调用 `browser.screenshot` 工具按需获取。
 
-## 5. 核心能力：一句话 → 可编辑计划 → 现场执行 → 保存用例
+## 5. 核心能力：Browser Use、计划与用例
 
 这是 Stage 2 的主交付物，也是与「聊天机器人」的分水岭。
 
-### 5.1 计划卡片
+### 5.1 Browser Use 循环
 
-AI 对「生成用例」类请求，不直接操作浏览器，而是先给出计划卡：
+AI 不是「一次生成一段脚本」，而是像人一样循环：观察 → 决策 → 操作 → 验证。
+
+1. **观察**：`browser.snapshot` 返回当前 URL、标题、可交互元素的语义列表（ref / 角色 / 名称 / 值 / 状态）；必要时 `browser.screenshot` 取画面。
+2. **决策**：模型决定下一步；任务超过 3 步时先用 `agent.update_plan` 写出或更新计划。
+3. **操作**：调用 `browser.click / fill / select / check / press / scroll / navigate`，统一走真实 Chrome；每次操作返回目标元素矩形与视口尺寸，供中栏高亮。
+4. **验证**：操作后自动重新快照；关键节点调用 `browser.assert_visible / assert_text / assert_value`；失败时保留现场，允许重试或改计划。
+5. **收尾**：给出已完成 / 已验证 / 未完成；需要时把过程沉淀为用例。
+
+约束：
+
+- 单轮最多 20 个模型步，单任务默认 5 分钟；达到上限暂停并汇报，不静默继续。
+- 每次操作后自动截图作为证据；模型默认只看语义快照，需要看画面时显式调用 `browser.screenshot`。
+- 工具只暴露语义操作，不提供任意 `evaluate`；定位不猜 CSS/XPath。
+- AI 操作与人工操作走同一套录制、回放、证据链路，行为不分叉。
+- 随时可停止/接管；停止后保留已完成动作与证据。
+
+「真的 Agent」体现在三件事：**自主循环、页面感知、结果验证**，而不是把一句自然语言翻译成一段固定脚本。
+
+### 5.2 计划卡片
+
+AI 对「生成用例」类请求，优先生成计划卡；执行时仍走 Browser Use 循环，逐步观察与验证：
 
 ```
 ┌ AI 计划 · 新建一条电影内容 ─────────────────────┐
@@ -179,17 +200,18 @@ AI 对「生成用例」类请求，不直接操作浏览器，而是先给出�
 - 「保存为用例」：执行成功后可保存；未执行也可保存为草稿（标明「未验证」）。
 - 执行结果直接反馈到计划卡：每步状态、耗时、证据缩略图；失败步骤可「让 AI 修复」。
 
-### 5.2 直接操作模式
+### 5.3 直接操作模式（Agent 默认）
 
-对「帮我点开设置页并截图」这类小任务，AI 可以直接调用浏览器工具，不必先生成计划：
+对「帮我点开设置页并截图」「把这个流程走一遍」这类任务，AI 直接进入 Browser Use 循环，不必先生成计划：
 
-- 中栏实时镜像 + 顶部 AI 状态条。
-- 每次操作产生工具卡片与截图证据。
-- 结束给出「已验证 / 假设 / 未完成」。
+- 中栏实时镜像 + 顶部 AI 状态条（步号 / 工具 / 耗时 / 停止 / 接管）。
+- 镜像上高亮当前目标元素，底部显示动作说明；点击、输入、选择有短促反馈。
+- 每步产生工具卡片与截图证据；右侧 Copilot 同步显示循环进度。
+- 结束给出「已验证 / 假设 / 未完成」，并可以把过程保存为用例。
 
-判定规则写进系统提示词：涉及 3 步以上、需要断言、或要修改已有用例时，先出计划；单步/探索性任务可直接操作。
+判定规则写进系统提示词：探索性、单步、验证性任务直接操作；要产出可复用用例、或修改已有用例时，先出计划 / diff。默认就是「能操作浏览器」的 Agent，不需要用户额外授权开关。
 
-### 5.3 修改现有用例：diff 卡片
+### 5.4 修改现有用例：diff 卡片
 
 AI 对现有用例的修改不静默写入，而是给出 diff 卡：
 
@@ -203,7 +225,7 @@ AI 对现有用例的修改不静默写入，而是给出 diff 卡：
 
 这不是权限审批，而是可逆性设计：浏览器操作可以直接做，不可逆的用例写入给出可检查的变更。
 
-### 5.4 执行记录
+### 5.5 执行记录
 
 每个 AI 会话保留一份动作清单（会话结束后仍可查）：
 
@@ -220,7 +242,7 @@ Web UI
   │  POST /api/invoke  ai:*          SSE: ai-delta / ai-tool / ai-plan / ai-done
   ▼
 CopilotService（会话、上下文、取消、持久化）
-  ├─ Provider（Anthropic / Stub）
+  ├─ Provider（Vercel AI SDK：DeepSeek / Anthropic / OpenAI-compatible / Stub）
   └─ ToolRegistry（Zod schema + 执行器 + 展示元数据）
         ├─ browser.*   → ChromeController / LiveView
         ├─ case.*      → MikroORM uow
@@ -235,19 +257,59 @@ CopilotService（会话、上下文、取消、持久化）
 
 ### 6.2 模型与配置
 
-- 默认 `deepseek-flash`；模型、provider、base URL 全部可配置，Claude 作为可切换选项。
-- 配置来源（优先级从高到低）：
-  1. 环境变量：`ATP_AI_PROVIDER`、`ATP_AI_MODEL`、`ATP_AI_BASE_URL`、`ATP_AI_API_KEY`
-  2. 兼容常见命名：`DEEPSEEK_API_KEY`、`ANTHROPIC_API_KEY`、`ANTHROPIC_BASE_URL`
-  3. `~/.atp-agent/config.json`
-- 不做登录页；没有 key 时 Copilot 页签显示配置卡（列出读取的变量名与示例命令），其余功能不受影响。
-- `deepseek-flash` 的具体 model id 与网关地址以实际环境为准；若当前 endpoint 不提供该 id，自动回退到 `deepseek-chat`，并在面板头部标明实际使用的模型。
-- 模型不支持 tool calling 时自动降级为只读问答，并提示原因，不静默失败。
+默认 `deepseek-flash`；三种访问方式都要支持，用 profile 配置，不在代码里判断协议：
+
+| 方式 | AI SDK provider | 典型配置 |
+| --- | --- | --- |
+| DeepSeek 官方 | `@ai-sdk/deepseek` | `DEEPSEEK_API_KEY` + model |
+| OpenAI 兼容网关 | `@ai-sdk/openai-compatible` | `baseURL` + key + model |
+| Anthropic 兼容网关 | `@ai-sdk/anthropic` | `baseURL` + key + model |
+| Claude 官方 | `@ai-sdk/anthropic` | `ANTHROPIC_API_KEY` + model |
+
+`~/.atp-agent/config.json`：
+
+```json
+{
+  "ai": {
+    "active": "company",
+    "profiles": {
+      "company": {
+        "kind": "openai-compatible",
+        "baseURL": "https://gateway.example.com/v1",
+        "model": "deepseek-flash",
+        "apiKeyEnv": "ATP_AI_API_KEY"
+      },
+      "deepseek": {
+        "kind": "deepseek",
+        "model": "deepseek-chat",
+        "apiKeyEnv": "DEEPSEEK_API_KEY"
+      },
+      "gateway": {
+        "kind": "anthropic",
+        "baseURL": "https://gateway.example.com",
+        "model": "deepseek-flash",
+        "apiKeyEnv": "ATP_AI_API_KEY"
+      },
+      "claude": {
+        "kind": "anthropic",
+        "model": "claude-sonnet-5-5",
+        "apiKeyEnv": "ANTHROPIC_API_KEY"
+      }
+    }
+  }
+}
+```
+
+- 环境变量可覆盖：`ATP_AI_PROFILE`、`ATP_AI_MODEL`、`ATP_AI_BASE_URL`、`ATP_AI_API_KEY`。
+- 面板头部显示实际 provider / model，可切换 profile；切换只影响新会话。
+- 不做登录页；没有 key 或配置错误时显示配置卡（列出读取的变量名与示例），其余功能不受影响。
+- `deepseek-flash` 的具体 model id 以网关为准；找不到时回退到 profile 的 `fallbackModel`（默认 `deepseek-chat`），并在面板头部标明。
+- 模型不支持 tool calling 时自动降级为只读问答，并明确提示原因，不静默失败。
 - 截图按需上传：模型调用 `browser.screenshot` 才把画面作为工具结果发回；默认只发可访问性快照。
 
-### 6.3 SDK 选型：Anthropic SDK vs Vercel AI SDK
+### 6.3 SDK 选型：Anthropic SDK vs Vercel AI SDK（已采用 Vercel）
 
-| 维度 | Anthropic SDK | Vercel AI SDK（推荐） |
+| 维度 | Anthropic SDK | Vercel AI SDK（采用） |
 | --- | --- | --- |
 | Provider 覆盖 | 仅 Claude | DeepSeek / Claude / OpenAI-compatible / 20+ |
 | 默认模型为 DeepSeek | 需要另写一套 OpenAI 兼容适配与循环 | `@ai-sdk/deepseek` 或 `@ai-sdk/openai-compatible` 直接接 |
@@ -259,7 +321,7 @@ CopilotService（会话、上下文、取消、持久化）
 | 版本风险 | 稳定 | 大版本变动较频繁，需要锁版本 |
 | 适配成本 | 双 provider 要两套循环 | 换模型基本是改配置 |
 
-结论：**用 Vercel AI SDK 作为接入层，外面再包一层自己的 `CopilotProvider` 接口。**
+结论：**已确定用 Vercel AI SDK 作为接入层，外面再包一层自己的 `CopilotProvider` 接口。**
 
 理由：
 
@@ -291,6 +353,7 @@ URL: http://…/demo
 
 - 实现：向可交互节点注入临时 `data-atp-ref`，返回角色、可读名、值、状态；操作工具接收 `ref`。
 - 导航后 ref 失效，需要重新快照；工具卡片只显示人类可读名。
+- 每个操作工具返回 `target: { rect, viewport }`（元素在 CSS 像素下的矩形与视口尺寸），中栏据此在镜像上画高亮框；不改被测页面 DOM。
 - 操作后自动截一张低质量证据图，挂到工具卡上。
 
 ### 6.5 与录制/回放/计划的关系
@@ -305,6 +368,8 @@ URL: http://…/demo
 | --- | --- |
 | 未配置 key | 配置卡 + 命令示例；不阻塞其他功能 |
 | 模型首 token 慢 | 「正在思考…」+ 已耗时；超过 15s 提示可停止 |
+| 模型观察页面 | 状态条「正在观察页面…」；显示最后一次快照摘要 |
+| 用户接管 | 停止 AI 循环并聚焦 Chrome；已完成动作与证据保留 |
 | 工具执行中 | 卡片显示工具名与耗时；顶部状态条可停止 |
 | 工具失败 | 卡片自动展开，给候选、遮挡归因与「让 AI 修复」 |
 | 流断开 | 保留已收到内容，显示「连接中断，重试」 |
@@ -322,19 +387,24 @@ URL: http://…/demo
 
 ## 9. 分期与验收
 
-### Stage 2.1：只读 Copilot + 界面骨架（先交付可感知的一层）
+### Stage 2.1：Copilot 骨架 + 页面感知（先交付可感知的一层）
 
 - 右侧 Copilot 页签、可拖拽宽度、上下文 chips、命令栏。
-- Vercel AI SDK（默认 DeepSeek provider）+ 自有 `CopilotProvider` 封装 + StubProvider、SSE 事件、会话持久化。
-- 只读工具：`browser.snapshot`、`browser.screenshot`、`case.list/get`、`run.list/get`。
-- 工具卡片（折叠/展开/失败态）、思考摘要、结论脚注。
-- **验收**：选中失败运行 → 点「分析这一步」→ 自动带上下文 → AI 输出归因与建议；全程中栏镜像可见。
+- Vercel AI SDK（默认 DeepSeek profile）+ 自有 `CopilotProvider` 封装 + StubProvider、SSE 事件、会话持久化。
+- 感知工具：`browser.snapshot`（语义 ref）、`browser.screenshot`、`case.list/get`、`run.list/get`。
+- 工具卡片（折叠/展开/失败态）、思考摘要、结论脚注、顶部 AI 状态条。
+- **验收**：选中失败运行 → 点「分析这一步」→ 自动带上下文 → AI 先快照/截图再输出归因与建议；全程中栏镜像可见。
 
-### Stage 2.2：可操作浏览器
+### Stage 2.2：Browser Use 操作 + 中栏可视化（关键切片）
 
-- 语义 ref 快照、`browser.navigate/click/fill/select/check/press/wait/assert`。
-- 顶部 AI 状态条、停止、动作清单、证据截图。
-- **验收**：一句「打开设置并截图」能看到镜像随操作变化；停止后 1s 内不再有动作；每步都有可回看的证据。
+- 语义 ref 快照、`browser.navigate/click/fill/select/check/press/scroll/wait/assert`。
+- Browser Use 循环：观察 → 决策 → 操作 → 验证；自动快照、失败重试、最大步数/时长。
+- 顶部 AI 状态条（步号 / 工具 / 耗时 / 停止 / 接管）。
+- 中栏可视化：目标元素高亮框、动作说明、点击/输入反馈、每步证据缩略图。
+- 动作清单与证据落盘；AI 与人工共用录制/回放链路。
+- **验收**：一句「把这个创建流程走一遍」→ AI 自主完成多步操作与断言，中栏能看到高亮与画面变化；停止后 1s 内不再有动作；每步都有可回看的证据；失败时能说明原因并重试或停下。
+
+Stage 2.2 是 Agent 能力的验收门槛：如果只能按固定脚本演示，不算通过。
 
 ### Stage 2.3：计划与用例
 
@@ -356,13 +426,15 @@ URL: http://…/demo
 1. 界面形态：右侧常驻页签 + 现场入口 + `⌘K`。
 2. 用例写入：计划卡 / diff 卡显式应用。
 3. 默认模型：`deepseek-flash`（可配置）。
+4. 接入层：Vercel AI SDK + 自有 `CopilotProvider` 封装。
+5. 三种访问方式都支持：DeepSeek 官方、OpenAI 兼容网关、Anthropic 兼容网关。
+6. Copilot 必须是真正的 Browser Use Agent，操作在中栏可视化。
 
-待确认（开始 2.1 前需要）：
+待补充（联调前需要，不阻塞 2.1 的 Stub 开发）：
 
-1. 接入层：推荐 Vercel AI SDK + 自有 `CopilotProvider` 封装（理由见 §6.3），还是 Anthropic SDK + 单独适配 DeepSeek。
-2. `deepseek-flash` 的 endpoint / model id 与 key 的环境变量名（若走公司网关，需要 base URL）。
-3. 是否同时接 Claude 作为可选 provider（默认仍 DeepSeek）。
-4. AI 会话是否需要跨重启保留（默认保留在 SQLite；如不需要可只留当前会话）。
+1. `deepseek-flash` 的 endpoint / model id 与 key 的环境变量名（若走公司网关，需要 base URL）。
+2. 是否同时接 Claude profile（默认仍 DeepSeek）。
+3. AI 会话是否需要跨重启保留（默认保留在 SQLite）。
 
 ## 11. 参考
 
