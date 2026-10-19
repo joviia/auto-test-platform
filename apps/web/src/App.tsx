@@ -1,4 +1,5 @@
 import { Toast, toast } from '@heroui/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { type PointerEvent as ReactPointerEvent, useEffect } from 'react'
 import { AiSettingsDialog } from './ai/AiSettingsDialog'
 import { CommandPalette } from './ai/CommandPalette'
@@ -34,6 +35,8 @@ export function App() {
   const endAiTool = useUiStore((s) => s.endAiTool)
   const finishAiMessage = useUiStore((s) => s.finishAiMessage)
   const failAiMessage = useUiStore((s) => s.failAiMessage)
+  const setReplaying = useUiStore((s) => s.setReplaying)
+  const qc = useQueryClient()
   // 项目/模块只是树上的定位，不算「打开了东西」；启动台仍应保持干净的整幅舞台
   const openedNode = selected?.kind === 'case' || selected?.kind === 'plan'
   const launchMode =
@@ -85,8 +88,19 @@ export function App() {
     const offAiDelta = window.atp.on('event:ai-delta', (p) =>
       appendAiDelta(p.messageId, p.kind, p.text),
     )
-    const offAiToolStart = window.atp.on('event:ai-tool-start', (p) => startAiTool(p.messageId, p))
-    const offAiToolEnd = window.atp.on('event:ai-tool-end', (p) => endAiTool(p.messageId, p))
+    const offAiToolStart = window.atp.on('event:ai-tool-start', (p) => {
+      startAiTool(p.messageId, p)
+      // AI 自己执行用例时，中栏回放状态条与进度条跟随
+      if (p.name === 'case_run') setReplaying(true)
+    })
+    const offAiToolEnd = window.atp.on('event:ai-tool-end', (p) => {
+      endAiTool(p.messageId, p)
+      if (p.name === 'case_run') {
+        setReplaying(false)
+        void qc.invalidateQueries({ queryKey: ['runs'] })
+        void qc.invalidateQueries({ queryKey: ['planRuns'] })
+      }
+    })
     const offAiDone = window.atp.on('event:ai-done', (p) =>
       finishAiMessage(p.messageId, p.cancelled),
     )
@@ -124,6 +138,8 @@ export function App() {
     endAiTool,
     finishAiMessage,
     failAiMessage,
+    setReplaying,
+    qc,
   ])
 
   // 拖拽右侧面板：向左拖动变宽，宽度持久化到本地

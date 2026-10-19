@@ -360,7 +360,7 @@ DeepSeek 已进入 V4 系列，旧模型名 `deepseek-chat` / `deepseek-reasoner
 具体做法：
 
 - `ai` + `@ai-sdk/deepseek`（默认）+ `@ai-sdk/anthropic`（可选）+ `@ai-sdk/openai-compatible`（自建网关）。
-- 工具用 Zod 定义，直接传给 `streamText`；`stopWhen: stepCountIs(20)` 控制上限。
+- 工具用 Zod 定义，直接传给 `streamText`；`stopWhen: stepCountIs(50)` 控制单轮上限，达到上限时向用户说明「任务可能未完成，可回复继续」。
 - 消费 `fullStream`，映射成 `ai-delta` / `ai-tool-start` / `ai-tool-result` / `ai-done`。
 - 不用 `useChat`，UI 保持自己的消息与卡片模型；SDK 只在 Agent 进程内使用。
 - 测试用自建 `StubProvider`，不把 `ai/test` 带进运行时（其在部分版本硬依赖 Vitest）。
@@ -436,7 +436,7 @@ URL: http://…/demo
 
 ### Stage 2.2：Browser Use 操作 + 中栏可视化（关键切片）
 
-> **状态（2026-10-19）**：部分交付。环境快照、平台工具（录制/平台状态）、drag/hover/wait_for、操作库 v1（slider_set / hover_menu / upload_file）与左栏「操作库」已落地，详见 <Stage2.2-环境感知与操作库.md>。iframe、Shadow DOM、自定义下拉与完整动作验证仍在后续。
+> **状态（2026-10-19）**：部分交付。环境快照、平台工具（录制/平台状态/case_run）、drag/hover/wait_for、操作库 v1（slider_set / hover_menu / upload_file）与左栏「操作库」已落地，详见 <Stage2.2-环境感知与操作库.md>。iframe、Shadow DOM、自定义下拉与完整动作验证仍在后续。
 - 语义 ref 快照、`browser.navigate/click/fill/select/check/press/scroll/wait/assert`。
 - Browser Use 循环：观察 → 决策 → 操作 → 验证；自动快照、失败重试、最大步数/时长。
 - 顶部 AI 状态条（步号 / 工具 / 耗时 / 停止 / 接管）。

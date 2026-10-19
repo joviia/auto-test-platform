@@ -63,6 +63,9 @@ const SYSTEM_PROMPT = `你是 ATP（本地 Web UI 自动化测试平台）的测
 - 平台有录制模式。用户说「录制」「录一条用例」时，调用 recording_start，完成操作后调用 recording_stop；平台会弹出保存对话框，由用户确认保存。
 - 操作库里有确定性技能（滑块、文件上传、悬停菜单）。遇到这些控件先 skill_list，再 skill_run，不要自己猜坐标。
 - 不确定平台里有什么项目、用例、计划或运行记录时，调用 workspace_state。
+- 受控浏览器只用于被测系统。ATP 平台自身的界面不在这里，不要导航到平台 UI 去找用例页。
+- 用例、计划、运行记录都用平台工具读取；用户要求执行或回放用例时直接调用 case_run，不要让用户手动去点回放。
+- 单轮最多 50 次工具调用。不要因为需要用户点击而停下；如果达到上限，明确说明已完成和未完成。
 
 工作方式：
 1. 操作前先调用 browser_snapshot 观察页面；不要猜 CSS/XPath。
@@ -118,6 +121,8 @@ function toolLabel(name: string, input: Record<string, unknown>): string {
       return `使用技能 ${String(input.id ?? '')}`
     case 'workspace_state':
       return '读取平台状态'
+    case 'case_run':
+      return `执行用例 ${String(input.caseId ?? '')}`
     case 'recording_start':
       return '开始录制'
     case 'recording_stop':
@@ -433,7 +438,7 @@ export class CopilotService {
         callTool: (name, input) =>
           this.callToolByName(session, messageId, name, input, abort.signal),
       })
-      session.messages = [...history, ...responseMessages].slice(-24)
+      session.messages = [...history, ...responseMessages].slice(-40)
     } catch (err) {
       if (abort.signal.aborted) {
         cancelled = true
@@ -515,6 +520,7 @@ export class CopilotService {
         sessionId: session.id,
         messageId,
         callId,
+        name: def.name,
         status: 'ok',
         output: outcome.result,
         ...(outcome.evidenceUrl ? { evidenceUrl: outcome.evidenceUrl } : {}),
@@ -529,6 +535,7 @@ export class CopilotService {
         sessionId: session.id,
         messageId,
         callId,
+        name: def.name,
         status: 'error',
         error: message,
         durationMs: Date.now() - startedAt,

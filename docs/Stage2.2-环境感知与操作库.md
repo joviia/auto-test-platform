@@ -61,9 +61,12 @@ Copilot 头部增加一个「环境」按钮。展开后显示模型实际看到
 | `workspace_state` | 读取项目、用例、计划、最近运行、元素数、技能数、录制状态 |
 | `recording_start` | 开始录制；录制中 AI 的页面操作会被采集为步骤 |
 | `recording_stop` | 停止录制，返回步数，并让界面弹出保存用例对话框 |
+| `case_run` | 直接执行一条用例，返回逐步状态、耗时和错误 |
 | `skill_list` / `skill_run` | 查看和运行操作库技能 |
 
-`workspace_state` 解决「不知道平台里有什么」。`recording_start/stop` 解决「不知道要录制」。
+`workspace_state` 解决「不知道平台里有什么」。`recording_start/stop` 解决「不知道要录制」。`case_run` 解决「知道用例却只能让用户点回放」——执行是平台工具，不是浏览器操作。
+
+system prompt 同时写明平台边界：受控浏览器只用于被测系统，ATP 自身的界面不在其中，不要导航到平台 UI 找用例页；单轮最多 50 次工具调用，达到上限要明确说明已完成和未完成。
 
 写入类操作仍然遵守之前的约定：AI 不直接保存用例。`recording_stop` 只负责把草稿交给用户，保存由现有的「保存录制的用例」对话框完成。
 
@@ -143,8 +146,10 @@ ai:send.context.environment                 → AiEnvironment
 1. 打开带滑块的演示页，对 Copilot 说「把音量调到 80%」。它先 `browser_snapshot`，再 `skill_run(slider_set)`，中栏能看到操作，结果读回值为 80。
 2. 对 Copilot 说「帮我录一条创建流程」。它调用 `recording_start`，操作页面，调用 `recording_stop`，界面弹出保存对话框，保存后的用例步骤数与录制一致。
 3. 切到「操作库」，能看到三个技能及参数；点击「让 Copilot 使用」后，Copilot 收到预置请求。
-4. Copilot 头部的「环境」面板能看到当前项目、用例和录制状态。
-5. 上述流程不依赖真实模型也能测的部分，进入 E2E；技能执行用 Playwright 集成测试覆盖。
+4. 对 Copilot 说「执行这条用例」，它调用 `case_run` 直接执行并逐步汇报，不要求用户手动点回放，也不会导航到平台 UI。
+5. Copilot 头部的「环境」面板能看到当前项目、用例和录制状态。
+6. 单轮工具调用达到 50 次时，消息末尾明确提示可能未完成。
+7. 上述流程不依赖真实模型也能测的部分，进入 E2E；技能执行与 `case_run` 用集成/单测覆盖。
 
 ## 9. 不在这一期
 
@@ -161,7 +166,7 @@ ai:send.context.environment                 → AiEnvironment
 
 ### 自动化
 
-- Agent 单测：19 个通过，其中技能集成测试覆盖原生 range、aria slider、步长量化、悬停菜单、文件上传与路径越界拒绝。
+- Agent 单测：24 个通过，其中技能集成测试覆盖原生 range、aria slider、步长量化、悬停菜单、文件上传与路径越界拒绝；工具单测覆盖 `case_run` 成功/失败与录制工具。
 - E2E：操作库三个技能与参数详情、Copilot 环境面板、模型设置、录制/回放/报告全部通过。
 - `pnpm biome check .`、两个应用的 typecheck、生产构建均通过。
 
@@ -172,6 +177,7 @@ ai:send.context.environment                 → AiEnvironment
 1. 「把演示页的音量滑块调到 80」→ `browser_snapshot` → `skill_list` → `skill_run(slider_set)`，读回 80，页面文本同步显示「音量 80」。
 2. 「展开用户菜单」并询问平台状态 → `workspace_state` → `run_get` → `skill_run(hover_menu)`，返回「个人资料 / 退出登录」两项。
 3. 「录一条创建节目的用例」→ `recording_start` → 填写/选择/勾选/点击 → `recording_stop`，保存对话框显示 4 步、4 个元素，草稿被正确交给用户。
+4. 选中「登陆」用例说「执行并重点看拖拽」→ `case_run`，6 步全部 passed，拖拽 549ms；随后读 `run_get` 核对，并确认登录后进入 `/#/workbench`。全程没有尝试打开平台用例页，也没有要求用户手动点回放。
 
 真实录制第一次验证时发现：`ai-recording-draft` 事件把草稿放在 `draft` 字段里，前端却按顶层草稿接收，导致界面崩溃。已改为扁平 payload（`{ type, ...draft }`）并在入口检查 `steps` 是否为数组。自动化 E2E 覆盖不到这一条，属于真实模型测试补上的问题。
 
@@ -179,3 +185,9 @@ ai:send.context.environment                 → AiEnvironment
 
 - 真实模型下的文件上传（执行逻辑由集成测试覆盖；演示页未提供合适的本地图片）。
 - iframe、Shadow DOM、自定义下拉的专项处理，按计划留到后续。
+
+## 11. 已知边界
+
+- 单轮工具上限 50。更长的任务会暂停并提示「回复继续」；后续可做成设置项或按任务类型动态放宽。
+- `case_run` 是真实执行，会创建运行记录并改变受控页面；只有用户明确要求执行时才应调用。
+- AI 执行用例期间，中栏回放状态条、进度与报告计数会跟随刷新；停止 Copilot 不会自动中止已经开始的回放，需要点中栏的「停止回放」。

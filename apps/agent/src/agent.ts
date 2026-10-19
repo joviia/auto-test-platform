@@ -102,6 +102,23 @@ export class Agent {
         startRecording: () => this.startRecording(),
         stopRecording: () => this.stopRecording(),
         notifyRecordingDraft: (draft) => this.emit({ type: 'ai-recording-draft', ...draft }),
+        runCase: async (caseId) => {
+          const result = await this.replayCase(caseId)
+          return {
+            runId: result.runId,
+            status: result.status,
+            ...(result.error ? { error: result.error } : {}),
+            ...(result.durationMs !== undefined ? { durationMs: result.durationMs } : {}),
+            steps: result.steps.map((step) => ({
+              index: step.index,
+              action: step.action,
+              status: step.status,
+              durationMs: step.durationMs,
+              ...(step.error ? { error: step.error } : {}),
+              ...(step.skipped !== undefined ? { skipped: step.skipped } : {}),
+            })),
+          }
+        },
       },
       onEvent: (event) => this.emit(event),
     })

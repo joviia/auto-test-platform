@@ -6,11 +6,27 @@ import { z } from 'zod'
 import type { ChromeController, RecordedDraft } from '../browser.js'
 import { SKILL_MANIFESTS, SKILL_MAP } from './skills.js'
 
+export interface CopilotCaseRun {
+  runId: string
+  status: 'passed' | 'failed'
+  durationMs?: number
+  error?: string
+  steps: Array<{
+    index: number
+    action: string
+    status: string
+    durationMs: number
+    error?: string
+    skipped?: boolean
+  }>
+}
+
 export interface CopilotPlatform {
   isRecording: () => boolean
   startRecording: () => void
   stopRecording: () => Promise<RecordedDraft>
   notifyRecordingDraft: (draft: RecordedDraft) => void
+  runCase: (caseId: string) => Promise<CopilotCaseRun>
 }
 
 export interface CopilotToolContext {
@@ -492,6 +508,36 @@ export const COPILOT_TOOLS: CopilotTool[] = [
           note: '保存用例对话框已打开，等待用户命名并保存',
         },
         label: `停止录制 · ${draft.steps.length} 步`,
+      }
+    },
+  },
+  {
+    name: 'case_run',
+    description:
+      '执行一条用例并返回逐步结果。只有用户明确要求执行、回放或跑一下时才使用；会在受控 Chrome 里真实操作页面并产生执行记录。需要执行时直接调用，不要让用户去平台手动点回放。',
+    schema: z.object({ caseId: z.string().min(1) }),
+    async run(input, ctx) {
+      checkAbort(ctx)
+      const caseId = String(input.caseId)
+      let caseName = caseId
+      try {
+        const file = await getDb().uow().cases.get(caseId)
+        if (file) caseName = file.case.name
+      } catch {
+        // 单测或数据库未初始化时只影响展示名称
+      }
+      const result = await ctx.platform.runCase(caseId)
+      return {
+        result: {
+          ok: result.status === 'passed',
+          runId: result.runId,
+          caseId,
+          status: result.status,
+          ...(result.error ? { error: result.error } : {}),
+          ...(result.durationMs !== undefined ? { durationMs: result.durationMs } : {}),
+          steps: result.steps,
+        },
+        label: `执行用例「${caseName}」· ${result.status === 'passed' ? '通过' : '失败'}`,
       }
     },
   },

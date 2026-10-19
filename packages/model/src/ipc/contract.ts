@@ -507,6 +507,7 @@ export const ipcEventContract = {
     sessionId: z.string(),
     messageId: z.string(),
     callId: z.string(),
+    name: z.string(),
     status: z.enum(['ok', 'error']),
     output: z.unknown().optional(),
     error: z.string().optional(),

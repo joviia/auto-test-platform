@@ -107,7 +107,7 @@ class AiSdkProvider implements CopilotProvider {
       instructions: input.system,
       messages: input.messages,
       tools: input.tools,
-      stopWhen: stepCountIs(20),
+      stopWhen: stepCountIs(MAX_TOOL_STEPS),
       abortSignal: input.signal,
       ...(options ? { providerOptions: options } : {}),
       onError: ({ error }) => {
@@ -122,9 +122,18 @@ class AiSdkProvider implements CopilotProvider {
         input.onError(part.error instanceof Error ? part.error.message : String(part.error))
       }
     }
+    const steps = await result.steps
+    if (steps.length >= MAX_TOOL_STEPS) {
+      input.onText(
+        `\n\n（已达到本轮 ${MAX_TOOL_STEPS} 次工具调用上限，任务可能还没完成。回复「继续」可以从当前进度接着做。）`,
+      )
+    }
     return (await result.responseMessages) as ModelMessage[]
   }
 }
+
+/** 单轮工具循环上限；复杂任务（录制、回放、多步诊断）需要比 20 更宽 */
+export const MAX_TOOL_STEPS = 50
 
 export interface ProviderBundle {
   provider: CopilotProvider
