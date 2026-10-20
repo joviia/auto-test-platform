@@ -1,11 +1,23 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getDb } from '@atp/core'
-import type { AiCaseProposal, AiPlanProposal, AiTarget, Element, Locator, Step } from '@atp/model'
+import type {
+  AiCaseProposal,
+  AiEnvironment,
+  AiPlanProposal,
+  AiTarget,
+  DesignCommand,
+  DesignMatrix,
+  DesignSelection,
+  Element,
+  Locator,
+  Step,
+} from '@atp/model'
 import { assertionSchema, caseFileSchema, isPageLevelAssertion } from '@atp/model'
 import { selectCustom } from '@atp/runner'
 import { z } from 'zod'
 import type { ChromeController, RecordedDraft, RefDescription } from '../browser.js'
+import { DESIGN_TOOLS } from './design-tools.js'
 import { buildCaseProposal, type CaseProposalInput, caseProposalOpsSchema } from './proposals.js'
 import { SKILL_MANIFESTS, SKILL_MAP } from './skills.js'
 
@@ -34,6 +46,12 @@ export interface AiPlatform {
   proposeCase: (proposal: AiCaseProposal) => void
   /** 把新用例计划卡交给界面；执行与保存由用户触发 */
   proposePlan: (proposal: AiPlanProposal) => void
+  /** 测试设计：工作台选择/筛选/视图指令 */
+  designCommand: (command: DesignCommand) => void
+  /** 测试设计：AI 已写库的新矩阵，推送给界面替换并保留撤销 */
+  designUpdated: (matrix: DesignMatrix, label: string) => void
+  /** 测试设计：对非写数据行直接生成并执行 */
+  runDesignSelection: (selections: DesignSelection[]) => Promise<{ cases: number }>
 }
 
 export interface AiToolContext {
@@ -43,6 +61,8 @@ export interface AiToolContext {
   browser: () => ChromeController | null
   platform: AiPlatform
   signal: AbortSignal
+  /** 本条消息的环境快照；设计工具据此定位当前矩阵与 revision */
+  environment?: AiEnvironment
 }
 
 export interface ToolOutcome {
@@ -121,7 +141,7 @@ async function act(
 }
 
 /** 计划卡的定位候选：语义优先，结构兜底 */
-function planLocators(info: RefDescription): Locator[] {
+export function planLocators(info: RefDescription): Locator[] {
   const out: Locator[] = []
   if (info.testId) out.push({ type: 'testId', value: info.testId })
   if (info.role && info.name) out.push({ type: 'role', value: info.role, name: info.name })
@@ -896,6 +916,7 @@ export const AI_TOOLS: AiTool[] = [
       }
     },
   },
+  ...DESIGN_TOOLS,
 ]
 
 export const AI_TOOL_MAP = new Map(AI_TOOLS.map((tool) => [tool.name, tool]))

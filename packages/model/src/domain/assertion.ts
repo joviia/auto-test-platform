@@ -53,6 +53,14 @@ export const assertionSchema = z.discriminatedUnion('type', [
     ...timeout,
   }),
 
+  // 表单语义
+  z.object({ type: z.literal('fieldInvalid'), ...timeout }),
+  z.object({
+    type: z.literal('fieldError'),
+    expected: z.string().optional(),
+    ...timeout,
+  }),
+
   // 属性 / 样式
   z.object({
     type: z.literal('attribute'),
@@ -108,5 +116,6 @@ export function assertionNeedsExpected(type: Assertion['type']): boolean {
     'checked',
     'unchecked',
     'count',
+    'fieldInvalid',
   ].includes(type)
 }

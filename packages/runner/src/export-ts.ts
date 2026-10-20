@@ -109,6 +109,12 @@ function assertionLines(a: Assertion, loc: string | null): string[] {
       ]
     case 'css':
       return [`await expect(${loc}).toHaveCSS(${quote(a.name)}, ${quote(a.expected)})`]
+    case 'fieldInvalid':
+      return [`await expect(${loc}).toBeInvalid()`]
+    case 'fieldError':
+      return a.expected
+        ? [`// 期望字段错误提示包含：${a.expected}`, `await expect(${loc}).toBeInvalid()`]
+        : [`await expect(${loc}).toBeInvalid()`]
   }
   return ['// 未支持的断言类型']
 }

@@ -50,6 +50,9 @@ function context(proposals: AiPlanProposal[]): AiToolContext {
     },
     proposeCase: () => undefined,
     proposePlan: (proposal) => proposals.push(proposal),
+    designCommand: () => undefined,
+    designUpdated: () => undefined,
+    runDesignSelection: async () => ({ cases: 0 }),
   }
   return {
     sessionId: 's-test',

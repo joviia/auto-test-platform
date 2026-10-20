@@ -46,7 +46,8 @@
     "semver": "^7.8.5",
     "signal-exit": "^4.1.0",
     "tar": "^7.5.22",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "@atp/test-design": "workspace:*"
   },
   "devDependencies": {
     "@atp/core": "workspace:*",

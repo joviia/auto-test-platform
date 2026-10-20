@@ -209,6 +209,21 @@ export const AiMessage = defineEntity({
   }),
 })
 
+/** 测试设计会话：保存矩阵快照，支持重新打开与追溯 */
+export const DesignSession = defineEntity({
+  name: 'DesignSession',
+  tableName: 'design_sessions',
+  properties: (p) => ({
+    id: p.string().primary(),
+    projectId: p.string().fieldName('project_id').nullable().index(),
+    objectId: p.string().fieldName('object_id').index(),
+    status: p.string(),
+    matrix: p.json<unknown>(),
+    createdAt: p.string().fieldName('created_at'),
+    updatedAt: p.string().fieldName('updated_at'),
+  }),
+})
+
 export type ProjectEntity = InferEntity<typeof Project>
 export type ModuleEntity = InferEntity<typeof Module>
 export type TestCaseEntity = InferEntity<typeof TestCase>
@@ -223,6 +238,7 @@ export type RunEntity = InferEntity<typeof Run>
 export type RunStepEntity = InferEntity<typeof RunStep>
 export type AiSessionEntity = InferEntity<typeof AiSession>
 export type AiMessageEntity = InferEntity<typeof AiMessage>
+export type DesignSessionEntity = InferEntity<typeof DesignSession>
 
 export const entities = [
   Project,
@@ -239,4 +255,5 @@ export const entities = [
   RunStep,
   AiSession,
   AiMessage,
+  DesignSession,
 ] as const

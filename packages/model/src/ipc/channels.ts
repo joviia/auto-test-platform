@@ -61,6 +61,15 @@ export const IpcChannel = {
   aiSessionList: 'ai:session-list',
   aiSessionGet: 'ai:session-get',
   aiSessionDelete: 'ai:session-delete',
+  // 测试设计（测试规范矩阵）
+  designAnalyze: 'design:analyze',
+  designGenerate: 'design:generate',
+  designRun: 'design:run',
+  designStop: 'design:stop',
+  /** 保存矩阵编辑（数据行、审阅状态、执行结果） */
+  designUpdate: 'design:update',
+  /** 最近一次设计会话（矩阵快照） */
+  designLatest: 'design:latest',
   // 单步调试
   debugStart: 'debug:start',
   debugCommand: 'debug:command',
@@ -88,6 +97,12 @@ export const IpcEvent = {
   aiPlanProposal: 'event:ai-plan-proposal',
   aiPlanProgress: 'event:ai-plan-progress',
   aiPlanResult: 'event:ai-plan-result',
+  /** 测试设计：单条场景的执行结果 */
+  designResult: 'event:design-result',
+  /** 测试设计：AI 直接修改矩阵后推送最新快照 */
+  designUpdated: 'event:design-updated',
+  /** 测试设计：AI 操作工作台的选择/筛选/视图 */
+  designCommand: 'event:design-command',
   /** 单步调试状态（暂停 / 运行 / 结束） */
   debugState: 'event:debug-state',
 } as const

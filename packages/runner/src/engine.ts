@@ -54,7 +54,13 @@ export async function runCaseOnPage(
   let runError: string | undefined
 
   try {
-    await page.goto(caseFile.case.startUrl, { waitUntil: 'load' })
+    // 每条用例都从干净的 startUrl 开始：同 URL（尤其 hash 路由）必须 reload，
+    // 否则上一次回放留下的弹窗会遮挡「新建/打开表单」等入口
+    if (page.url() === caseFile.case.startUrl) {
+      await page.reload({ waitUntil: 'load' })
+    } else {
+      await page.goto(caseFile.case.startUrl, { waitUntil: 'load' })
+    }
     for (const [index, rawStep] of caseFile.case.steps.entries()) {
       if (opts.signal?.aborted) {
         status = 'failed'

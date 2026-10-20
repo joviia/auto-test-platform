@@ -237,6 +237,220 @@ try {
   await page.getByText('观察页面', { exact: false }).first().waitFor({ timeout: 20_000 })
   console.log('[agent] AI ✓ 流式输出与工具卡分组')
 
+  // 测试设计：AI 发起 → 摘要卡 → 全屏工作台 → 审阅/编辑/AI 直操/执行/入库
+  await invoke(origin, 'browser:navigate', { url: `${origin}/demo` })
+  await composer.fill('为当前页面生成测试设计，覆盖必填、长度、格式和正常流')
+  await composer.press('Enter')
+  const summary = page.locator('[data-design-summary]')
+  await summary.waitFor({ timeout: 30_000 })
+  await summary.getByText(/已生成 \d+ 个场景 \/ \d+ 行数据/).waitFor({ timeout: 30_000 })
+  await summary.getByRole('button', { name: '打开设计工作台' }).click()
+
+  const workbench = page.locator('[data-design-workbench]')
+  await workbench.waitFor({ timeout: 10_000 })
+  await page.waitForFunction(
+    () => document.querySelectorAll('[data-design-scenario-status]').length > 0,
+  )
+  const scenarioCount = await page.locator('[data-design-scenario-status]').count()
+  const session = await invoke(origin, 'design:latest')
+  if (!session || session.schemaVersion !== 2) throw new Error('设计会话没有持久化')
+  if (scenarioCount < 5 || session.stats.rows < 6 || session.stats.readyRows < 5) {
+    throw new Error(
+      `测试设计过少：${scenarioCount} 场景 / ${session.stats.rows} 行（可执行 ${session.stats.readyRows}）`,
+    )
+  }
+  // 规范清单收敛到筛选浮层：展开后核对五类规范都已生成场景
+  const ruleFilter = page.locator('[data-design-rule-filter]')
+  await ruleFilter.locator('summary').click()
+  const ruleText = await ruleFilter.innerText()
+  for (const rule of ['必填校验', '长度校验', '格式校验', '重复校验', '正常流']) {
+    if (!ruleText.includes(rule)) throw new Error(`测试设计缺少规范「${rule}」`)
+  }
+  await ruleFilter.locator('summary').click()
+  console.log(
+    `[agent] 测试设计工作台 ✓ ${scenarioCount} 场景 / ${session.stats.rows} 行（可执行 ${session.stats.readyRows}）`,
+  )
+
+  // 工作台打开时原生/网页镜像都暂停，避免挡住全屏设计
+  const stateWhileOpen = await fetch(`${origin}/api/state`).then((res) => res.json())
+  if (stateWhileOpen.liveSubscribers !== 0) {
+    throw new Error(`工作台打开时浏览器镜像应暂停，实际订阅 ${stateWhileOpen.liveSubscribers}`)
+  }
+
+  // 矩阵视图：字段 × 规范，点单元格下钻回场景视图
+  await workbench.getByRole('button', { name: '矩阵' }).click()
+  const matrixCell = page.locator('[data-design-cell]').first()
+  await matrixCell.waitFor({ timeout: 10_000 })
+  await matrixCell.click()
+  await page
+    .getByText(/规范：/)
+    .first()
+    .waitFor({ timeout: 10_000 })
+  await page.getByRole('button', { name: '清除', exact: true }).click()
+  console.log('[agent] 测试设计矩阵 ✓ 单元格下钻与清除筛选')
+
+  // 详情按需抽屉：点场景标题打开，Esc 关闭
+  const titleButton = page.locator('[data-design-scenario-status] button').nth(1)
+  await titleButton.click()
+  await page.getByRole('button', { name: '关闭详情抽屉' }).waitFor({ timeout: 10_000 })
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: '关闭详情抽屉' }).waitFor({ state: 'hidden' })
+  if (!(await workbench.isVisible())) throw new Error('Esc 不应在抽屉打开时直接关闭工作台')
+  console.log('[agent] 测试设计抽屉 ✓ 标题打开详情 / Esc 只关抽屉')
+
+  // 展开全部数据行（切换视图会重置展开状态，必须在下钻后做）
+  while ((await page.locator('button[aria-label="展开数据行"]').count()) > 0) {
+    await page.locator('button[aria-label="展开数据行"]').first().click()
+  }
+
+  // 数据行可编辑，并自动持久化到设计会话
+  const dataInput = page.locator('[data-design-row] input:not([type="checkbox"]):visible').first()
+  await dataInput.waitFor({ timeout: 10_000 })
+  const originalValue = await dataInput.inputValue()
+  await dataInput.fill('E2E临时值')
+  await page.waitForTimeout(1000)
+  const persistedEdit = await invoke(origin, 'design:latest')
+  const persistedValues = Object.values(persistedEdit.dataRecords ?? {}).flatMap((row) =>
+    Object.values(row.values),
+  )
+  if (!persistedValues.includes('E2E临时值')) throw new Error('设计数据编辑没有自动保存')
+  await dataInput.fill(originalValue)
+  await page.waitForTimeout(1000)
+  console.log('[agent] 测试设计编辑 ✓ 数据行变更已持久化')
+
+  // AI 直操：筛选 + 修改数据 + 撤销
+  await workbench.getByRole('button', { name: 'AI 助手' }).click()
+  const aiComposer = workbench.locator('textarea[placeholder^="描述要测什么"]')
+  await aiComposer.waitFor({ timeout: 10_000 })
+  const waitAiIdle = () =>
+    workbench.getByRole('button', { name: '发送', exact: true }).waitFor({ timeout: 30_000 })
+  await waitAiIdle()
+  await aiComposer.fill('只保留长度和格式场景')
+  await aiComposer.press('Enter')
+  await workbench.getByText(/已按 长度、格式 筛选/).waitFor({ timeout: 30_000 })
+  await page.getByText(/规范：长度校验、格式校验/).waitFor({ timeout: 10_000 })
+  const filteredTitles = await page
+    .locator('[data-design-scenario-status]')
+    .evaluateAll((rows) => rows.map((row) => row.innerText.replace(/\s+/g, ' ')))
+  if (filteredTitles.length === 0 || filteredTitles.some((text) => !/长度|格式/.test(text))) {
+    throw new Error(`AI 筛选后仍有非长度/格式场景：${JSON.stringify(filteredTitles.slice(0, 4))}`)
+  }
+  await page.getByRole('button', { name: '清除', exact: true }).click()
+  await waitAiIdle()
+
+  await aiComposer.fill('把第一行数据改成 257 字')
+  await aiComposer.press('Enter')
+  try {
+    await workbench.getByText(/已把「.*」的数据改为 257/).waitFor({ timeout: 30_000 })
+  } catch (err) {
+    console.log('--- AI 修改失败现场 ---')
+    console.log((await workbench.innerText()).slice(-2000))
+    throw err
+  }
+  const menuSummary = workbench.locator('summary[aria-label="更多操作"]')
+  await menuSummary.click()
+  const undoButton = workbench.getByRole('button', { name: '撤销 AI 修改' })
+  await undoButton.waitFor({ timeout: 15_000 })
+  await page.waitForTimeout(1000)
+  const changed = await invoke(origin, 'design:latest')
+  const has257 = Object.values(changed.dataRecords ?? {}).some((row) =>
+    Object.values(row.values).includes('257'),
+  )
+  if (!has257) throw new Error('AI 修改的数据没有写库')
+  await undoButton.click()
+  await page.getByText('已撤销上一步 AI 修改').first().waitFor({ timeout: 10_000 })
+  await page.waitForTimeout(1000)
+  console.log('[agent] AI 设计直操 ✓ 筛选 / 改数据 / 撤销')
+
+  // 排除一个场景：不计入覆盖与可执行行
+  await page.getByRole('button', { name: '清空', exact: true }).click()
+  const firstReadyScenario = page.locator('[data-design-scenario-status="ready"]').first()
+  await firstReadyScenario.getByRole('checkbox', { name: /^选择场景/ }).check()
+  await workbench.getByRole('button', { name: '排除所选', exact: true }).click()
+  await page
+    .getByText(/已排除 1 个场景/)
+    .first()
+    .waitFor({ timeout: 10_000 })
+  await page.waitForTimeout(1000)
+  const afterReject = await invoke(origin, 'design:latest')
+  const rejectedScenario = afterReject.scenarios.find((item) => item.status === 'rejected')
+  if (!rejectedScenario) throw new Error('排除后场景状态没有持久化')
+  const runnableIds = Object.values(afterReject.dataRecords ?? {})
+    .filter((row) => {
+      const owner = afterReject.scenarios.find((item) => item.dataRecordIds.includes(row.id))
+      return row.status === 'ready' && owner && !['rejected', 'excluded'].includes(owner.status)
+    })
+    .map((row) => row.id)
+  if (runnableIds.length === 0) throw new Error('排除后没有可执行数据行')
+  console.log(
+    `[agent] 测试设计审阅 ✓ 排除「${rejectedScenario.title}」，剩余可执行 ${runnableIds.length} 行`,
+  )
+
+  // 全选可执行 → 写数据确认 → 按行执行
+  await page.getByRole('button', { name: '全选可执行' }).click()
+  await page.waitForFunction(
+    (expected) =>
+      document
+        .querySelector('[data-design-selected-rows]')
+        ?.getAttribute('data-design-selected-rows') === String(expected),
+    runnableIds.length,
+    { timeout: 10_000 },
+  )
+  await page.getByRole('button', { name: '执行选中' }).click()
+  await page.getByText('执行会写入业务数据').waitFor({ timeout: 10_000 })
+  await page.getByRole('button', { name: /继续执行/ }).click()
+
+  let afterRun = null
+  for (let attempt = 0; attempt < 160; attempt += 1) {
+    const snapshot = await invoke(origin, 'design:latest')
+    const done = runnableIds.every((id) => snapshot.dataRecords?.[id]?.lastRun)
+    if (done) {
+      afterRun = snapshot
+      break
+    }
+    await page.waitForTimeout(500)
+  }
+  if (!afterRun) throw new Error('测试设计执行超时：仍有数据行没有结果')
+  const failedRows = runnableIds
+    .map((id) => ({ id, run: afterRun.dataRecords[id].lastRun }))
+    .filter((item) => item.run.status !== 'passed')
+  if (failedRows.length > 0) {
+    for (const row of failedRows) {
+      const detail = await invoke(origin, 'run:get', { runId: row.run.runId }).catch(() => null)
+      console.log(
+        `--- 失败行 ${row.id} ${row.run.runId} ---\n${JSON.stringify(detail, null, 2).slice(0, 4000)}`,
+      )
+    }
+    throw new Error(`测试设计执行未全部通过：${JSON.stringify(failedRows, null, 2)}`)
+  }
+  await page.waitForFunction(
+    () => document.querySelector('[data-design-run-status="passed"]') !== null,
+    null,
+    { timeout: 15_000 },
+  )
+  console.log(`[agent] 测试设计执行 ✓ ${runnableIds.length} 行通过`)
+
+  // 接受并入库：每个可执行数据行一条用例
+  await workbench.getByRole('button', { name: '接受并入库' }).click()
+  await page.getByRole('heading', { name: '接受并入库' }).waitFor({ timeout: 10_000 })
+  const saveButton = page.getByRole('button', { name: /入库 \d+ 条用例/ })
+  await saveButton.waitFor({ timeout: 30_000 })
+  await saveButton.click()
+  await page
+    .getByText(/已入库 \d+ 条用例/)
+    .first()
+    .waitFor({ timeout: 90_000 })
+  await page.waitForTimeout(800)
+  await page.locator('[data-design-workbench]').waitFor({ state: 'hidden', timeout: 10_000 })
+  const projectId = (await invoke(origin, 'project:list'))[0].id
+  const afterDesign = await invoke(origin, 'case:list', { projectId })
+  if (afterDesign.length !== 1 + runnableIds.length) {
+    throw new Error(
+      `测试设计保存后应有 ${1 + runnableIds.length} 条用例，实际 ${afterDesign.length} 条`,
+    )
+  }
+  console.log('[agent] 测试设计保存 ✓ 每个可执行数据行一条用例')
+
   // 语音输入：用假的 SpeechRecognition 验证按钮与文本回填，不依赖真实麦克风
   const voicePage = await browser.newPage()
   voicePage.on('pageerror', (err) => errors.push(err.message))
@@ -511,9 +725,11 @@ try {
   await resumeComposer.fill('帮我观察一下当前页面')
   await resumeComposer.press('Enter')
   await resumePage
+    .getByRole('tabpanel', { name: 'AI' })
     .getByRole('button', { name: '停止' })
     .waitFor({ state: 'visible', timeout: 20_000 })
   await resumePage
+    .getByRole('tabpanel', { name: 'AI' })
     .getByRole('button', { name: '发送' })
     .waitFor({ state: 'visible', timeout: 15_000 })
   await resumePage.close()

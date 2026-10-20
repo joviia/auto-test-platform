@@ -208,6 +208,83 @@ export async function performAssertion(
       }, timeoutMs)
       return finish(a, `${a.name} = ${a.expected}`, attempt)
     }
+    case 'fieldInvalid': {
+      const attempt = await pollUntil(async () => {
+        const invalid = await element().evaluate((el) => {
+          const input = el as HTMLInputElement
+          if (input.getAttribute('aria-invalid') === 'true') return true
+          try {
+            if (typeof input.checkValidity === 'function' && !input.checkValidity()) return true
+          } catch {
+            // 非原生表单控件没有 checkValidity
+          }
+          // Element Plus / Ant Design 的错误态不一定在 6 层祖先内
+          if (
+            el.closest(
+              '.is-error, .ant-form-item-has-error, [data-invalid="true"], .el-form-item__content.is-error',
+            )
+          ) {
+            return true
+          }
+          const formItem = el.closest('.el-form-item, .ant-form-item, .form-item, [data-form-item]')
+          const errorNode = formItem?.querySelector(
+            '.el-form-item__error, .ant-form-item-explain-error, [role="alert"], .atp-field-error',
+          )
+          if (errorNode) {
+            const style = window.getComputedStyle(errorNode)
+            const text = (errorNode.textContent ?? '').trim()
+            if (text && style.display !== 'none' && style.visibility !== 'hidden') return true
+          }
+          let node: Element | null = el
+          for (let depth = 0; depth < 6 && node; depth += 1) {
+            if (
+              node.matches(
+                '[data-invalid="true"], .is-error, .el-form-item.is-error, .ant-form-item-has-error, .atp-field-invalid',
+              )
+            ) {
+              return true
+            }
+            node = node.parentElement
+          }
+          return false
+        })
+        return { ok: invalid, actual: invalid ? 'invalid' : 'valid' }
+      }, timeoutMs)
+      return finish(a, 'invalid', attempt)
+    }
+    case 'fieldError': {
+      const expected = a.expected ?? '存在错误提示'
+      const attempt = await pollUntil(async () => {
+        const actual = await element().evaluate((el, want) => {
+          const input = el as HTMLInputElement
+          if (typeof input.validationMessage === 'string' && input.validationMessage.trim()) {
+            const text = input.validationMessage.trim()
+            return want ? (text.includes(want) ? text : '') : text
+          }
+          const selectors = [
+            '[role="alert"]',
+            '.el-form-item__error',
+            '.ant-form-item-explain-error',
+            '.atp-field-error',
+          ].join(',')
+          let node: Element | null = el
+          for (let depth = 0; depth < 6 && node; depth += 1) {
+            const candidates = Array.from(node.querySelectorAll(selectors))
+            for (const candidate of candidates) {
+              const style = window.getComputedStyle(candidate)
+              if (style.display === 'none' || style.visibility === 'hidden') continue
+              const text = (candidate.textContent ?? '').trim()
+              if (!text) continue
+              if (!want || text.includes(want)) return text.slice(0, 200)
+            }
+            node = node.parentElement
+          }
+          return ''
+        }, a.expected ?? '')
+        return { ok: actual.length > 0, actual: actual || '(无错误提示)' }
+      }, timeoutMs)
+      return finish(a, expected, attempt)
+    }
   }
   throw new Error(`未知断言类型：${(a as Assertion).type}`)
 }

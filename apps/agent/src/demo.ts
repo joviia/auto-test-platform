@@ -18,9 +18,12 @@ export function demoHtml(): string {
   .muted { margin: 0 0 20px; color: #6b7280; font-size: 12px; }
   .field { display: block; margin-bottom: 14px; }
   .field span { display: block; margin-bottom: 6px; font-size: 12px; color: #374151; }
-  input[type="text"], select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #d1d5db;
+  input[type="text"], input[type="email"], select { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #d1d5db;
     border-radius: 8px; background: #fff; font: inherit; outline: none; }
-  input[type="text"]:focus, select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+  input[type="text"]:focus, input[type="email"]:focus, select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, .12); }
+  input[aria-invalid="true"] { border-color: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, .1); }
+  .field-error { margin-top: 5px; color: #b91c1c; font-size: 11.5px; }
+  .field-error[hidden] { display: none; }
   input[type="range"] { width: 100%; accent-color: #2563eb; }
   input[type="file"] { font-size: 12px; color: #6b7280; }
   output { color: #2563eb; font-weight: 600; }
@@ -46,10 +49,16 @@ export function demoHtml(): string {
 <main>
   <h1>内容管理</h1>
   <p class="muted">ATP Agent 内置演示页。在这里操作，Agent 会实时记录步骤。</p>
-  <form id="form">
+  <form id="form" novalidate>
     <label class="field">
       <span>内容名称</span>
-      <input id="content-name" data-testid="content-name" aria-label="内容名称" placeholder="例如：节目_20261019" autocomplete="off" />
+      <input id="content-name" data-testid="content-name" aria-label="内容名称" placeholder="例如：节目_20261019" autocomplete="off" required minlength="2" maxlength="50" />
+      <div class="field-error" role="alert" data-error-for="content-name" hidden></div>
+    </label>
+    <label class="field">
+      <span>邮箱</span>
+      <input type="email" id="email" data-testid="email" aria-label="邮箱" placeholder="例如：qa@example.com" autocomplete="off" />
+      <div class="field-error" role="alert" data-error-for="email" hidden></div>
     </label>
     <label class="field">
       <span>节目类型</span>
@@ -102,12 +111,57 @@ export function demoHtml(): string {
     });
   });
 
+  var nameInput = document.getElementById('content-name');
+  var emailInput = document.getElementById('email');
+  var nameError = document.querySelector('[data-error-for="content-name"]');
+  var emailError = document.querySelector('[data-error-for="email"]');
+
+  function setFieldError(input, node, message) {
+    if (message) {
+      input.setAttribute('aria-invalid', 'true');
+      node.textContent = message;
+      node.hidden = false;
+    } else {
+      input.removeAttribute('aria-invalid');
+      node.textContent = '';
+      node.hidden = true;
+    }
+  }
+
+  function validateForm() {
+    var name = nameInput.value.trim();
+    var email = emailInput.value.trim();
+    var ok = true;
+    if (!name) {
+      setFieldError(nameInput, nameError, '请填写内容名称');
+      ok = false;
+    } else if (name.length < 2) {
+      setFieldError(nameInput, nameError, '内容名称至少 2 个字');
+      ok = false;
+    } else if (name.length > 50) {
+      setFieldError(nameInput, nameError, '内容名称最多 50 个字');
+      ok = false;
+    } else {
+      setFieldError(nameInput, nameError, '');
+    }
+    if (email && !/^[^s@]+@[^s@]+.[^s@]+$/.test(email)) {
+      setFieldError(emailInput, emailError, '请输入有效的邮箱地址');
+      ok = false;
+    } else {
+      setFieldError(emailInput, emailError, '');
+    }
+    return { ok: ok, name: name };
+  }
+
+  nameInput.addEventListener('input', function () { setFieldError(nameInput, nameError, ''); });
+  emailInput.addEventListener('input', function () { setFieldError(emailInput, emailError, ''); });
+
   document.getElementById('form').addEventListener('submit', function (event) {
     event.preventDefault();
-    var name = document.getElementById('content-name').value.trim();
+    var result = validateForm();
     var toast = document.getElementById('toast');
-    toast.textContent = name ? '保存成功：' + name : '请填写内容名称';
-    toast.className = name ? 'ok' : 'bad';
+    toast.textContent = result.ok ? '保存成功：' + result.name : '请检查表单';
+    toast.className = result.ok ? 'ok' : 'bad';
   });
 </script>
 </body>

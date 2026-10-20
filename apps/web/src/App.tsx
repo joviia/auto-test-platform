@@ -8,6 +8,8 @@ import { BrowserStage } from './browser/BrowserStage'
 import { AppBar } from './components/AppBar'
 import { LeftSidebar } from './components/LeftSidebar'
 import { StatusBar } from './components/StatusBar'
+import { DesignWorkbench } from './design/DesignWorkbench'
+import { adoptDesignMatrix, noteDesignPersisted } from './design/useDesignPersistence'
 import { RightPanel } from './panels/RightPanel'
 import { SaveCaseDialog } from './recording/SaveCaseDialog'
 import { useUiStore } from './state/ui-store'
@@ -27,6 +29,7 @@ export function App() {
   const navTab = useUiStore((s) => s.navTab)
   const selected = useUiStore((s) => s.selected)
   const aiOpen = useUiStore((s) => s.aiOpen)
+  const designWorkbenchOpen = useUiStore((s) => s.designWorkbenchOpen)
   const rightWidth = useUiStore((s) => s.rightWidth)
   const setRightWidth = useUiStore((s) => s.setRightWidth)
   const startAiMessage = useUiStore((s) => s.startAiMessage)
@@ -74,6 +77,56 @@ export function App() {
       setCurrentProjectId(projects[0].id)
     }
   }, [projects, currentProjectId, setCurrentProjectId])
+
+  // 恢复最近一次测试设计会话；矩阵是持久化资产，不随刷新丢失
+  useEffect(() => {
+    let cancelled = false
+    void window.atp
+      .invoke('design:latest')
+      .then((matrix) => {
+        if (cancelled || !matrix) return
+        const store = useUiStore.getState()
+        if (store.design) return
+        const restored = {
+          ...matrix,
+          note: matrix.note ?? '已恢复上次设计会话',
+        }
+        adoptDesignMatrix(restored)
+        store.setDesign(restored)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // 刷新 / 重新打开 UI 时恢复 Agent 当前页面与运行态，避免明明 Chrome 有页面却回到启动台
+  useEffect(() => {
+    let cancelled = false
+    void fetch('/api/state')
+      .then((response) => (response.ok ? response.json() : null))
+      .then(
+        (
+          state: {
+            url?: string
+            recording?: boolean
+            replaying?: boolean
+          } | null,
+        ) => {
+          if (cancelled || !state) return
+          const store = useUiStore.getState()
+          if (state.url && state.url !== 'about:blank' && !store.url) {
+            store.setUrl(state.url)
+          }
+          if (state.recording) store.setRecording(true)
+          if (state.replaying) store.setReplaying(true)
+        },
+      )
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const offStatus = window.atp.on('event:recording-status', (p) => setRecording(p.recording))
@@ -132,6 +185,32 @@ export function App() {
     const offAiPlanResult = window.atp.on('event:ai-plan-result', (p) =>
       useUiStore.getState().applyAiPlanResult(p),
     )
+    // 测试设计：单条场景的执行结果
+    const offDesign = window.atp.on('event:design-result', (p) =>
+      useUiStore.getState().applyDesignResult(p),
+    )
+    // AI 直接修改设计矩阵：替换矩阵并保留撤销栈；AI 只发事件，不碰 UI 状态
+    const offDesignUpdated = window.atp.on('event:design-updated', (p) => {
+      const store = useUiStore.getState()
+      if (p.undoable && store.design) store.pushDesignUndo(p.label, store.design)
+      noteDesignPersisted(p.matrix.revision)
+      store.applyDesignUpdate(p.matrix)
+      adoptDesignMatrix(useUiStore.getState().design ?? p.matrix)
+      toast.success(p.label)
+    })
+    const offDesignCommand = window.atp.on('event:design-command', (p) => {
+      const store = useUiStore.getState()
+      if (p.command === 'select') {
+        store.applyDesignSelection(
+          [...new Set(p.selections.map((selection) => selection.scenarioId))],
+          p.selections.map((selection) => `${selection.scenarioId}::${selection.dataRecordId}`),
+        )
+      } else if (p.command === 'filter') {
+        store.setDesignFilter(p.filter)
+      } else {
+        store.setDesignView(p.view)
+      }
+    })
     // 单步调试：暂停 / 运行 / 结束状态
     const offDebug = window.atp.on('event:debug-state', (p) => {
       const store = useUiStore.getState()
@@ -165,6 +244,9 @@ export function App() {
       offAiPlan()
       offAiPlanProgress()
       offAiPlanResult()
+      offDesign()
+      offDesignUpdated()
+      offDesignCommand()
       offDebug()
       offAiState()
     }
@@ -214,7 +296,7 @@ export function App() {
           <main className="flex min-w-0 flex-1 flex-col">
             <BrowserStage />
           </main>
-          {!launchMode && (
+          {!launchMode && !designWorkbenchOpen && (
             <>
               <hr
                 aria-orientation="vertical"
@@ -233,6 +315,7 @@ export function App() {
         </div>
         <StatusBar />
       </div>
+      <DesignWorkbench />
       <SaveCaseDialog />
       <AiSettingsDialog />
       <CommandPalette />

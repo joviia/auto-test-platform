@@ -176,6 +176,16 @@ export function createInvokeRouter(agent: Agent, dataDir: string) {
     agent.startPlanDraft(input.proposalId, input.caseFile),
   )
   route(IpcChannel.aiPlanStop, async () => agent.stopPlanDraft())
+  route(IpcChannel.designAnalyze, async (input) => agent.analyzeDesign(input?.openEntry ?? false))
+  route(IpcChannel.designGenerate, async (input) =>
+    agent.generateDesignCases(input.matrix, input.selections),
+  )
+  route(IpcChannel.designRun, async (input) => agent.startDesignRun(input.cases))
+  route(IpcChannel.designStop, async () => agent.stopDesignRun())
+  route(IpcChannel.designUpdate, async (input) =>
+    agent.updateDesign(input.matrix, input.baseRevision),
+  )
+  route(IpcChannel.designLatest, async () => agent.latestDesign())
   route(IpcChannel.debugStart, async (input) => agent.startDebug(input.caseId, input.breakpoints))
   route(IpcChannel.debugCommand, async (input) =>
     agent.debugCommand(input.action, input.breakpoints),

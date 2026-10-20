@@ -19,4 +19,25 @@ describe('toPlaywrightSpec', () => {
     expect(code).toContain('page.getByTestId("login-submit").click()')
     expect(code).toContain('toHaveText("登录成功")')
   })
+
+  it('表单语义断言导出为 toBeInvalid', () => {
+    const file = caseFileSchema.parse(example) as CaseFile
+    file.case.steps.push(
+      {
+        id: 's-005',
+        action: 'assert',
+        elementId: 'el-username',
+        assertion: { type: 'fieldInvalid' },
+      },
+      {
+        id: 's-006',
+        action: 'assert',
+        elementId: 'el-username',
+        assertion: { type: 'fieldError', expected: '用户名' },
+      },
+    )
+    const code = toPlaywrightSpec(file)
+    expect(code.match(/toBeInvalid\(\)/g)).toHaveLength(2)
+    expect(code).toContain('期望字段错误提示包含：用户名')
+  })
 })

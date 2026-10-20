@@ -146,7 +146,7 @@ describe('AtpDatabase / UnitOfWork', () => {
     })
 
     const run = await db.uow().runs.get('r-test')
-    expect(run?.run.caseName).toBeUndefined()
+    expect(run?.run.caseName).toBe('新建电影')
     expect(run?.steps[0]?.durationMs).toBe(12)
     expect(run?.steps[0]?.locatorHit?.tier).toBe(0)
 

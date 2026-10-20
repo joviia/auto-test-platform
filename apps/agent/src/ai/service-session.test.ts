@@ -18,6 +18,9 @@ const platform: AiPlatform = {
   },
   proposeCase: () => undefined,
   proposePlan: () => undefined,
+  designCommand: () => undefined,
+  designUpdated: () => undefined,
+  runDesignSelection: async () => ({ cases: 0 }),
 }
 
 let dir: string

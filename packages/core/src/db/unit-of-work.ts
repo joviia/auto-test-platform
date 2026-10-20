@@ -1,6 +1,7 @@
 import type { EntityManager } from '@mikro-orm/sqlite'
 import { AiSessionRepository } from './repositories/ai-sessions.js'
 import { CaseRepository } from './repositories/cases.js'
+import { DesignSessionRepository } from './repositories/design-sessions.js'
 import { ElementRepository } from './repositories/elements.js'
 import { ModuleRepository } from './repositories/modules.js'
 import { PlanRepository, PlanRunRepository } from './repositories/plans.js'
@@ -22,6 +23,7 @@ export class UnitOfWork {
   readonly planRuns: PlanRunRepository
   readonly runs: RunRepository
   readonly aiSessions: AiSessionRepository
+  readonly designSessions: DesignSessionRepository
 
   constructor(readonly em: EntityManager) {
     this.projects = new ProjectRepository(em)
@@ -33,5 +35,6 @@ export class UnitOfWork {
     this.planRuns = new PlanRunRepository(em)
     this.runs = new RunRepository(em)
     this.aiSessions = new AiSessionRepository(em)
+    this.designSessions = new DesignSessionRepository(em)
   }
 }

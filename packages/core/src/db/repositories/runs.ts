@@ -17,6 +17,17 @@ function toRunRow(row: RunEntity): RunRow {
   }
 }
 
+/** 设计执行可能没有保存到用例库；从 caseSnapshot 回退出用例名 */
+function caseNameFromSnapshot(row: RunEntity): string | undefined {
+  if (!row.caseSnapshot) return undefined
+  try {
+    const parsed = JSON.parse(row.caseSnapshot) as { case?: { name?: string } }
+    return parsed.case?.name
+  } catch {
+    return undefined
+  }
+}
+
 function toStepRow(row: RunStepEntity): RunStepRow {
   return {
     id: row.id,
@@ -51,14 +62,20 @@ export class RunRepository {
     const caseIds = [...new Set(rows.map((row) => row.caseId))]
     const cases = caseIds.length ? await this.em.find(TestCase, { id: { $in: caseIds } }) : []
     const nameById = new Map(cases.map((row) => [row.id, row.name]))
-    return rows.map((row) => ({ ...toRunRow(row), caseName: nameById.get(row.caseId) }))
+    return rows.map((row) => ({
+      ...toRunRow(row),
+      caseName: nameById.get(row.caseId) ?? caseNameFromSnapshot(row),
+    }))
   }
 
   async get(runId: string): Promise<{ run: RunRow; steps: RunStepRow[] } | null> {
     const row = await this.em.findOne(Run, { id: runId })
     if (!row) return null
     const steps = await this.em.find(RunStep, { runId }, { orderBy: { idx: 'asc' } })
-    return { run: toRunRow(row), steps: steps.map(toStepRow) }
+    return {
+      run: { ...toRunRow(row), caseName: caseNameFromSnapshot(row) },
+      steps: steps.map(toStepRow),
+    }
   }
 
   /** 落库一次完整回放结果（执行记录与用例定义分离），事务写入 */

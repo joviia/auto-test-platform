@@ -49,6 +49,47 @@ function lastUserText(messages: ModelMessage[]): string {
   return ''
 }
 
+const DESIGN_RULE_WORDS: Array<[RegExp, string]> = [
+  [/必填/, 'required'],
+  [/长度/, 'length'],
+  [/格式/, 'format'],
+  [/重复|唯一/, 'duplicate'],
+  [/日期范围|日期/, 'date-range'],
+  [/正常流|主流程|正向/, 'happy-path'],
+]
+
+const DESIGN_RULE_LABEL: Record<string, string> = {
+  required: '必填',
+  length: '长度',
+  format: '格式',
+  duplicate: '重复',
+  'date-range': '日期范围',
+  'happy-path': '正常流',
+}
+
+function designRuleIds(text: string): string[] {
+  return DESIGN_RULE_WORDS.filter(([pattern]) => pattern.test(text)).map(([, id]) => id)
+}
+
+interface StubDesignRow {
+  id: string
+  label: string
+  status: string
+}
+
+interface StubDesignScenario {
+  id: string
+  title: string
+  ruleId: string
+  rows: StubDesignRow[]
+}
+
+interface StubDesignQuery {
+  revision?: number
+  stats?: { scenarios?: number; rows?: number; readyRows?: number; pendingRows?: number }
+  scenarios?: StubDesignScenario[]
+}
+
 function asCaseFile(value: unknown): CaseFile | null {
   if (!value || typeof value !== 'object') return null
   const file = value as { case?: { id?: unknown; steps?: unknown } }
@@ -69,6 +110,80 @@ class StubProvider implements AiProvider {
     input.onText('当前是演示模式：没有配置真实模型，我会展示 Agent 的观察与工具卡片。\n\n')
     if (this.reason) input.onText(`（${this.reason}）\n\n`)
     await pause()
+
+    // 设计工作台：脚本化覆盖筛选、改数据、接受/拒绝与执行，便于演示与 E2E
+    if (context.environment?.design) {
+      const text = lastUserText(input.messages)
+      const ruleIds = designRuleIds(text)
+      const ruleText =
+        ruleIds.length > 0
+          ? ruleIds.map((id) => DESIGN_RULE_LABEL[id] ?? id).join('、')
+          : '当前范围'
+      try {
+        if (/执行|跑一下|跑一遍/.test(text)) {
+          const result = (await input.callTool('design_run', {
+            ...(ruleIds.length > 0 ? { ruleIds } : { allReady: true }),
+          })) as { needsConfirmation?: boolean; message?: string; cases?: number }
+          input.onText(
+            result?.needsConfirmation
+              ? `${result.message}\n\n`
+              : `已开始执行 ${result?.cases ?? 0} 行数据，结果会按行回写。\n\n`,
+          )
+        } else if (/清空|全部|重置/.test(text)) {
+          await input.callTool('design_select', { clear: true, filter: null })
+          input.onText('已清空工作台的筛选与选择。\n\n')
+        } else if (/只保留|筛选|只看|选中|保留/.test(text)) {
+          await input.callTool('design_select', {
+            ...(ruleIds.length > 0 ? { ruleIds } : {}),
+            filter: ruleIds.length > 0 ? { ruleIds } : {},
+          })
+          input.onText(`已按 ${ruleText} 筛选，并选中对应的可执行行。\n\n`)
+        } else if (/拒绝|接受/.test(text)) {
+          const query = (await input.callTool('design_query', {})) as StubDesignQuery
+          const targets =
+            query.scenarios?.filter(
+              (scenario) => ruleIds.length === 0 || ruleIds.includes(scenario.ruleId),
+            ) ?? []
+          const decision = text.includes('拒绝') ? 'rejected' : 'accepted'
+          await input.callTool('design_decide', {
+            decision,
+            ...(targets.length > 0 ? { scenarioIds: targets.map((item) => item.id) } : {}),
+          })
+          input.onText(
+            `已${decision === 'rejected' ? '拒绝' : '接受'} ${targets.length} 个场景（未入库）。\n\n`,
+          )
+        } else if (/改成|改为|修改|更新|设为/.test(text)) {
+          const query = (await input.callTool('design_query', {})) as StubDesignQuery
+          const scenarios =
+            query.scenarios?.filter(
+              (scenario) => ruleIds.length === 0 || ruleIds.includes(scenario.ruleId),
+            ) ?? []
+          const target =
+            scenarios.find((scenario) => scenario.rows?.some((row) => row.status === 'ready')) ??
+            scenarios[0]
+          const row = target?.rows?.find((item) => item.status === 'ready') ?? target?.rows?.[0]
+          const match = text.match(/(?:改成|改为|修改为|设为)\s*["“]?([^\s"”，。]+)/)
+          const value = (match?.[1] ?? '').replace(/字$/, '')
+          if (target && row && value) {
+            await input.callTool('design_update_data', {
+              updates: [{ scenarioId: target.id, dataRecordId: row.id, value }],
+            })
+            input.onText(`已把「${target.title}」的数据改为 ${value}，工作台底部可以撤销。\n\n`)
+          } else {
+            input.onText('没有找到可修改的可执行数据行；可以先打开设计工作台重新分析。\n\n')
+          }
+        } else {
+          const query = (await input.callTool('design_query', {})) as StubDesignQuery
+          input.onText(
+            `当前设计 rev ${query.revision ?? '—'}：${query.stats?.scenarios ?? 0} 个场景 / ${query.stats?.rows ?? 0} 行数据，可执行 ${query.stats?.readyRows ?? 0} 行，待确认 ${query.stats?.pendingRows ?? 0} 行。\n\n`,
+          )
+        }
+      } catch (err) {
+        input.onText(`设计操作失败：${err instanceof Error ? err.message : String(err)}\n\n`)
+      }
+      await pause()
+      return []
+    }
 
     type StubSnapshot = {
       elements?: Array<{ ref: string; role: string; name: string; disabled?: boolean }>

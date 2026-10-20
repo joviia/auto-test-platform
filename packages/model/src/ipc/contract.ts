@@ -3,6 +3,10 @@ import { z } from 'zod'
 import {
   caseFileSchema,
   caseGroupSchema,
+  designCaseSchema,
+  designMatrixSchema,
+  designResultSchema,
+  designSelectionSchema,
   elementSchema,
   stepSchema,
   stepStatusSchema,
@@ -62,7 +66,7 @@ const aiModelSchema = z.object({
 
 /** AI 每次请求携带的工作环境；前端从 ui-store 组装 */
 const aiEnvironmentSchema = z.object({
-  mode: z.enum(['launch', 'editing', 'recording', 'replaying', 'plan']),
+  mode: z.enum(['launch', 'editing', 'recording', 'replaying', 'plan', 'design']),
   url: z.string().optional(),
   navTab: z.enum(['cases', 'plans', 'skills']).optional(),
   selectedKind: z.enum(['project', 'module', 'case', 'plan', 'skill']).optional(),
@@ -83,6 +87,26 @@ const aiEnvironmentSchema = z.object({
       caseIndex: z.number().int().nonnegative(),
       caseTotal: z.number().int().nonnegative(),
       attempt: z.number().int().positive().optional(),
+    })
+    .optional(),
+  /** 测试设计工作台上下文；工具据此直接操作当前矩阵 */
+  design: z
+    .object({
+      sessionId: z.string(),
+      revision: z.number().int().nonnegative(),
+      view: z.enum(['scenarios', 'matrix']),
+      filter: z
+        .object({
+          fieldRef: z.string().optional(),
+          ruleId: z.string().optional(),
+          ruleIds: z.array(z.string()).optional(),
+          status: z.string().optional(),
+        })
+        .optional(),
+      activeScenarioId: z.string().optional(),
+      activeDataRecordId: z.string().optional(),
+      selectedScenarioIds: z.array(z.string()),
+      selectedDataRecordIds: z.array(z.string()),
     })
     .optional(),
 })
@@ -572,6 +596,34 @@ export const ipcContract = {
   },
   [IpcChannel.aiSessionDelete]: { input: idInput, output: okSchema },
 
+  [IpcChannel.designAnalyze]: {
+    input: z.object({ openEntry: z.boolean().optional() }).optional(),
+    output: designMatrixSchema,
+  },
+  [IpcChannel.designGenerate]: {
+    input: z.object({
+      matrix: designMatrixSchema,
+      selections: z.array(designSelectionSchema).min(1),
+    }),
+    output: z.object({ cases: z.array(designCaseSchema) }),
+  },
+  [IpcChannel.designRun]: {
+    input: z.object({ cases: z.array(designCaseSchema).min(1) }),
+    output: okSchema,
+  },
+  [IpcChannel.designStop]: { input: z.void(), output: okSchema },
+  [IpcChannel.designUpdate]: {
+    input: z.object({
+      matrix: designMatrixSchema,
+      baseRevision: z.number().int().nonnegative(),
+    }),
+    output: designMatrixSchema,
+  },
+  [IpcChannel.designLatest]: {
+    input: z.void(),
+    output: designMatrixSchema.nullable(),
+  },
+
   [IpcChannel.debugStart]: {
     input: z.object({
       caseId: z.string().min(1),
@@ -608,6 +660,26 @@ export function parseIpcInput<K extends keyof IpcContract>(channel: K, raw: unkn
 }
 
 /** main → renderer 推送事件的载荷契约 */
+export const designCommandSchema = z.discriminatedUnion('command', [
+  z.object({
+    command: z.literal('select'),
+    selections: z.array(designSelectionSchema),
+  }),
+  z.object({
+    command: z.literal('filter'),
+    filter: z.object({
+      fieldRef: z.string().optional(),
+      ruleId: z.string().optional(),
+      ruleIds: z.array(z.string()).optional(),
+      status: z.string().optional(),
+    }),
+  }),
+  z.object({
+    command: z.literal('view'),
+    view: z.enum(['scenarios', 'matrix']),
+  }),
+])
+
 export const ipcEventContract = {
   [IpcEvent.recordingStatus]: z.object({
     recording: z.boolean(),
@@ -703,6 +775,16 @@ export const ipcEventContract = {
     error: z.string().optional(),
     steps: z.array(aiPlanStepResultSchema),
   }),
+  /** 测试设计：单条场景执行结果 */
+  [IpcEvent.designResult]: designResultSchema,
+  /** 测试设计：AI 直接修改矩阵后的最新快照 */
+  [IpcEvent.designUpdated]: z.object({
+    matrix: designMatrixSchema,
+    label: z.string(),
+    undoable: z.boolean(),
+  }),
+  /** 测试设计：AI 操作工作台的选择/筛选/视图 */
+  [IpcEvent.designCommand]: designCommandSchema,
   /** 单步调试状态变化 */
   [IpcEvent.debugState]: debugStateSchema,
 }
@@ -724,6 +806,7 @@ export type AiModelInfo = z.output<typeof aiModelSchema>
 export type AiModelsInput = z.output<(typeof ipcContract)[typeof IpcChannel.aiModels]['input']>
 export type AiModelsResult = z.output<(typeof ipcContract)[typeof IpcChannel.aiModels]['output']>
 export type AiEnvironment = z.output<typeof aiEnvironmentSchema>
+export type DesignCommand = z.output<typeof designCommandSchema>
 export type SkillParam = z.output<typeof skillParamSchema>
 export type SkillManifest = z.output<typeof skillManifestSchema>
 export type RecordedDraft = z.output<typeof recordedDraftSchema>

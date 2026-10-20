@@ -2,6 +2,8 @@ import type {
   Element as CaseElement,
   CaseFile,
   CaseGroup,
+  DesignPageField,
+  DesignSubmit,
   LiveStep,
   Step,
   StepResult,
@@ -79,6 +81,18 @@ export interface SnapshotElement {
   max?: number
   step?: number
   orientation?: 'horizontal' | 'vertical'
+}
+
+/** 测试设计：当前页面可编辑字段与提交按钮（静态约束） */
+export interface DesignPageInfo {
+  url: string
+  title: string
+  fields: DesignPageField[]
+  submit?: DesignSubmit
+  /** 弹窗/抽屉标题（表单在浮层中时） */
+  scopeLabel?: string
+  /** 列表页上的「新建/新增/创建」入口，用于打开表单后重新分析 */
+  entry?: DesignSubmit
 }
 
 export interface PageSnapshot {
@@ -570,6 +584,299 @@ export class ChromeController {
         truncated: nodes.length > MAX,
       }
     })
+  }
+
+  /** 测试设计：读取当前页面的表单字段、HTML 约束与提交按钮 */
+  async designPage(): Promise<DesignPageInfo> {
+    const page = await this.ensurePage()
+    return page.evaluate(() => {
+      document.querySelectorAll('[data-atp-ref]').forEach((el) => {
+        el.removeAttribute('data-atp-ref')
+      })
+      const clean = (value: string | null | undefined): string =>
+        (value ?? '').replace(/\s+/g, ' ').trim()
+      const visible = (el: Element): boolean => {
+        const rect = el.getBoundingClientRect()
+        const style = getComputedStyle(el)
+        return (
+          rect.width > 0.5 &&
+          rect.height > 0.5 &&
+          style.display !== 'none' &&
+          style.visibility !== 'hidden'
+        )
+      }
+      const textOf = (node: Element | null): string => clean(node?.textContent)
+      // 表单在弹窗/抽屉里时只分析当前浮层，避免把背景列表字段一起算进来
+      const dialogSelector = '[role="dialog"], .el-dialog, .el-drawer, .ant-modal, .ant-drawer'
+      const dialogs = Array.from(document.querySelectorAll(dialogSelector)).filter(visible)
+      const activeDialog = dialogs.length > 0 ? dialogs[dialogs.length - 1] : null
+      const scopeRoot: ParentNode = activeDialog ?? document
+      const scopeLabel = activeDialog
+        ? (
+            textOf(
+              activeDialog.querySelector(
+                '.el-dialog__title, .ant-modal-title, [role="heading"], h1, h2, h3',
+              ),
+            ) ||
+            clean(activeDialog.getAttribute('aria-label')) ||
+            ''
+          ).slice(0, 80) || undefined
+        : undefined
+      const labelOf = (el: Element): string => {
+        const aria = clean(el.getAttribute('aria-label'))
+        if (aria) return aria
+        const labelledby = clean(el.getAttribute('aria-labelledby'))
+        if (labelledby) {
+          const joined = labelledby
+            .split(/\s+/)
+            .map((id) => textOf(document.getElementById(id)))
+            .filter(Boolean)
+            .join(' ')
+          if (joined) return joined
+        }
+        const labels = (el as HTMLInputElement).labels
+        if (labels && labels.length > 0) {
+          const label = textOf(labels[0])
+          if (label) return label
+        }
+        const item = el.closest('.el-form-item, .ant-form-item, .form-item, [data-form-item]')
+        if (item) {
+          const label = item.querySelector(
+            'label, .el-form-item__label, .ant-form-item-label, [data-form-label]',
+          )
+          const text = textOf(label)
+          if (text) return text
+        }
+        return (
+          clean(el.getAttribute('placeholder')) ||
+          clean(el.getAttribute('name')) ||
+          el.tagName.toLowerCase()
+        )
+      }
+      const formItemText = (el: Element): string | undefined => {
+        const item = el.closest(
+          '.el-form-item, .ant-form-item, .form-item, [data-form-item], label',
+        )
+        const text = textOf(item)
+        return text ? text.slice(0, 200) : undefined
+      }
+
+      const selector = [
+        'input',
+        'textarea',
+        'select',
+        '[contenteditable="true"]',
+        '[role="textbox"]',
+        '[role="combobox"]',
+      ].join(',')
+      const skipTypes = new Set([
+        'hidden',
+        'file',
+        'range',
+        'color',
+        'submit',
+        'button',
+        'reset',
+        'image',
+      ])
+      const seen = new Set<Element>()
+      const ignoredContainer =
+        '[role="grid"], [role="treegrid"], .el-table, .ant-table, .el-pagination, .ant-pagination, [class*="pagination"]'
+      const nodes = Array.from(scopeRoot.querySelectorAll(selector)).filter((el) => {
+        if (seen.has(el)) return false
+        seen.add(el)
+        if (!visible(el)) return false
+        // 表格行内编辑、分页器属于列表操作，不是表单字段；表单布局用的 <table> 保留
+        if (el.closest(ignoredContainer)) return false
+        const layoutTable = el.closest('table')
+        if (
+          layoutTable &&
+          (Boolean(layoutTable.querySelector('thead')) ||
+            layoutTable.querySelectorAll('tr').length > 4)
+        ) {
+          return false
+        }
+        const tag = el.tagName.toLowerCase()
+        // 自定义组件外层可能带 role=textbox/combobox，只保留内部原生控件
+        if (
+          tag !== 'input' &&
+          tag !== 'textarea' &&
+          tag !== 'select' &&
+          el.querySelector('input, textarea, select')
+        ) {
+          return false
+        }
+        if (tag === 'input') {
+          const type = (el as HTMLInputElement).type.toLowerCase()
+          if (skipTypes.has(type)) return false
+        }
+        return true
+      })
+
+      const fields = nodes.map((el, index) => {
+        const tag = el.tagName.toLowerCase()
+        const input = el as HTMLInputElement
+        const type =
+          tag === 'input'
+            ? input.type.toLowerCase()
+            : tag === 'select'
+              ? 'select'
+              : tag === 'textarea'
+                ? 'textarea'
+                : 'text'
+        const ref = `df-${index + 1}`
+        el.setAttribute('data-atp-ref', ref)
+        const minLength =
+          typeof input.minLength === 'number' && input.minLength > 0 ? input.minLength : undefined
+        const maxLength =
+          typeof input.maxLength === 'number' && input.maxLength > 0 ? input.maxLength : undefined
+        const min =
+          typeof input.min === 'string' && input.min.trim() ? Number(input.min) : undefined
+        const max =
+          typeof input.max === 'string' && input.max.trim() ? Number(input.max) : undefined
+        const options =
+          tag === 'select'
+            ? Array.from((el as HTMLSelectElement).options)
+                .map((option) => clean(option.textContent) || option.value)
+                .filter(Boolean)
+            : undefined
+        // Element Plus / Ant Design 用容器 class 或星号表达必填，原生 required 常常没有
+        const item = el.closest('.el-form-item, .ant-form-item, .form-item, [data-form-item]')
+        const labelEl = item?.querySelector(
+          'label, .el-form-item__label, .ant-form-item-label, [data-form-label]',
+        )
+        const labelText = textOf(labelEl ?? null)
+        const requiredByItem = Boolean(
+          item &&
+            (item.classList.contains('is-required') ||
+              item.classList.contains('ant-form-item-required') ||
+              item.getAttribute('aria-required') === 'true' ||
+              Boolean(
+                item.querySelector('.is-required, .ant-form-item-required, [aria-required="true"]'),
+              ) ||
+              /^\s*\*/.test(labelText) ||
+              /[*＊]\s*$/.test(labelText)),
+        )
+        // 自定义下拉的已选值在 span 里，input.value 往往为空
+        const selectRoot = el.closest('.el-select, .ant-select')
+        const selectedText = selectRoot
+          ? textOf(selectRoot.querySelector('.ant-select-selection-item')) ||
+            textOf(selectRoot.querySelector('.el-select__placeholder'))
+          : ''
+        const selectedIsPlaceholder = Boolean(
+          selectRoot?.querySelector('.ant-select-selection-placeholder') ||
+            selectRoot?.querySelector('.el-select__placeholder.is-transparent'),
+        )
+        const fieldValue =
+          selectRoot && selectedText && !selectedIsPlaceholder
+            ? selectedText
+            : typeof input.value === 'string'
+              ? input.value
+              : undefined
+        return {
+          ref,
+          label: labelOf(el),
+          role: clean(el.getAttribute('role')) || tag,
+          tag,
+          inputType: type,
+          ...(clean(el.getAttribute('placeholder'))
+            ? { placeholder: clean(el.getAttribute('placeholder')) }
+            : {}),
+          ...(el.getAttribute('contenteditable') === 'true' ? { contentEditable: true } : {}),
+          required:
+            input.required === true ||
+            el.getAttribute('aria-required') === 'true' ||
+            requiredByItem,
+          ...(Number.isFinite(minLength) ? { minLength } : {}),
+          ...(Number.isFinite(maxLength) ? { maxLength } : {}),
+          ...(Number.isFinite(min) ? { min } : {}),
+          ...(Number.isFinite(max) ? { max } : {}),
+          ...(el.getAttribute('pattern')
+            ? { pattern: el.getAttribute('pattern') ?? undefined }
+            : {}),
+          value: fieldValue,
+          ...(options ? { options } : {}),
+          ...(tag === 'select' && (el as HTMLSelectElement).multiple ? { multiple: true } : {}),
+          ...(formItemText(el) ? { formItemText: formItemText(el) } : {}),
+          disabled: input.disabled === true,
+          readonly: input.readOnly === true || el.getAttribute('aria-readonly') === 'true',
+        }
+      })
+
+      const buttons = Array.from(
+        scopeRoot.querySelectorAll('button, [role="button"], input[type="submit"]'),
+      ).filter((el) => visible(el) && !(el as HTMLButtonElement).disabled)
+      const buttonText = (el: Element): string =>
+        clean((el as HTMLButtonElement).innerText) ||
+        clean((el as HTMLInputElement).value) ||
+        clean(el.getAttribute('aria-label'))
+      // 弹窗内「创建/新增」是提交；页面上的同名按钮通常是打开表单的入口
+      const actionPattern = activeDialog
+        ? /保存|提交|确定|创建|新增|下一步|继续/
+        : /保存|提交|确定|下一步|继续/
+      const submitEl =
+        buttons.find((el) => actionPattern.test(buttonText(el))) ??
+        buttons.find((el) => /查询|搜索/.test(buttonText(el)))
+      if (submitEl) submitEl.setAttribute('data-atp-ref', 'df-submit')
+
+      // 弹窗打开时仍保留背景页的入口 ref，生成用例时每条回放都要先点它打开弹窗
+      const pageButtons = activeDialog
+        ? Array.from(
+            document.querySelectorAll('button, [role="button"], input[type="submit"]'),
+          ).filter(
+            (el) =>
+              visible(el) && !(el as HTMLButtonElement).disabled && !activeDialog.contains(el),
+          )
+        : buttons
+      const entryEl = pageButtons.find(
+        (el) =>
+          /新建|新增|创建/.test(buttonText(el)) && !/文件|上传|修改|删除|导出/.test(buttonText(el)),
+      )
+      if (entryEl) entryEl.setAttribute('data-atp-ref', 'df-entry')
+
+      return {
+        url: location.href,
+        title: document.title,
+        fields,
+        ...(scopeLabel ? { scopeLabel } : {}),
+        ...(submitEl ? { submit: { ref: 'df-submit', name: buttonText(submitEl) || '提交' } } : {}),
+        ...(entryEl ? { entry: { ref: 'df-entry', name: buttonText(entryEl) || '新建' } } : {}),
+      }
+    })
+  }
+
+  /** 列表页「新建/新增」入口：点击并等待表单浮层或路由出现 */
+  async openDesignEntry(ref: string): Promise<boolean> {
+    if (!/^[a-z0-9-]{1,32}$/i.test(ref)) return false
+    const page = await this.ensurePage()
+    const locator = page.locator(`[data-atp-ref="${ref}"]`).first()
+    if ((await locator.count()) === 0) return false
+    await locator.click({ timeout: 3000 }).catch(() => undefined)
+    await page
+      .waitForFunction(
+        () => {
+          const dialogs = Array.from(
+            document.querySelectorAll(
+              '[role="dialog"], .el-dialog, .el-drawer, .ant-modal, .ant-drawer',
+            ),
+          )
+          return dialogs.some((el) => {
+            const rect = el.getBoundingClientRect()
+            const style = getComputedStyle(el)
+            return (
+              rect.width > 10 &&
+              rect.height > 10 &&
+              style.display !== 'none' &&
+              style.visibility !== 'hidden'
+            )
+          })
+        },
+        null,
+        { timeout: 4000 },
+      )
+      .catch(() => undefined)
+    await page.waitForTimeout(300)
+    return true
   }
 
   /** 解析一次快照里的 ref；旧 ref 已被下一次快照清除，会返回 null */

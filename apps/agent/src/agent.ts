@@ -15,6 +15,10 @@ import type {
   CaseFile,
   CaseRow,
   DebugState,
+  DesignCase,
+  DesignMatrix,
+  DesignResult,
+  DesignSelection,
   IpcChannel,
   IpcEventPayload,
   IpcOutput,
@@ -29,6 +33,7 @@ import {
   type RecordedDraft,
 } from './browser.js'
 import { type DebugAction, DebugController } from './debug-runner.js'
+import { analyzeDesign, generateDesignCases } from './design.js'
 import { isPlanRunning, startPlanRun, stopPlanRun } from './plan-runner.js'
 
 export interface AgentOptions {
@@ -71,6 +76,9 @@ export type AgentEvent =
   | { type: 'ai-plan-progress'; progress: AiPlanProgress }
   | { type: 'ai-plan-result'; result: AiPlanResult }
   | { type: 'debug-state'; state: DebugState }
+  | { type: 'design-result'; result: DesignResult }
+  | ({ type: 'design-updated' } & IpcEventPayload<'event:design-updated'>)
+  | ({ type: 'design-command' } & IpcEventPayload<'event:design-command'>)
   | {
       type: 'replay-progress'
       runId: string
@@ -90,6 +98,7 @@ export class Agent {
   private lastDraft: RecordedDraft | null = null
   private replayAbort: AbortController | null = null
   private planDraftAbort: AbortController | null = null
+  private designAbort: AbortController | null = null
   private readonly debugRunner = new DebugController((state) =>
     this.emit({ type: 'debug-state', state }),
   )
@@ -122,6 +131,16 @@ export class Agent {
         notifyRecordingDraft: (draft) => this.emit({ type: 'ai-recording-draft', ...draft }),
         proposeCase: (proposal) => this.emit({ type: 'ai-case-proposal', ...proposal }),
         proposePlan: (proposal) => this.emit({ type: 'ai-plan-proposal', ...proposal }),
+        designCommand: (command) => this.emit({ type: 'design-command', ...command }),
+        designUpdated: (matrix, label) =>
+          this.emit({ type: 'design-updated', matrix, label, undoable: true }),
+        runDesignSelection: async (selections) => {
+          const matrix = await this.latestDesign()
+          if (!matrix) throw new Error('没有可执行的设计会话：请重新分析当前页面')
+          const { cases } = await generateDesignCases(this.requireBrowser(), matrix, selections)
+          this.startDesignRunFromAi(cases)
+          return { cases: cases.length }
+        },
         runCase: async (caseId) => {
           const result = await this.replayCase(caseId)
           return {
@@ -167,7 +186,8 @@ export class Agent {
       engine: this.browser?.engine ?? '',
       url: this.browser?.currentUrl ?? '',
       recording: this.browser?.isRecording ?? false,
-      replaying: this.replayAbort !== null || this.planDraftAbort !== null,
+      replaying:
+        this.replayAbort !== null || this.planDraftAbort !== null || this.designAbort !== null,
       cases: await this.allCases(),
     }
   }
@@ -183,6 +203,7 @@ export class Agent {
     if (this.browser?.isRecording) throw new Error('录制中不能导航，请先停止录制')
     if (this.replayAbort) throw new Error('回放中不能导航')
     if (this.planDraftAbort) throw new Error('AI 计划执行中不能导航')
+    if (this.designAbort) throw new Error('测试设计执行中不能导航')
     // 用户手动导航视为接管：先结束调试会话，等待当前步骤退出后再导航
     if (this.debugRunner.active) await this.debugRunner.stopAndWait()
     if (isPlanRunning()) throw new Error('计划执行中不能导航')
@@ -214,6 +235,7 @@ export class Agent {
   startRecording(): void {
     if (this.replayAbort) throw new Error('回放中不能开始录制')
     if (this.planDraftAbort) throw new Error('AI 计划执行中不能开始录制')
+    if (this.designAbort) throw new Error('测试设计执行中不能开始录制')
     if (this.debugRunner.active) throw new Error('调试中不能开始录制')
     if (isPlanRunning()) throw new Error('计划执行中不能开始录制')
     const browser = this.requireBrowser()
@@ -271,6 +293,7 @@ export class Agent {
     if (this.browser?.isRecording) throw new Error('录制中不能回放')
     if (this.replayAbort) throw new Error('已有回放正在执行')
     if (this.planDraftAbort) throw new Error('AI 计划正在执行')
+    if (this.designAbort) throw new Error('测试设计正在执行')
     if (this.debugRunner.active) throw new Error('调试中不能回放')
     if (isPlanRunning()) throw new Error('计划执行中不能回放')
     const uow = getDb().uow()
@@ -355,6 +378,7 @@ export class Agent {
     if (this.browser?.isRecording) throw new Error('录制进行中，无法执行计划')
     if (this.replayAbort) throw new Error('回放进行中，无法执行计划')
     if (this.planDraftAbort) throw new Error('已有 AI 计划正在执行')
+    if (this.designAbort) throw new Error('测试设计正在执行')
     if (this.debugRunner.active) throw new Error('调试中无法执行 AI 计划')
     if (isPlanRunning()) throw new Error('测试计划执行中，无法执行 AI 计划')
 
@@ -427,11 +451,165 @@ export class Agent {
     return { ok: true }
   }
 
+  /** 测试设计：分析当前页面，返回字段与场景矩阵 */
+  async analyzeDesign(openEntry = false): Promise<DesignMatrix> {
+    this.assertDesignIdle()
+    return analyzeDesign(this.requireBrowser(), { openEntry })
+  }
+
+  /** 测试设计：最近一次会话的矩阵快照 */
+  async latestDesign(): Promise<DesignMatrix | null> {
+    return getDb().uow().designSessions.latest()
+  }
+
+  /** 测试设计：保存矩阵编辑（数据行、审阅状态、执行结果） */
+  async updateDesign(matrix: DesignMatrix, baseRevision: number): Promise<DesignMatrix> {
+    const project = (await getDb().uow().projects.list())[0]
+    return getDb()
+      .uow()
+      .designSessions.save({ projectId: project?.id ?? null, matrix, baseRevision })
+  }
+
+  /** 测试设计：把选中的数据行生成可执行用例草稿（不写库） */
+  async generateDesignCases(
+    matrix: DesignMatrix,
+    selections: DesignSelection[],
+  ): Promise<{ cases: DesignCase[] }> {
+    this.assertDesignIdle()
+    return generateDesignCases(this.requireBrowser(), matrix, selections)
+  }
+
+  /** 测试设计：按顺序执行选中的用例草稿，每条约一个 runId 与证据 */
+  startDesignRun(cases: DesignCase[]): { ok: true } {
+    this.assertDesignIdle()
+    return this.launchDesignRun(cases)
+  }
+
+  /** AI 工具直接发起设计执行：允许 AI 自身正在运行，但仍禁止其它互斥任务 */
+  startDesignRunFromAi(cases: DesignCase[]): { ok: true } {
+    this.assertDesignIdleExceptAi()
+    return this.launchDesignRun(cases)
+  }
+
+  private launchDesignRun(cases: DesignCase[]): { ok: true } {
+    if (cases.length === 0) throw new Error('没有可执行的测试设计用例')
+    const browser = this.requireBrowser()
+    const abort = new AbortController()
+    this.designAbort = abort
+    this.emitStatus()
+
+    void (async () => {
+      try {
+        for (const [index, item] of cases.entries()) {
+          if (abort.signal.aborted) {
+            for (const rest of cases.slice(index)) {
+              this.emit({
+                type: 'design-result',
+                result: {
+                  scenarioId: rest.scenarioId,
+                  dataRecordId: rest.dataRecordId,
+                  runId: getDb().uow().runs.newRunId(),
+                  status: 'stopped',
+                  error: '已停止',
+                  steps: [],
+                },
+              })
+            }
+            break
+          }
+          const runId = getDb().uow().runs.newRunId()
+          try {
+            const result = await browser.replay(item.caseFile, {
+              evidenceDir: runDir(runId),
+              runId,
+              signal: abort.signal,
+            })
+            // 设计执行与普通回放共用运行记录；矩阵覆盖由前端按数据行回写
+            await getDb()
+              .uow()
+              .runs.save(result, { caseSnapshot: JSON.stringify(item.caseFile) })
+            const stopped = abort.signal.aborted && result.status !== 'passed'
+            this.emit({
+              type: 'design-result',
+              result: {
+                scenarioId: item.scenarioId,
+                dataRecordId: item.dataRecordId,
+                runId,
+                status: stopped ? 'stopped' : result.status,
+                ...(result.error ? { error: result.error } : {}),
+                steps: result.steps.map((step, stepIndex) => ({
+                  index: stepIndex + 1,
+                  stepId: step.stepId,
+                  action: step.action,
+                  status: step.status,
+                  durationMs: step.durationMs,
+                  ...(step.error ? { error: step.error } : {}),
+                  ...(step.skipped !== undefined ? { skipped: step.skipped } : {}),
+                  ...(step.screenshotPath
+                    ? {
+                        screenshotUrl: `/evidence/${runId}/${basename(step.screenshotPath)}`,
+                      }
+                    : {}),
+                })),
+              },
+            })
+          } catch (err) {
+            this.emit({
+              type: 'design-result',
+              result: {
+                scenarioId: item.scenarioId,
+                dataRecordId: item.dataRecordId,
+                runId,
+                status: abort.signal.aborted ? 'stopped' : 'failed',
+                error: abort.signal.aborted
+                  ? '已停止'
+                  : err instanceof Error
+                    ? err.message
+                    : String(err),
+                steps: [],
+              },
+            })
+          }
+        }
+      } finally {
+        this.designAbort = null
+        this.emitStatus()
+      }
+    })()
+
+    return { ok: true }
+  }
+
+  stopDesignRun(): { ok: true } {
+    this.designAbort?.abort()
+    return { ok: true }
+  }
+
+  private assertDesignIdle(): void {
+    if (this.browser?.isRecording) throw new Error('录制中不能进行测试设计')
+    if (this.replayAbort) throw new Error('回放中不能进行测试设计')
+    if (this.planDraftAbort) throw new Error('AI 计划执行中不能进行测试设计')
+    if (this.designAbort) throw new Error('已有测试设计正在执行')
+    if (this.debugRunner.active) throw new Error('调试中不能进行测试设计')
+    if (this.ai?.state().running) throw new Error('AI 正在执行，请先停止')
+    if (isPlanRunning()) throw new Error('计划执行中不能进行测试设计')
+  }
+
+  private assertDesignIdleExceptAi(): void {
+    if (this.browser?.isRecording) throw new Error('录制中不能进行测试设计')
+    if (this.replayAbort) throw new Error('回放中不能进行测试设计')
+    if (this.planDraftAbort) throw new Error('AI 计划执行中不能进行测试设计')
+    if (this.designAbort) throw new Error('已有测试设计正在执行')
+    if (this.debugRunner.active) throw new Error('调试中不能进行测试设计')
+    if (isPlanRunning()) throw new Error('计划执行中不能进行测试设计')
+  }
+
   /** 从一条已保存用例开始单步调试：先导航，再停在第一步之前 */
   async startDebug(caseId: string, breakpoints: string[] = []): Promise<{ runId: string }> {
     if (this.browser?.isRecording) throw new Error('录制中不能调试')
     if (this.replayAbort) throw new Error('回放中不能调试')
     if (this.planDraftAbort) throw new Error('AI 计划执行中不能调试')
+    if (this.designAbort) throw new Error('测试设计执行中不能调试')
     if (this.ai?.state().running) throw new Error('AI 正在执行，请先停止')
     if (isPlanRunning()) throw new Error('测试计划执行中不能调试')
     if (this.debugRunner.active) throw new Error('已有调试会话正在执行')
@@ -464,6 +642,7 @@ export class Agent {
   async aiSend(input: AiSendInput): Promise<{ sessionId: string; messageId: string }> {
     if (!this.ai) throw new Error('AI 尚未初始化')
     if (this.planDraftAbort) throw new Error('AI 计划正在执行，请先停止')
+    if (this.designAbort) throw new Error('测试设计正在执行，请先停止')
     if (this.debugRunner.active) throw new Error('调试中不能操作页面，请先停止调试')
     return this.ai.send(input)
   }
@@ -528,6 +707,7 @@ export class Agent {
     this.stopReplay()
     this.stopPlan()
     this.stopPlanDraft()
+    this.stopDesignRun()
     if (this.debugRunner.active) this.debugRunner.command('stop')
     await this.browser?.close()
     this.browser = null
@@ -553,7 +733,8 @@ export class Agent {
       engine: this.browser?.engine ?? '',
       url: this.browser?.currentUrl ?? '',
       recording: this.browser?.isRecording ?? false,
-      replaying: this.replayAbort !== null || this.planDraftAbort !== null,
+      replaying:
+        this.replayAbort !== null || this.planDraftAbort !== null || this.designAbort !== null,
     })
   }
 

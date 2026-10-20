@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   CircleAlert,
+  ClipboardCheck,
   FileText,
   Globe,
   History,
@@ -22,11 +23,13 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCases, usePlans, useProjects } from '../api/client'
+import { flushDesignSave } from '../design/useDesignPersistence'
 import { useUiStore } from '../state/ui-store'
 import { AiHistoryDialog } from './AiHistoryDialog'
 import { AiPlanList } from './AiPlanCard'
 import { CaseProposalList } from './CaseProposalCard'
 import { Markdown } from './Markdown'
+import { analyzeCurrentPage, TestDesignCard } from './TestDesignCard'
 import type { AiContext, AiMessage, AiToolCall } from './types'
 import { appendDictation, useSpeechInput } from './useSpeechInput'
 
@@ -50,7 +53,13 @@ const MODE_LABEL: Record<AiEnvironment['mode'], string> = {
   recording: '录制中',
   replaying: '回放中',
   plan: '计划执行中',
+  design: '测试设计工作台',
 }
+
+/** 在 AI 对话里直接触发确定性测试设计；不需要模型或密钥 */
+const DESIGN_INTENT = /(测试设计|边界用例|(必填|长度|格式).*(校验|边界|场景))/
+/** 已有设计会话时，只有明确要求重新分析才走确定性短路，其余交给模型调用 design_* 工具 */
+const DESIGN_REFRESH = /(重新分析|重新生成|重新设计|再分析|生成测试设计)/
 
 function hostOf(url: string): string {
   try {
@@ -61,7 +70,7 @@ function hostOf(url: string): string {
   }
 }
 
-export function AiPanel() {
+export function AiPanel({ embedded = false }: { embedded?: boolean }) {
   const aiConfig = useUiStore((s) => s.aiConfig)
   const setAiConfig = useUiStore((s) => s.setAiConfig)
   const messages = useUiStore((s) => s.aiMessages)
@@ -80,6 +89,17 @@ export function AiPanel() {
   const draftRecording = useUiStore((s) => s.draftRecording)
   const replaying = useUiStore((s) => s.replaying)
   const planProgress = useUiStore((s) => s.planProgress)
+  const designLoading = useUiStore((s) => s.designLoading)
+  const designRunning = useUiStore((s) => s.designRunning)
+  const design = useUiStore((s) => s.design)
+  const designWorkbenchOpen = useUiStore((s) => s.designWorkbenchOpen)
+  const setDesignWorkbenchOpen = useUiStore((s) => s.setDesignWorkbenchOpen)
+  const designView = useUiStore((s) => s.designView)
+  const designFilter = useUiStore((s) => s.designFilter)
+  const designActiveScenarioId = useUiStore((s) => s.designActiveScenarioId)
+  const designActiveDataRecordId = useUiStore((s) => s.designActiveDataRecordId)
+  const designSelected = useUiStore((s) => s.designSelected)
+  const designRowSelected = useUiStore((s) => s.designRowSelected)
   const navTab = useUiStore((s) => s.navTab)
   const { data: cases = [] } = useCases(currentProjectId)
   const { data: projects = [] } = useProjects()
@@ -120,19 +140,42 @@ export function AiPanel() {
     selected?.kind === 'case' ? cases.find((item) => item.id === selected.id)?.name : undefined
 
   const environment = useMemo<AiEnvironment>(() => {
-    const mode: AiEnvironment['mode'] = recording
-      ? 'recording'
-      : replaying
-        ? 'replaying'
-        : planProgress
-          ? 'plan'
-          : url
-            ? 'editing'
-            : 'launch'
+    const mode: AiEnvironment['mode'] =
+      designWorkbenchOpen && design
+        ? 'design'
+        : recording
+          ? 'recording'
+          : replaying
+            ? 'replaying'
+            : planProgress
+              ? 'plan'
+              : url
+                ? 'editing'
+                : 'launch'
     const project = projects.find((item) => item.id === currentProjectId)
     const plan =
       selected?.kind === 'plan' ? plans.find((item) => item.id === selected.id) : undefined
     const value: AiEnvironment = { mode, navTab }
+    // 只有工作台打开时才把设计会话交给模型：关闭后 AI 不能操作看不见的矩阵
+    if (design && designWorkbenchOpen) {
+      const selectedRecordIds = [
+        ...new Set(
+          designRowSelected
+            .map((key) => key.split('::')[1])
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ]
+      value.design = {
+        sessionId: design.sessionId ?? design.id ?? '',
+        revision: design.revision,
+        view: designView,
+        ...(Object.keys(designFilter).length > 0 ? { filter: designFilter } : {}),
+        ...(designActiveScenarioId ? { activeScenarioId: designActiveScenarioId } : {}),
+        ...(designActiveDataRecordId ? { activeDataRecordId: designActiveDataRecordId } : {}),
+        selectedScenarioIds: designSelected,
+        selectedDataRecordIds: selectedRecordIds,
+      }
+    }
     if (url) value.url = url
     if (selected) value.selectedKind = selected.kind
     if (project) {
@@ -177,6 +220,14 @@ export function AiPanel() {
     draftRecording,
     replaying,
     planProgress,
+    design,
+    designWorkbenchOpen,
+    designView,
+    designFilter,
+    designActiveScenarioId,
+    designActiveDataRecordId,
+    designSelected,
+    designRowSelected,
   ])
 
   const context = useMemo<AiContext>(() => {
@@ -199,12 +250,34 @@ export function AiPanel() {
         toast.info('AI 正在执行，先停止当前任务再继续')
         return
       }
+      // 已有设计会话时，把「筛选/改数据/执行」交给模型的 design_* 工具；
+      // 只有明确要求重新分析才重新跑确定性分析。
+      if (DESIGN_INTENT.test(trimmed) && (!design || DESIGN_REFRESH.test(trimmed))) {
+        store.addAiUserMessage(trimmed)
+        stickToBottom.current = true
+        store.addAiAssistantMessage('好，我来读取当前页面的字段、控件类型与规范约束。')
+        const matrix = await analyzeCurrentPage({ silentSuccess: true, openEntry: true })
+        if (!matrix) {
+          store.addAiAssistantMessage('没有读到可分析的页面；请先在中间打开一个被测页面。')
+          return
+        }
+        if (matrix.scenarios.length === 0) {
+          store.addAiAssistantMessage(matrix.skipped[0]?.reason ?? '当前页面没有可生成的测试场景。')
+        } else {
+          store.addAiAssistantMessage(
+            `${matrix.note ? `${matrix.note}。` : ''}已生成 ${matrix.stats.scenarios} 个场景 / ${matrix.stats.rows} 行数据（可执行 ${matrix.stats.readyRows} 行，待确认 ${matrix.stats.pendingRows} 行），覆盖 ${matrix.stats.rules} 类规范。点上方「打开设计工作台」审阅、改数据、接受并执行；也可以直接让我在工作台里筛选、改数据或执行可执行行。`,
+          )
+        }
+        return
+      }
       const sessionId = store.aiSessionId
       store.addAiUserMessage(trimmed)
       store.setAiRunning(true)
       stickToBottom.current = true
       try {
         const payload = override ?? context
+        // 工作台里的手动编辑可能还在防抖窗口内；先落库，AI 才能读到最新矩阵
+        await flushDesignSave()
         await window.atp.invoke('ai:send', {
           message: trimmed,
           ...(sessionId ? { sessionId } : {}),
@@ -214,7 +287,7 @@ export function AiPanel() {
         useUiStore.getState().addAiErrorMessage(err instanceof Error ? err.message : '发送失败')
       }
     },
-    [context],
+    [context, design],
   )
 
   // 来自命令栏 / 报告 / 启动台的预置请求：消费一次后自动发送
@@ -241,16 +314,20 @@ export function AiPanel() {
   const suggestions = useMemo(() => {
     const list: string[] = []
     if (selectedRunId) list.push('分析这次运行失败的原因，并给出修复建议')
-    if (url) {
+    if (designWorkbenchOpen) {
+      list.push('只保留长度和格式相关的场景')
+      list.push('把第一行数据改成合法边界值')
+      list.push('执行当前选中的可执行行')
+    } else if (url) {
+      list.push('为当前页面生成测试设计，覆盖必填、长度、格式和正常流')
       list.push('描述当前页面，并给出 3 个值得测的场景')
       list.push('在当前页面上走一遍主流程，每一步都告诉我结果')
-      list.push('从当前页面生成一条可执行的测试用例')
     } else {
       list.push('打开 https://demo.playwright.dev/todomvc/ 并添加一条待办')
       list.push('我该如何开始编写一条 Web 自动化用例？')
     }
     return list.slice(0, 3)
-  }, [url, selectedRunId])
+  }, [url, selectedRunId, designWorkbenchOpen])
 
   const hasContext = Object.keys(context).length > 0
   const modelLabel = aiConfig?.stub ? '演示模式' : (aiConfig?.model ?? '未配置')
@@ -258,8 +335,12 @@ export function AiPanel() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
-        <Sparkles size={13} className="shrink-0 text-accent" />
-        <span className="text-[12px] font-semibold">AI</span>
+        {!embedded && (
+          <>
+            <Sparkles size={13} className="shrink-0 text-accent" />
+            <span className="text-[12px] font-semibold">AI</span>
+          </>
+        )}
         <button
           type="button"
           onClick={() => setAiSettingsOpen(true)}
@@ -278,6 +359,22 @@ export function AiPanel() {
           </span>
         )}
         <div className="ml-auto flex items-center gap-0.5">
+          {!embedded && (
+            <button
+              type="button"
+              onClick={() => void analyzeCurrentPage()}
+              disabled={!url || running || recording || replaying || designRunning || designLoading}
+              className="grid size-6 place-items-center rounded text-muted hover:bg-default hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
+              aria-label="重新分析测试设计"
+              title="重新分析当前页面"
+            >
+              {designLoading ? (
+                <Loader2 size={12} className="animate-spin" />
+              ) : (
+                <ClipboardCheck size={12} />
+              )}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setHistoryOpen(true)}
@@ -300,15 +397,17 @@ export function AiPanel() {
           >
             <RotateCcw size={12} />
           </button>
-          <button
-            type="button"
-            onClick={() => setAiOpen(false)}
-            className="grid size-6 place-items-center rounded text-muted hover:bg-default hover:text-foreground"
-            aria-label="收起 AI"
-            title="收起（⌘K 可再次唤起）"
-          >
-            <PanelRightClose size={12} />
-          </button>
+          {!embedded && (
+            <button
+              type="button"
+              onClick={() => setAiOpen(false)}
+              className="grid size-6 place-items-center rounded text-muted hover:bg-default hover:text-foreground"
+              aria-label="收起 AI"
+              title="收起（⌘K 可再次唤起）"
+            >
+              <PanelRightClose size={12} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -318,6 +417,19 @@ export function AiPanel() {
             <Globe size={9} className="shrink-0" />
             <span className="truncate">{hostOf(url)}</span>
           </span>
+        )}
+        {design && (
+          <button
+            type="button"
+            data-design-context
+            onClick={() => setDesignWorkbenchOpen(true)}
+            className="flex shrink-0 items-center gap-1 rounded border border-accent/30 bg-accent/[0.06] px-1.5 py-0.5 text-[10px] text-accent hover:bg-accent/10"
+            title="打开设计工作台；AI 可以直接操作，保存入库与写数据执行仍需确认"
+            aria-label="打开设计工作台"
+          >
+            <ClipboardCheck size={9} className="shrink-0" />
+            设计会话 · {design.stats.scenarios} 场景 · {design.stats.readyRows} 可执行
+          </button>
         )}
         {selected?.kind === 'case' && (
           <span className="flex shrink-0 items-center gap-1 rounded border border-border bg-surface-secondary px-1.5 py-0.5 text-[10px] text-muted">
@@ -414,6 +526,17 @@ export function AiPanel() {
                 </dd>
               </>
             )}
+            {environment.design && (
+              <>
+                <dt className="text-muted">设计</dt>
+                <dd className="truncate">
+                  rev {environment.design.revision} · 已选{' '}
+                  {environment.design.selectedScenarioIds.length} 场景 /{' '}
+                  {environment.design.selectedDataRecordIds.length} 行 ·{' '}
+                  {environment.design.view === 'matrix' ? '矩阵' : '场景'}视图
+                </dd>
+              </>
+            )}
           </dl>
           <p className="mt-1.5 border-t border-border/60 pt-1.5 text-[9.5px] leading-4 text-muted">
             这些字段会随每条消息发送给模型。{hasContext ? '' : '当前没有页面或用例上下文。'}
@@ -437,7 +560,8 @@ export function AiPanel() {
               </div>
               <h3 className="mt-3 text-center text-[13px] font-semibold">让 AI 操作页面</h3>
               <p className="mx-auto mt-1 max-w-[280px] text-center text-[11.5px] leading-5 text-muted">
-                AI 会先读取页面，再一步步点击、输入与验证；每一步都显示在中间舞台，可随时停止。
+                AI
+                会先读取页面，再一步步点击、输入与验证；也可以让它按测试规范生成必填、长度、格式等边界场景。
               </p>
               <div className="mt-4 space-y-1.5">
                 {suggestions.map((suggestion) => (
@@ -478,6 +602,8 @@ export function AiPanel() {
           )}
         </div>
       </div>
+
+      {!embedded && <TestDesignCard />}
 
       <AiPlanList />
 

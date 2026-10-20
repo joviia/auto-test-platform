@@ -77,6 +77,10 @@ const SYSTEM_PROMPT = `你是 ATP（本地 Web UI 自动化测试平台）的 AI
 - 新建用例：用户要求从当前页面生成用例 / 把流程沉淀为用例时，先 browser_snapshot，再调用 case_plan，用快照里的 ref 指定目标。平台会显示计划卡，由用户决定执行和保存；不要声称已经保存或已经执行。
 - case_plan 只支持 click / fill / select / press / scroll / wait / assert；需要悬停、上传、多标签等动作时，说明当前计划卡不支持。
 - 单轮最多 50 次工具调用。不要因为需要用户点击而停下；如果达到上限，明确说明已完成和未完成。
+- 测试设计工作台打开时（环境模式为「测试设计工作台」），可以直接调用 design_query / design_select / design_update_data / design_decide / design_run 操作当前矩阵。每次操作说明改了什么。
+- 修改设计数据前先 design_query 拿到 scenarioId / dataRecordId；修改后报告 changed 和 revision。
+- design_run 直接执行非写数据行；返回 needsConfirmation 时，说明写数据行已选中，必须由用户在工作台点击「执行选中」。
+- 保存到用例库只能由用户点击「接受并入库」；不要用 case_propose / case_plan 代替，也不要声称已经保存。
 
 工作方式：
 1. 操作前先调用 browser_snapshot 观察页面；不要猜 CSS/XPath。
@@ -111,6 +115,20 @@ function compactToolOutput(name: string, output: unknown): unknown {
     }
   }
   if (name === 'browser_screenshot') return { ok: true }
+  if (name === 'design_query' && output && typeof output === 'object') {
+    const data = output as {
+      revision?: unknown
+      stats?: unknown
+      coverage?: unknown
+      skipped?: unknown
+    }
+    return {
+      revision: data.revision,
+      stats: data.stats,
+      coverage: data.coverage,
+      skipped: Array.isArray(data.skipped) ? data.skipped.length : data.skipped,
+    }
+  }
   return output
 }
 
@@ -174,6 +192,20 @@ function toolLabel(name: string, input: Record<string, unknown>): string {
       return '查看执行记录'
     case 'run_get':
       return '读取运行记录'
+    case 'design_query':
+      return '读取测试设计'
+    case 'design_select':
+      return input.view
+        ? `切换工作台视图`
+        : input.filter !== undefined
+          ? '设置设计筛选'
+          : '选中设计场景'
+    case 'design_update_data':
+      return '修改设计数据'
+    case 'design_decide':
+      return input.decision === 'accepted' ? '接受设计场景' : '拒绝设计场景'
+    case 'design_run':
+      return '执行设计数据行'
     default:
       return name
   }
@@ -513,7 +545,7 @@ export class AiService {
     const system = buildSystemPrompt(context)
     const history: ModelMessage[] = [...session.messages, { role: 'user', content: userText }]
     const runState: RunState = { text: '', reasoning: '', tools: [] }
-    const tools = this.buildTools(session, messageId, abort.signal, runState)
+    const tools = this.buildTools(session, messageId, abort.signal, runState, context)
     let cancelled = false
     let errorText: string | undefined
     try {
@@ -548,7 +580,7 @@ export class AiService {
           this.options.onEvent({ type: 'ai-error', sessionId: session.id, messageId, error })
         },
         callTool: (name, input) =>
-          this.callToolByName(session, messageId, name, input, abort.signal, runState),
+          this.callToolByName(session, messageId, name, input, abort.signal, runState, context),
       })
       session.messages = [...history, ...responseMessages].slice(-40)
     } catch (err) {
@@ -603,6 +635,7 @@ export class AiService {
     messageId: string,
     signal: AbortSignal,
     runState: RunState,
+    context: ProviderContext,
   ): ToolSet {
     const tools: ToolSet = {}
     for (const def of AI_TOOL_MAP.values()) {
@@ -610,7 +643,7 @@ export class AiService {
         description: def.description,
         inputSchema: def.schema,
         execute: async (input) =>
-          this.executeTool(session, messageId, def, input, signal, runState),
+          this.executeTool(session, messageId, def, input, signal, runState, context),
       })
     }
     return tools
@@ -623,10 +656,11 @@ export class AiService {
     input: unknown,
     signal: AbortSignal,
     runState: RunState,
+    context: ProviderContext,
   ): Promise<unknown> {
     const def = AI_TOOL_MAP.get(name)
     if (!def) throw new Error(`未知工具：${name}`)
-    return this.executeTool(session, messageId, def, input, signal, runState)
+    return this.executeTool(session, messageId, def, input, signal, runState, context)
   }
 
   private async executeTool(
@@ -636,6 +670,7 @@ export class AiService {
     rawInput: unknown,
     signal: AbortSignal,
     runState: RunState,
+    context: ProviderContext,
   ): Promise<unknown> {
     const input = (rawInput ?? {}) as Record<string, unknown>
     const callId = newId('tc')
@@ -666,6 +701,7 @@ export class AiService {
       browser: this.options.getBrowser,
       platform: this.options.platform,
       signal,
+      environment: context.environment,
     }
     try {
       const outcome = await def.run(input, ctx)
@@ -718,6 +754,7 @@ const MODE_LABEL: Record<AiEnvironment['mode'], string> = {
   recording: '录制中',
   replaying: '回放中',
   plan: '计划执行中',
+  design: '测试设计工作台',
 }
 
 function buildSystemPrompt(context: ProviderContext): string {
@@ -747,6 +784,27 @@ function buildSystemPrompt(context: ProviderContext): string {
     }
     if (env.navTab) lines.push(`- 左侧页签：${env.navTab}`)
     if (env.selectedKind) lines.push(`- 当前选中：${env.selectedKind}`)
+    if (env.design) {
+      lines.push(
+        `- 测试设计会话：sessionId=${env.design.sessionId} revision=${env.design.revision} 视图=${env.design.view}`,
+      )
+      if (env.design.filter) {
+        lines.push(
+          `- 当前筛选：字段=${env.design.filter.fieldRef ?? '全部'} 规范=${env.design.filter.ruleId ?? '全部'} 状态=${env.design.filter.status ?? '全部'}`,
+        )
+      }
+      lines.push(
+        `- 已选：${env.design.selectedScenarioIds.length} 个场景 / ${env.design.selectedDataRecordIds.length} 行数据`,
+      )
+      if (env.design.activeScenarioId) {
+        lines.push(
+          `- 当前详情：场景 ${env.design.activeScenarioId}${env.design.activeDataRecordId ? ` / 数据行 ${env.design.activeDataRecordId}` : ''}`,
+        )
+      }
+      lines.push(
+        '- 可以直接用 design_* 工具操作工作台；修改前先 design_query，保存入库与写数据执行必须由用户点击。',
+      )
+    }
   } else {
     if (context.caseId) {
       lines.push(`- 用例：${context.caseName ?? context.caseId}（id=${context.caseId}）`)
